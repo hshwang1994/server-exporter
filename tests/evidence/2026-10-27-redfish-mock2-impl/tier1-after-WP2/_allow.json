@@ -1,0 +1,38 @@
+[
+ {
+  "labels": [
+   "sr650_v4_01",
+   "sr650_v4_02",
+   "sr650_v4_03",
+   "sr650_v4_04",
+   "r1_Lenovo_SR650_01"
+  ],
+  "path_prefix": "meta.adapter_id",
+  "issue": "01-adapter-001",
+  "note": "인증 후 재선택: redfish_lenovo_bmc(강등) -> redfish_lenovo_xcc3 (opt-in bmc_model_patterns, Manager.Model 'XClarity Controller 3')"
+ },
+ {
+  "labels": [
+   "sr650_v4_01",
+   "sr650_v4_02",
+   "sr650_v4_03",
+   "sr650_v4_04",
+   "r1_Lenovo_SR650_01"
+  ],
+  "path_prefix": "diagnosis.details.adapter_first_pass",
+  "issue": "01-adapter-001",
+  "note": "1차 선택(xcc3)과 재선택이 같아져 first_pass 기록이 null 로 (site.yml: 바뀐 경우만 기록)"
+ },
+ {
+  "labels": [
+   "sr650_v4_01",
+   "sr650_v4_02",
+   "sr650_v4_03",
+   "sr650_v4_04",
+   "r1_Lenovo_SR650_01"
+  ],
+  "path_prefix": "diagnosis.details.adapter_candidate",
+  "issue": "01-adapter-001",
+  "note": "같은 재선택 결과가 diagnosis.details.adapter_candidate 에도 비친다: redfish_lenovo_bmc -> redfish_lenovo_xcc3"
+ }
+]

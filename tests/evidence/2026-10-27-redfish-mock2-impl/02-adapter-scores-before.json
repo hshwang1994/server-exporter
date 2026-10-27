@@ -1,0 +1,5026 @@
+{
+ "csus3200_01": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102570,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "csus3200_02": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102570,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "csus3200_03": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102570,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "dl380_gen12_01": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": true,
+   "score": 120570,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "dl380_gen12_02": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": true,
+   "score": 120570,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "dl380_gen12_03": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": true,
+   "score": 120570,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "dl380_gen12_04": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": true,
+   "score": 120570,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_0": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102520,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50320,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": true,
+   "score": 90320,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100320,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": true,
+   "score": 120520,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": true,
+   "score": 101520,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_1": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": true,
+   "score": 120520,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": true,
+   "score": 50320,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": true,
+   "score": 100320,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_10": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_11": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_12": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_2": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": true,
+   "score": 50320,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": true,
+   "score": 100520,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": true,
+   "score": 120520,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_3": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": true,
+   "score": 80320,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": true,
+   "score": 75320,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": true,
+   "score": 100320,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": true,
+   "score": 100320,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": true,
+   "score": 100320,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": true,
+   "score": 110320,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": true,
+   "score": 50320,
+   "spec": 30
+  }
+ },
+ "extra_4": {
+  "redfish_cisco_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": true,
+   "score": 100520,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": true,
+   "score": 110320,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_5": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": true,
+   "score": 80520,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_6": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": true,
+   "score": 80320,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_7": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": true,
+   "score": 80520,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_8": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": true,
+   "score": 80320,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "extra_9": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "r1_DELL_R740_01": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "r1_HPE_CSUS3200_01": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102570,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "r1_HPE_CSUS3200_02": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102570,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "r1_HPE_CSUS3200_03": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102570,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "r1_HPE_CSUS3200_04": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": true,
+   "score": 102570,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": true,
+   "score": 100345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "r1_HPE_DL380_01": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": true,
+   "score": 50345,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": true,
+   "score": 120570,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "r1_Lenovo_SR650_01": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "ref_xcc_v2": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": true,
+   "score": 100570,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "sr650_v4_01": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "sr650_v4_02": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "sr650_v4_03": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ },
+ "sr650_v4_04": {
+  "redfish_cisco_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_cisco_cimc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_cisco_ucs_xseries": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_dell_idrac10": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_dell_idrac8": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_dell_idrac9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_fujitsu_irmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_generic": {
+   "match": true,
+   "score": -400,
+   "spec": -40
+  },
+  "redfish_hpe_csus_3200": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_ilo": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_hpe_ilo4": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo5": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo6": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_hpe_ilo7": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_hpe_superdome_flex": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_huawei_ibmc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_inspur_isbmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_bmc": {
+   "match": true,
+   "score": 10120,
+   "spec": 10
+  },
+  "redfish_lenovo_imm2": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_lenovo_xcc": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_lenovo_xcc3": {
+   "match": false,
+   "score": null,
+   "spec": 50
+  },
+  "redfish_quanta_qct_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_ars": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_bmc": {
+   "match": false,
+   "score": null,
+   "spec": 10
+  },
+  "redfish_supermicro_x10": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x11": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x12": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x13": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x14": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  },
+  "redfish_supermicro_x9": {
+   "match": false,
+   "score": null,
+   "spec": 30
+  }
+ }
+}
