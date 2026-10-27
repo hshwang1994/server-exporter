@@ -2767,6 +2767,10 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
                                code=_CODE_BIOS_NON_BLOCKING))
             return out, errors
 
+        # 2026-10-27 (C9 04-firmware, 구조 근거): Bios.Links.ActiveSoftwareImage → firmware_links(bios). 이미 받은 응답에서만 읽는다.
+        if isinstance(link_info, dict):
+            link_info['active_software_image'] = _safe(data, 'Links', 'ActiveSoftwareImage', '@odata.id')
+
         # 최상위 type 만 본다. 표준 응답도 내부(@Redfish.Settings / Oem)에는 다른 type 이 있다.
         odata_type = data.get('@odata.type')
         if odata_type is not None and not (
@@ -2802,7 +2806,7 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
 
 
 def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_ssl,
-               manager_layout=None, is_first=True, manager_id=None):
+               manager_layout=None, is_first=True, manager_id=None, links_out=None):
     """bmc 섹션 수집 (Redfish endpoints).
 
     호출 endpoint:
@@ -2824,6 +2828,9 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     if err or st != 200:
         errors.append(_err('bmc', f'BMC 수집 실패: {err or st}'))
         return {}, errors
+    # 2026-10-27 (C9 04-firmware, 구조 근거): Manager.Links.ActiveSoftwareImage → firmware_links(bmc). 이미 받은 응답에서만 읽는다 (요청 0).
+    if isinstance(links_out, dict):
+        links_out['active_software_image'] = _safe(data, 'Links', 'ActiveSoftwareImage', '@odata.id')
 
     # nosec rule12-r1: vendor → BMC 표시명 매핑 (외부 spec 기반 표준 이름)
     bmc_names = {'dell': 'iDRAC', 'hpe': 'iLO', 'lenovo': 'XCC', 'supermicro': 'BMC',
@@ -5012,7 +5019,7 @@ def _is_pending_fw_id(fw_id):
     return bool(isinstance(fw_id, str) and 'pending' in fw_id.lower())
 
 
-def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
+def gather_firmware(bmc_ip, username, password, timeout, verify_ssl, links_out=None):
     """
     UpdateService/FirmwareInventory — 벤더 공통
     Members 에 상세 필드 없으면 개별 URI 조회 (Dell/HPE/Supermicro 모두 해당)
@@ -5104,6 +5111,12 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         if post_key in seen_fw_keys:
             continue
         seen_fw_keys.add(post_key)
+        # 2026-10-27 (C9 구조 근거): 멤버 RelatedItem 이 Bios 리소스(…/Bios)를 가리키면 BIOS 펌웨어다 (실측 Lenovo UEFI · UEFI-Pending).
+        # RelatedItem → Managers/<id> 는 bmc 근거로 쓰지 않는다 — 같은 링크를 HPM-FPGA 같은 다른 부품도 가진다(실측 Lenovo).
+        if isinstance(links_out, dict) and any(
+                isinstance(ri, dict) and _str(ri.get('@odata.id')).rstrip('/').lower().endswith('/bios')
+                for ri in _dicts(_safe(member, 'RelatedItem'))):
+            links_out.setdefault(_fw_dedup_key(fw_id), {})['bios'] = True
         fw_list.append({
             'id':         fw_id,
             'name':       _safe(member, 'Name'),
@@ -5692,9 +5705,9 @@ def _make_section_runner(all_errors, collected, failed, unsupported=None):
     cycle 2026-05-01: 404 시그널은 unsupported list로 분리 (endpoint 부재 = capability 미지원).
     호환성: unsupported 인자 미전달 시 기존 동작 유지 (back-compat).
     """
-    def _run(section, fn, *args):
+    def _run(section, fn, *args, **kwargs):
         try:
-            val, errs = fn(*args)
+            val, errs = fn(*args, **kwargs)
             # 404 only면 unsupported로 분류, errors[]에서 제외 (호출자 noise 차단)
             # EXC-1: 단, collection-level 404(val 비어있음=진짜 미지원)만 unsupported.
             # collection 200 + sub-멤버 404 로 *부분 수집*된 경우(val 채워짐)는 아래 일반 경로로
@@ -6582,7 +6595,7 @@ def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, pass
 def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           username, password, timeout, verify_ssl,
                           all_errors, collected, failed, unsupported=None,
-                          manager_layout=None, product_hint=None, firmware_scope=None):
+                          manager_layout=None, product_hint=None, firmware_scope=None, aux_out=None):
     """10개 섹션 dispatch (system / bmc / processors / memory / storage / network /
     firmware / power / thermal / network_adapters[P4]).
 
@@ -6620,14 +6633,16 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     sys_chassis_all = sys_chassis or ([eff_chassis_uri] if eff_chassis_uri else [])
     # system 수집이 ComputerSystem 응답의 Bios 링크를 여기에 기록한다 (재조회 없음).
     bios_link = {}
+    # 2026-10-27 (C9): 구조 근거 수집용 out dict — bmc 는 Manager.Links.ActiveSoftwareImage, firmware 는 멤버 RelatedItem(/Bios). 요청 0.
+    bmc_links, fw_links_by_key = {}, {}
     sections = {
         'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
-        'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout),
+        'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout, links_out=bmc_links),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
         'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
-        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds),
+        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds, links_out=fw_links_by_key),
         # 2026-10-19 (A-11): System 이 연결한 섀시 전체 — 1개면 종전 gather_power(eff_chassis_uri) 와 같은 호출
         'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds),
         # cycle 2026-06-14 (Track 4): 단일노드 thermal (온도 센서 + 팬). 미지원 벤더는 {} graceful.
@@ -6654,7 +6669,35 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     # 전원 Off 는 관측 사실로만 1회 남긴다 — 섹션 status 는 바꾸지 않고(수집은 성공), 인과 해석은 계약 문서(03-fields 6.7)에 둔다.
     if _str(bios_link.get('power_state')).strip().lower() == 'off':
         _notice('system', '호스트 전원 Off 관측 — 저장/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
+    # 2026-10-27 (C9 FIX 7): 구조 근거 firmware_links — 최종 firmware[].id 로 키잉. data 밖(모듈 최상위 firmware_links)으로 나가고
+    # normalize 의 category 가 1순위로 쓴다. 발행 키·요청 수는 늘지 않는다.
+    if aux_out is not None:
+        aux_out['firmware_links'] = _firmware_links_by_id(
+            sections.get('firmware'), fw_links_by_key,
+            bios_link.get('active_software_image'), bmc_links.get('active_software_image'))
     return sections
+
+
+def _firmware_links_by_id(fw_list, links_by_key, bios_image_uri, bmc_image_uri):
+    """firmware[].id → {'bios': True} | {'bmc': True} | 둘 다 — 구조 근거만 (2026-10-27, C9 04-firmware-001~005 / 008).
+
+    근거 3종: Bios.Links.ActiveSoftwareImage(→ bios) · Manager.Links.ActiveSoftwareImage(→ bmc) · 멤버 RelatedItem 이 …/Bios(→ bios).
+    대조는 status 접두사를 뗀 dedup key 로 한다 — Dell 은 ActiveSoftwareImage 가 'Installed-…' 를 가리키고 firmware[] 에는 first-seen
+    'Current-…' 가 남는다(04-firmware-008). 근거가 없는 항목은 키 자체가 없다(normalize 는 토큰 사슬로 간다).
+    """
+    by_key = {k: dict(v) for k, v in (links_by_key or {}).items() if isinstance(v, dict)}
+    for uri, kind in ((bios_image_uri, 'bios'), (bmc_image_uri, 'bmc')):
+        tail = _str(uri).rstrip('/').split('/')[-1] if isinstance(uri, str) and uri.strip() else ''
+        if tail:
+            by_key.setdefault(_fw_dedup_key(tail), {})[kind] = True
+    out = {}
+    for fw in (fw_list or []):
+        if not isinstance(fw, dict) or not isinstance(fw.get('id'), str):
+            continue
+        hit = by_key.get(_fw_dedup_key(fw['id']))
+        if hit:
+            out[fw['id']] = dict(hit)
+    return out
 
 
 def _compute_final_status(collected, failed, errors=None, first_auth_status=None):
@@ -9327,11 +9370,12 @@ def main():
                 multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
             )
 
+    aux = {}   # 2026-10-27 (C9): data 밖으로 나가는 구조 근거(firmware_links)
     result_data = _collect_all_sections(
         bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         username, password, timeout, verify_ssl,
         all_errors, collected, failed, unsupported,
-        manager_layout=manager_layout,
+        manager_layout=manager_layout, aux_out=aux,
         # A1b (2026-06-04): ServiceRoot.Product 를 hardware.model fallback 로 전달 (check_redfish 동일).
         product_hint=_safe(service_root, 'Product'),
         firmware_scope=(p.get('firmware_inventory_scope') or None),
@@ -9377,6 +9421,8 @@ def main():
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
+        # 2026-10-27 (C9): firmware[].id → 구조 근거 {bios|bmc} — normalize 의 category 1순위. data 밖이라 GOLDEN/envelope 키 불변.
+        firmware_links=aux.get('firmware_links') or {},
         # 2026-10-03 (P2): 모듈 내부 관측값 — envelope 13 필드에는 들어가지 않는다 (normalize 가 뽑지 않음).
         cache=cache_stats(),
     )

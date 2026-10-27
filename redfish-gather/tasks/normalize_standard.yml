@@ -16,6 +16,8 @@
     _rf_d_thermal: "{{ _rf_raw_collect.data.thermal     | default({'temperatures':[],'fans':[]}) }}"
     # P4 (cycle 2026-04-28): NetworkAdapters / Ports / FC HBA / InfiniBand
     _rf_d_netad:   "{{ _rf_raw_collect.data.network_adapters | default({'adapters':[],'ports':[],'fc_hbas':[],'infiniband':[]}) }}"
+    # 2026-10-27 (C9 FIX 7): 모듈 최상위 firmware_links — firmware[].id → {bios|bmc} 구조 근거 (Bios/Manager Links.ActiveSoftwareImage, RelatedItem /Bios)
+    _rf_fw_links:  "{{ _rf_raw_collect.firmware_links | default({}) }}"
   no_log: true
 
 # 2026-04-29 fix B01: ProcessorType=='CPU' 필터링 — Dell r760 Tesla T4 같은 GPU/Accelerator/FPGA/DSP가
@@ -398,33 +400,48 @@
     # cycle 2026-06-15 (SCHEMA-07, HPE DL380 검수): 'System ROM'(HPE BIOS) → bios 분류 +
     # UBM 백플레인('8 SFF 24G x1NVMe/SAS UBM3 BC BP')이 'nvme' substring 으로 drive 오분류되던 것 정정.
     # 고특이 'ubm'/'bc bp' 를 drive 앞에서 선점, 일반 'backplane' 은 drive 뒤 유지(Dell disk>backplane 보존).
+    # 2026-10-27 (C9 FIX 7 — 2차 Mock 18 label 재분류, enum 확장 없음): 1순위는 구조 근거(_rf_fw_links: Bios/Manager Links.ActiveSoftwareImage,
+    #   RelatedItem /Bios — 모듈이 이미 받은 응답에서만), 2순위는 실측으로 검증된 토큰 사슬(특이 → 일반), 3순위는 같은 봉투의 storage.controllers[]
+    #   controller_model 과 이름 일치(Storage 리소스가 식별한 컨트롤러와의 구조적 조인). 근거가 없으면 other 유지(CSUS ComplexFW/Partition<N>_FW —
+    #   RelatedItem 이 Chassis/System 이라 구조 근거 없음, Description 산문은 근거가 아니다). FC HBA 는 enum 에 없어 일관되게 other(FIX 7).
+    #   토큰 추가 근거: 'uefi'(Lenovo UEFI = 구조 근거와 일치) · 'programmable logic'/'fpga'(HPE PLD · Lenovo HPM/SCM-FPGA — CPLD 와 같은 프로그래머블
+    #   로직 부류) · 'video'/'graphics'(HPE Embedded Video Controller 가 'controller' 폴백으로 storage_controller 가 되던 것) · FC HBA 토큰(Dell/HPE/Lenovo
+    #   QLogic·SN1x10Q·QLE2772 가 'controller' 폴백에 걸리던 것). 'disk' 를 'backplane' 앞에, 'backplane' 을 'raid' 앞에, 'raid' 를 'drive|nvme' 앞에 둔다.
     _rf_firmware_categorized: >-
+      {%- set ctrl_models = (_rf_norm_controllers | default([])) | map(attribute='controller_model', default='') | select('string') | map('lower') | map('trim') | reject('equalto', '') | list -%}
       {%- set out = [] -%}
       {%- for fw in (_rf_d_firmware | default([])) -%}
         {%- set fid = fw.id | default('') | string -%}
         {%- set fname = fw.name | default('') | string -%}
         {%- set lid = (fid ~ '|' ~ fname) | lower -%}
+        {%- set links = (_rf_fw_links | default({})).get(fid) | default({}, true) -%}
         {%- set cat = 'other' -%}
         {# nosec rule12-r1: firmware id substring 매칭 (Redfish firmware naming, vendor 분기 아님) #}
-        {%- if 'bios' in lid or 'system rom' in lid -%}{%- set cat = 'bios' -%}
-        {%- elif 'cpld' in lid -%}{%- set cat = 'cpld' -%}
-        {%- elif 'tpm' in lid -%}{%- set cat = 'tpm' -%}
+        {%- if links.bios | default(false) -%}{%- set cat = 'bios' -%}
+        {%- elif links.bmc | default(false) -%}{%- set cat = 'bmc' -%}
         {%- elif 'diagnostic' in lid -%}{%- set cat = 'diagnostic' -%}
+        {%- elif 'bios' in lid or 'system rom' in lid or 'uefi' in lid -%}{%- set cat = 'bios' -%}
+        {%- elif 'cpld' in lid or 'programmable logic' in lid or 'fpga' in lid -%}{%- set cat = 'cpld' -%}
+        {%- elif 'tpm' in lid -%}{%- set cat = 'tpm' -%}
         {%- elif 'usc' in lid or 'lifecycle' in lid -%}{%- set cat = 'lifecycle' -%}
         {%- elif 'driver' in lid -%}{%- set cat = 'driver_pack' -%}
         {%- elif 'ubm' in lid or 'bc bp' in lid -%}{%- set cat = 'backplane' -%}
-        {%- elif 'disk' in lid or 'drive' in lid or 'nvme' in lid or 'ssd' in lid or 'hdd' in lid or 'boss' in lid -%}{%- set cat = 'drive' -%}
+        {%- elif 'disk' in lid -%}{%- set cat = 'drive' -%}
         {%- elif 'backplane' in lid -%}{%- set cat = 'backplane' -%}
-        {%- elif 'service' in lid -%}{%- set cat = 'service_module' -%}
-        {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}{# nosec rule12-r1: BMC 표시명 substring (Redfish firmware naming, vendor 분기 아님) #}
         {#- RD-FW1 (2026-10-10): RAID 토큰이 NIC 보다 먼저 — Broadcom MegaRAID 컨트롤러가 'broadcom' 으로 nic 이 되던 것 -#}
         {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
+        {%- elif 'drive' in lid or 'nvme' in lid or 'ssd' in lid or 'hdd' in lid or 'boss' in lid -%}{%- set cat = 'drive' -%}
+        {%- elif 'service' in lid -%}{%- set cat = 'service_module' -%}
+        {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}{# nosec rule12-r1: BMC 표시명 substring (Redfish firmware naming, vendor 분기 아님) #}
+        {%- elif 'fibre channel' in lid or 'fc hba' in lid or 'fc adapter' in lid or ' hba' in lid -%}{%- set cat = 'other' -%}
+        {%- elif 'video' in lid or 'graphics' in lid -%}{%- set cat = 'other' -%}
+        {%- elif (fname | lower | trim) in (ctrl_models | default([])) -%}{%- set cat = 'storage_controller' -%}
         {#- 2026-10-19 (A-9): 'gbe' — PCIe 장치 이름이 "10/25GbE" 류일 때(실측 CSUS PCIeDevice 'MLX MCX631102 10/25GbE 2p SFP28 Adptr' 에는
             nic/ethernet/제조사 토큰이 없다). FC HBA 이름은 '16Gb' 라 걸리지 않는다 -#}
         {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid or 'gbe' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'psu' in lid or 'power supply' in lid -%}{%- set cat = 'psu' -%}
         {#- 2026-10-19 (A-9): 위 토큰에 안 걸린 '… Controller' 는 저장 컨트롤러로 본다 (실측 CSUS PCIe 'HPE SR3258p-16i/e PCIe4 Controller').
-            BMC(관리 컨트롤러 이름들) · lifecycle · backplane · 이더넷 컨트롤러는 앞 분기가 먼저 잡는다. FC HBA 는 enum 에 없어 other 로 남는다. -#}
+            BMC(관리 컨트롤러 이름들) · lifecycle · backplane · 이더넷 컨트롤러 · 비디오 컨트롤러는 앞 분기가 먼저 잡는다. -#}
         {%- elif 'controller' in lid -%}{%- set cat = 'storage_controller' -%}
         {%- endif -%}
         {%- set _ = out.append(fw | combine({'category': cat})) -%}
