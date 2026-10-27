@@ -58,7 +58,9 @@ def _select(facts):
     # Lenovo — XCC2 펌웨어에 숫자 3 이 있어도 XCC3 가 아니다; 접두 식은 접두에만
     ({"vendor": "Lenovo", "model": "ThinkSystem SR650 V3", "firmware": "XCC2 v3.10"}, "redfish_lenovo_xcc"),
     ({"vendor": "Lenovo", "model": "ThinkSystem SR650 V2", "firmware": "AFBT58B-5.70"}, "redfish_lenovo_xcc"),
-    ({"vendor": "Lenovo", "model": "ThinkSystem SR650 V4", "firmware": "XCC3 1.20"}, "redfish_lenovo_xcc3"),
+    # 2026-10-27: 가공 문자열 "XCC3 1.20" 을 실측(용인 SR650 V4, IHX438R 2.97 20260910 + Manager.Model) 로 — xcc3 는 model V4 + bmc_model 로 선택
+    ({"vendor": "Lenovo", "model": "ThinkSystem SR650 V4", "firmware": "IHX438R 2.97 20260910", "bmc_model": "Lenovo XClarity Controller 3"},
+     "redfish_lenovo_xcc3"),
     ({"vendor": "Lenovo", "model": "System x3650 M5", "firmware": "IMM2 TCOO54D 1.50"}, "redfish_lenovo_imm2"),
 ])
 def test_generation_token_selects_the_right_generation(facts, expected):
