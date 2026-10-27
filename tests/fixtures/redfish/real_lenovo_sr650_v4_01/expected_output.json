@@ -838,14 +838,6 @@
       },
       {
         "component": "BMC-IHX4-10",
-        "id": "BMC-Primary-Pending",
-        "name": "Firmware:BMC",
-        "pending": true,
-        "updateable": true,
-        "version": null
-      },
-      {
-        "component": "BMC-IHX4-10",
         "id": "BMC-Backup",
         "name": "Firmware:BMC",
         "pending": false,
@@ -861,28 +853,12 @@
         "version": "06N-4.42"
       },
       {
-        "component": "FPGA-IHFG-10",
-        "id": "HPM-FPGA-Pending",
-        "name": "Firmware:HPM-FPGA",
-        "pending": true,
-        "updateable": true,
-        "version": null
-      },
-      {
         "component": "UEFI-IHE1-6",
         "id": "UEFI",
         "name": "Firmware:UEFI",
         "pending": false,
         "updateable": true,
         "version": "20L-1.50"
-      },
-      {
-        "component": "UEFI-IHE1-6",
-        "id": "UEFI-Pending",
-        "name": "Firmware:UEFI",
-        "pending": true,
-        "updateable": true,
-        "version": null
       },
       {
         "component": "LXPM-DFL1-4",
@@ -1029,14 +1005,6 @@
         "version": "26"
       },
       {
-        "component": "STOREXP-BB-10",
-        "id": "Drive_Backplane_STA7B78555_L3HF5BC007P_PSoC_0xBB-Pending",
-        "name": "Firmware-PSoC:0xBB",
-        "pending": true,
-        "updateable": true,
-        "version": null
-      },
-      {
         "component": "POWER-GREAac00-10",
         "id": "PSU1",
         "name": "POWER-PSU1",
@@ -1063,7 +1031,7 @@
           "error_correction": "SingleBitECC",
           "health": "OK",
           "id": "23",
-          "locator": "23",
+          "locator": "DIMM 23",
           "manufacturer": "Micron Technology",
           "name": "DIMM 23",
           "part_number": "MTC40F2046S1RC64BD2 MWFF",
@@ -1080,7 +1048,7 @@
           "error_correction": "SingleBitECC",
           "health": "OK",
           "id": "7",
-          "locator": "7",
+          "locator": "DIMM 7",
           "manufacturer": "Micron Technology",
           "name": "DIMM 7",
           "part_number": "MTC40F2046S1RC64BD2 MWFF",
@@ -1244,7 +1212,7 @@
           "firmware_version": "04",
           "health": "Critical",
           "manufacturer": "GREA",
-          "model": "CRPS1300D5    ",
+          "model": "CRPS1300D5",
           "name": "PSU1",
           "part_number": "SP57B68396",
           "power_capacity_w": 1300,
@@ -1255,7 +1223,7 @@
           "firmware_version": "04",
           "health": "OK",
           "manufacturer": "GREA",
-          "model": "CRPS1300D5    ",
+          "model": "CRPS1300D5",
           "name": "PSU2",
           "part_number": "SP57B68396",
           "power_capacity_w": 1300,
@@ -1413,9 +1381,9 @@
       "oem": {
         "fru_serial": null,
         "health_summary": null,
-        "led_indicator": null,
+        "led_indicator": "Off",
         "machine_level": null,
-        "machine_type": null,
+        "machine_type": "7DGD",
         "product_id": null,
         "product_name": "ThinkSystem SR650 V4",
         "system_id": null,

@@ -23,3 +23,14 @@
 | G-08 | WP3 | `real_hpe_dl380` (1차) | `data.thermal.temperatures[*].reading_celsius` (State Absent 9건) | `0` ×9 | `null` ×9 (Enabled 43 건 불변) | 같음 (1차 iLO 7 1.20.00) | 같음 |
 
 - G-04~G-08 검증: 15 real_* fixture 전부 재생해 평탄 비교 — 바뀐 경로가 위 다섯 fixture 의 위 경로뿐임을 확인한 뒤 썼다(CSUS 4 · Lenovo 5 · Dell 1 = 차이 0; CSUS ThermalMetrics 는 Status 가 없어 규칙이 닿지 않는다). 요청 예산 불변.
+
+### WP5 (C4 — Lenovo XCC3 응답 모양) — 2026-10-27
+
+| # | WP | fixture / baseline | 경로 | before | after | 원천 | 원인 |
+|---|---|---|---|---|---|---|---|
+| G-09 | WP5 | `real_lenovo_sr650`(1차) · `real_lenovo_sr650_v4_01..04` | `data.firmware[]` | 26 · 28 · 30 · 40 · 30 항목 (`-Pending` 빈 슬롯 2 · 4 · 4 · 4 · 4 — `version null`, `pending true`) | **24 · 24 · 26 · 36 · 26** 항목 (빈 슬롯 제외, 그 밖 항목 값 불변 — 인덱스만 이동) | recording `UpdateService/FirmwareInventory/{BMC-Primary,UEFI,HPM-FPGA,Drive_Backplane_…_PSoC}-Pending`: `Status.State Disabled` · `Version ""` | 예정된 업데이트가 없는 스테이징 자리(placeholder) → 제외 + notice "Disabled · Version 없음(예정된 업데이트 없음) — 목록에서 제외" (04-firmware-006). Version 이 있는 pending 은 보존 |
+| G-10 | WP5 | `real_lenovo_sr650` · `_v4_01..04` | `data.memory.slots[*].locator` (16 · 2 · 2 · 16 · 8 건) | `"32"`, `"23"` … (MemoryLocation.Slot 문자열) | `"DIMM 32"`, `"DIMM 23"` … (`Location.PartLocation.ServiceLabel`) | recording `Systems/1/Memory/<n>`: `DeviceLocator null`, `ServiceLabel "DIMM 23"`, `MemoryLocation.Slot 23` | 순서 DeviceLocator → ServiceLabel → str(Slot) (02-memory-003). Dell/iLO(DeviceLocator)·CSUS(Slot 0 → ServiceLabel) 불변 |
+| G-11 | WP5 | `real_lenovo_sr650_v4_01..04` | `data.power.power_supplies[0..1].model` | `"CRPS1300D5    "` | `"CRPS1300D5"` | recording `Chassis/1/Power.PowerSupplies[].Model` 패딩 공백 | 문자열 strip (05-power-003). 1차 `FSP006-EL0G` 는 공백이 없어 불변 |
+| G-12 | WP5 | `real_lenovo_sr650` · `_v4_01..04` | `data.system.oem.machine_type` · `led_indicator` | `null` · `null` | `"7DGD"` · `"Off"` | recording `Systems/1.SubModel "7DGD"` · `IndicatorLED "Off"` (Chassis.Oem.Lenovo 에 MachineType/LEDIndicators 없음) | chassis OEM 이 비면 System 값으로 채움(원천 있는 2키). 다른 oem 키는 그대로(null 유지 — 원천 없음) |
+
+- G-09~G-12 검증: 15 fixture 전부 재생 → 바뀐 경로는 Lenovo 5세트의 위 네 묶음뿐(CSUS 4 · DL380 5 · Dell 1 차이 0). 요청 예산 불변. 호스트 EthernetInterfaces 의 FC 제외(03-network-001)는 normalize 층이라 모듈 golden 에 없다 — Tier 1 봉투(`tier1-after-WP5/`)와 INV-5 로 확인.
