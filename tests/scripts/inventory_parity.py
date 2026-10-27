@@ -5,11 +5,11 @@ gather 코드와 **독립된 단순 규칙**으로 원본 Redfish(recording.json
 수집 산출(모듈 golden/재생 결과 또는 최종 envelope)의 개수와 대조한다. `status: success` 는 보지 않는다.
 
 노출 수 (원본):
-- 디스크: `.../Drives/<id>` 본문(Storage/*/Drives, Chassis/*/Drives) + SimpleStorage `Devices[]`.
+- 디스크: `.../Drives/<id>` 본문(Storage/*/Drives, Chassis/*/Drives). SimpleStorage `Devices[]` 는 Drive 리소스가 하나도 없을 때만(같은 디스크의 단순화 보기).
     present         = CapacityBytes > 0 ∧ Status.State != Absent ∧ 이름에 'empty' 없음
     absent_empty_bay = 그 밖(State Absent · CapacityBytes 0/없음 · Empty Bay)
     같은 드라이브가 두 경로(Storage 와 Chassis)로 보이면 SerialNumber 로 1개로 센다(present_raw 는 중복 포함 수).
-- FC 포트: `.../NetworkAdapters/<a>/(Ports|NetworkPorts)/<p>` 본문에 FC 신호가 있으면 FC —
+- FC 포트: `.../NetworkAdapters/<a>/(Ports|NetworkPorts)/<p>` 본문에 FC 신호가 있으면 FC(같은 adapter·같은 Id 가 두 컬렉션에 있으면 1개) —
     LinkNetworkTechnology/ActiveLinkTechnology == FibreChannel · PortProtocol ∈ {FC, FCP, FCoE} · `FibreChannel` 블록(dict) ·
     8옥텟 주소(WWPN) · 또는 그 포트를 가리키는 NDF 의 NetDevFuncType/NetDevFuncCapabilities 가 FibreChannel.
     **NDF 컬렉션이 비어 있어도 Port 신호만으로 센다**(Lenovo XCC3 사례). 포트 링크가 없는 FC NDF 는 고아(orphan)로 따로 센다.
@@ -151,10 +151,16 @@ def exposure(bodies: dict) -> dict:
         rec = {"path": path, "serial": (body.get("SerialNumber") or "").strip() or None, "capacity_bytes": cap,
                "state": state, "name": name}
         (drives_present if present else drives_absent).append(rec)
-    # SimpleStorage Devices
+    # SimpleStorage Devices — Storage/*/Drives 가 하나도 없을 때만 센다. SimpleStorage 는 같은 물리 디스크의 단순화된
+    # 보기(DMTF SimpleStorage: "simple storage subsystem" 의 Devices[])라 Drive 리소스와 함께 있으면 같은 디스크의 두 번째
+    # 노출이다 (2026-10-27 r1_DELL_R740_01: RAID.Slot.6-1 의 Devices[0..3] = Drives/Disk.Bay.0..3, SerialNumber 없음).
+    simple_storage_used = False
     for path, body in bodies.items():
         if not _SIMPLE_RE.match(path):
             continue
+        if drives_present or drives_absent:
+            continue
+        simple_storage_used = True
         for i, dev in enumerate(body.get("Devices") or []):
             if not isinstance(dev, dict):
                 continue
@@ -173,17 +179,27 @@ def exposure(bodies: dict) -> dict:
     for d in drives_present:
         key = ("serial", d["serial"]) if d["serial"] else ("path", d["path"])
         dedup.setdefault(key, d)
-    # FC ports
+    # FC ports — 같은 adapter 의 같은 포트 Id 가 Ports/ 와 NetworkPorts/(구 스키마) 두 컬렉션에 모두 있으면 1개다
+    # (2026-10-27 r1_DELL_R740_01: FC.Slot.1-1 이 NetworkPorts(ActiveLinkTechnology) 와 Ports(LinkNetworkTechnology) 양쪽에).
+    # 대표 경로는 Ports/ 를 우선하고, FC 판정은 두 본문 중 하나라도 FC 신호가 있으면 FC 다.
     fc_ports, eth_ports = set(), set()
     port_bodies = {p: b for p, b in bodies.items() if _PORT_RE.search(p)}
-    for p, b in port_bodies.items():
-        (fc_ports if _port_is_fc(b) else eth_ports).add(p)
+    canon_of = {}
+    groups = {}
+    for p in sorted(port_bodies, key=lambda x: (x.rsplit("/", 2)[0], x.rsplit("/", 1)[1], 0 if "/Ports/" in x else 1)):
+        key = (p.rsplit("/", 2)[0], p.rsplit("/", 1)[1])
+        groups.setdefault(key, []).append(p)
+    for key, paths in groups.items():
+        canon = paths[0]
+        for p in paths:
+            canon_of[p] = canon
+        (fc_ports if any(_port_is_fc(port_bodies[p]) for p in paths) else eth_ports).add(canon)
     orphan_fc_ndf = []
     pending_ndf = []
     for p, b in bodies.items():
         if not _NDF_RE.search(p) or not _ndf_is_fc(b):
             continue
-        links = [l for l in _ndf_port_links(b) if l in port_bodies]
+        links = [canon_of[l] for l in _ndf_port_links(b) if l in canon_of]
         if links:
             for l in links:
                 fc_ports.add(l)
@@ -203,7 +219,7 @@ def exposure(bodies: dict) -> dict:
     storage_members = {p: len(b.get("Members") or []) for p, b in bodies.items() if _STORAGE_COLL_RE.match(p)}
     return {
         "disks_present": len(dedup), "disks_present_raw": len(drives_present), "disks_absent_empty_bay": len(drives_absent),
-        "disk_paths_present": sorted(d["path"] for d in drives_present),
+        "disk_paths_present": sorted(d["path"] for d in drives_present), "simple_storage_used": simple_storage_used,
         "fc_ports": len(fc_ports), "fc_port_paths": sorted(fc_ports), "ethernet_ports": len(eth_ports),
         "orphan_fc_ndf": sorted(orphan_fc_ndf), "host_fc_in_ethernet": host_fc_in_eth,
         "power_state": power, "storage_collection_members": storage_members,
