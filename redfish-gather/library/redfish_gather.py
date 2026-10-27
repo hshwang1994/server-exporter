@@ -2574,6 +2574,9 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     if bios_link_out is not None:
         bios_link_out['retrieved'] = True
         bios_link_out['link'] = _safe(data, 'Bios', '@odata.id')
+        # 2026-10-27 (C2 — 02-system/05-power/05-thermal 전원 Off 맥락): 같은 응답의 PowerState 도 기록한다.
+        # _collect_all_sections 가 섹션 수집 뒤 "호스트 전원 Off 관측" notice 1회에 쓴다 (요청 0, 전역 없음).
+        bios_link_out['power_state'] = _safe(data, 'PowerState')
 
     # Lenovo 등 일부 벤더는 ProductName 이 Chassis.Oem 에 위치 (System.Oem 에는 없음).
     # OEM extractor 가 chassis 데이터를 활용할 수 있도록 1회 fetch.
@@ -3073,7 +3076,7 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         errors.append(_err('memory', f'Memory 컬렉션 실패: {err or st}'))
         return {'total_mib': None, 'slots': []}, errors
 
-    slots, total_mib, cap_unknown = [], 0, 0
+    slots, total_mib, cap_unknown, empty_slots = [], 0, 0, 0
     for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
                                       'memory', errors):
         uri = _safe(member, '@odata.id')
@@ -3083,6 +3086,13 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             errors.append(_err('memory', f'Memory {uri} 실패: {merr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         if _safe(mdata, 'Status', 'State') == 'Absent':
+            continue
+        # 2026-10-27 (C2 02-memory, 실측 iLO 7 DL380 Gen12 호스트 Off 스냅샷 — 32 멤버 중 16): Status 자체가 없고 CapacityMiB 가
+        # 0/None 이며 제조사·부품·시리얼이 전부 비어 있는 멤버는 빈 슬롯이다(DeviceLocator 만 있다). 값이 하나라도 있으면 종전대로 담는다.
+        # Status 가 있는 장착 DIMM · Absent 로 표시된 슬롯(위 분기) 은 영향 없다.
+        if (_safe(mdata, 'Status') is None and not _safe(mdata, 'CapacityMiB')
+                and not any(_strip_or_none(_safe(mdata, k)) for k in ('Manufacturer', 'PartNumber', 'SerialNumber'))):
+            empty_slots += 1
             continue
         # MEM-01 (2026-06-15 재검수): 구 `_safe(mdata,'CapacityMiB') or 0` 은 CapacityMiB 부재(None)를
         # 0(유효 용량)으로 날조 — 누락과 "0 MiB DIMM" 을 혼동(wrong-default). None 보존(raw 충실).
@@ -3141,6 +3151,8 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         else:
             _notice('memory', f'CapacityMiB 부재 DIMM {cap_unknown}/{len(slots)} — 합계 미산출(slot 은 보존)')
         total_mib = None
+    if empty_slots:
+        _notice('memory', f'빈 DIMM 슬롯 {empty_slots}개 제외 (Status 없음 · CapacityMiB 0 · 제조사/부품/시리얼 없음)')
     return {'total_mib': total_mib, 'slots': slots}, errors
 
 
@@ -5183,6 +5195,12 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                         errors.append(_err('power', f'PowerSupply {m_uri} 실패: {_err_m or st_m}',
                                            detail={'status_code': st_m}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
+                m_state = _safe(mdata, 'Status', 'State')
+                # CSUS-R9 (2026-06-15 실미러 검수): HPE CSUS PSU 는 FirmwareVersion 부재 +
+                # DMTF PowerSupply.Version("Release -0005")에 버전 → Version fallback (Additive).
+                m_cap, m_fw = _psu_absent_placeholders_to_none(
+                    m_state, _safe_int(_safe(mdata, 'PowerCapacityWatts')),
+                    _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'))
                 psus.append({
                     'name':             _safe(mdata, 'Name'),
                     'model':            _safe(mdata, 'Model'),
@@ -5190,12 +5208,10 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                     'manufacturer':     _safe(mdata, 'Manufacturer'),
                     # 2026-06-16 감사 G4 (Additive): CSUS PSU raw PartNumber=CSU2400AP-3-500 미수집이었음.
                     'part_number':      _safe(mdata, 'PartNumber'),
-                    'power_capacity_w': _safe_int(_safe(mdata, 'PowerCapacityWatts')),
-                    # CSUS-R9 (2026-06-15 실미러 검수): HPE CSUS PSU 는 FirmwareVersion 부재 +
-                    # DMTF PowerSupply.Version("Release -0005")에 버전 → Version fallback (Additive).
-                    'firmware_version': _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'),
+                    'power_capacity_w': m_cap,
+                    'firmware_version': m_fw,
                     'health':           _safe(mdata, 'Status', 'Health'),
-                    'state':            _safe(mdata, 'Status', 'State'),
+                    'state':            m_state,
                 })
                 # CSUS-R10: PSU.Metrics.InputPowerWatts.Reading 합산 — chassis 에 /Power·
                 # /EnvironmentMetrics 가 없어 소비전력이 PSU Metrics 에만 있는 환경(HPE CSUS) 대비.
@@ -5340,6 +5356,8 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
             ranges = _safe(psu, 'InputRanges') or []
             if isinstance(ranges, list) and ranges and isinstance(ranges[0], dict):
                 psu_capacity = _safe_int(ranges[0].get('OutputWattage'))
+        psu_state = _safe(psu, 'Status', 'State')
+        psu_capacity, psu_fw = _psu_absent_placeholders_to_none(psu_state, psu_capacity, _safe(psu, 'FirmwareVersion'))
         psus.append({
             'name':             _safe(psu, 'Name'),
             'model':            _safe(psu, 'Model'),
@@ -5347,9 +5365,9 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
             'manufacturer':     _safe(psu, 'Manufacturer'),
             'part_number':      _safe(psu, 'PartNumber'),  # 2026-06-16 감사 G4 (Additive)
             'power_capacity_w': psu_capacity,
-            'firmware_version': _safe(psu, 'FirmwareVersion'),
+            'firmware_version': psu_fw,
             'health':           _safe(psu, 'Status', 'Health'),
-            'state':            _safe(psu, 'Status', 'State'),
+            'state':            psu_state,
         })
 
     # PowerControl — system-level power consumption (Safe Common: 3 vendors verified)
@@ -5365,7 +5383,9 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     # 합산으로 fallback (PSU 770W × 2 = 1540W 형태).
     pc_capacity = _safe_int(_safe(pc0, 'PowerCapacityWatts'))  # Round 2: watt int 통일
     if pc_capacity is None:
-        psu_caps = [p['power_capacity_w'] for p in psus if p['power_capacity_w'] is not None]
+        # 2026-10-27 (C2): Absent 슬롯은 설치된 PSU 가 아니다 — 신 경로(_gather_power_subsystem, D-07)와 같은 규칙
+        psu_caps = [p['power_capacity_w'] for p in psus
+                    if p['power_capacity_w'] is not None and _str(p.get('state')).strip().lower() != 'absent']
         if psu_caps:
             pc_capacity = sum(psu_caps)
     power_control = {
@@ -5380,6 +5400,28 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     } if pc0 else None
 
     return {'power_supplies': psus, 'power_control': power_control}, errors
+
+
+def _psu_absent_placeholders_to_none(state, capacity_w, firmware_version):
+    """2026-10-27 (C2 05-power, 실측 iLO 7 DL380 Gen12 전원 Off 스냅샷): State=Absent 슬롯의 `PowerCapacityWatts: 0` · `FirmwareVersion: "0.00"`
+    은 장치 값이 아니라 빈 슬롯 placeholder 다 → null. state 는 그대로 남긴다(Absent 는 그 자체가 정보). Absent 가 아니면 값을 건드리지 않는다."""
+    if _str(state).strip().lower() != 'absent':
+        return capacity_w, firmware_version
+    if capacity_w == 0:
+        capacity_w = None
+    if isinstance(firmware_version, str) and firmware_version.strip() in ('', '0.00'):
+        firmware_version = None
+    return capacity_w, firmware_version
+
+
+def _sensor_reading_if_enabled(entry, reading):
+    """2026-10-27 (C2 05-thermal): Status.State 가 있고 'Enabled' 가 아니면(UnavailableOffline · Absent · Disabled …) 그 reading 은 측정값이
+    아니라 placeholder 다(실측 iLO 7: 전원 Off 호스트의 42 센서 전부 0 °C · 미장착 슬롯 0 °C) → null. state 는 그대로 남긴다.
+    Status 가 없는 응답(실측 CSUS ThermalMetrics 47~63건)은 값을 그대로 둔다 — 없는 상태를 추측하지 않는다."""
+    state = _safe(entry, 'Status', 'State')
+    if isinstance(state, str) and state.strip() and state.strip() != 'Enabled':
+        return None
+    return reading
 
 
 def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
@@ -5416,7 +5458,8 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         temps.append({
             'name':             _safe(t, 'Name'),
             # 2026-06-16 감사 G1: 절삭(_safe_int) → 반올림(_safe_round_int). 44.7→45.
-            'reading_celsius':  _safe_round_int(_safe(t, 'ReadingCelsius')),  # str '42' 방어
+            # 2026-10-27 (C2): Enabled 가 아닌 센서의 값은 placeholder → null (_sensor_reading_if_enabled)
+            'reading_celsius':  _sensor_reading_if_enabled(t, _safe_round_int(_safe(t, 'ReadingCelsius'))),  # str '42' 방어
             'health':           _safe(t, 'Status', 'Health'),
             'state':            _safe(t, 'Status', 'State'),
             'upper_critical':   _safe_round_int(_safe(t, 'UpperThresholdCritical')),
@@ -5430,7 +5473,7 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
             reading = _safe(f, 'ReadingRPM')
         fans.append({
             'name':          _safe(f, 'Name'),
-            'reading':       _safe_int(reading),
+            'reading':       _sensor_reading_if_enabled(f, _safe_int(reading)),   # 2026-10-27 (C2)
             'reading_units': _safe(f, 'ReadingUnits'),
             'health':        _safe(f, 'Status', 'Health'),
             'state':         _safe(f, 'Status', 'State'),
@@ -5504,7 +5547,7 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                 temps.append({
                     'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name'),
                     # 2026-06-16 감사 G1: 절삭 → 반올림. ThermalMetrics.Reading 은 float (39.3906).
-                    'reading_celsius':  _safe_round_int(_safe(tr, 'Reading')),
+                    'reading_celsius':  _sensor_reading_if_enabled(tr, _safe_round_int(_safe(tr, 'Reading'))),   # 2026-10-27 (C2)
                     'health':           _safe(tr, 'Status', 'Health'),
                     'state':            _safe(tr, 'Status', 'State'),
                     'upper_critical':   None,
@@ -5526,7 +5569,7 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                     continue
                 fans.append({
                     'name':          _safe(fdata, 'Name'),
-                    'reading':       _safe_int(_safe(fdata, 'SpeedPercent', 'Reading')),
+                    'reading':       _sensor_reading_if_enabled(fdata, _safe_int(_safe(fdata, 'SpeedPercent', 'Reading'))),   # 2026-10-27 (C2)
                     'reading_units': 'Percent' if _safe(fdata, 'SpeedPercent') else None,
                     'health':        _safe(fdata, 'Status', 'Health'),
                     'state':         _safe(fdata, 'Status', 'State'),
@@ -5540,7 +5583,7 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
             bmc_ip, chassis_uri, fan_uris, username, password, timeout, verify_ssl)
         if rpm_map:
             for i, f in enumerate(fans):
-                if f['reading'] is None and i < len(fan_uris):
+                if f['reading'] is None and i < len(fan_uris) and f.get('state') in (None, 'Enabled'):   # 2026-10-27 (C2)
                     hit = rpm_map.get(fan_uris[i])
                     if hit:
                         f['reading'], f['reading_units'] = hit[0], hit[1]
@@ -6607,6 +6650,10 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)
     sections['bios'] = bios
+    # 2026-10-27 (C2, 실측 iLO 7 DL380 Gen12 전원 Off 스냅샷: Storage 멤버 0 · DIMM 16/32 빈 슬롯 · PSU Absent · 센서 전부 0):
+    # 전원 Off 는 관측 사실로만 1회 남긴다 — 섹션 status 는 바꾸지 않고(수집은 성공), 인과 해석은 계약 문서(03-fields 6.7)에 둔다.
+    if _str(bios_link.get('power_state')).strip().lower() == 'off':
+        _notice('system', '호스트 전원 Off 관측 — 저장/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
     return sections
 
 
