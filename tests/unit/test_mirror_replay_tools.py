@@ -58,7 +58,7 @@ def _paged_tree(tmp_path, v2, total=62, declared=None, with_page2=True):
 
 
 def _use_map(monkeypatch, rmap):
-    """재생 transport 를 시험 안에서만 꽂는다 (replay.install_fakes 는 되돌릴 수 없다)."""
+    """재생 transport 를 시험 안에서만 꽂는다 (replay.installed_fakes 는 seam 을 되돌리지만, 이 시험은 _get 수준의 맵만 필요)."""
     def fake_get(bmc_ip, path, username, password, timeout, verify_ssl):
         return rmap.get(path, (404, {}, "HTTP 404: Not Found"))
     monkeypatch.setattr(rep.rg, "_get", fake_get)

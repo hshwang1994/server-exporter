@@ -18,6 +18,7 @@ _compute_final_status) 을 그대로 구동한다.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -291,10 +292,17 @@ def load_mockup_records(mirror_dir):
     return full, stats["files"], stats["skipped"] + stats["non_json"]
 
 
-def install_fakes(response_map: dict):
-    """rg 의 모든 HTTP 진입점을 맵 기반 fake 로 교체."""
+@contextlib.contextmanager
+def installed_fakes(response_map: dict):
+    """rg 의 전송 seam 을 맵 기반 fake 로 바꾸고, 블록을 나갈 때 seam 과 모듈 전역을 들어올 때 값으로 되돌린다.
 
-    def fake_get(bmc_ip, path, username, password, timeout, verify_ssl):
+    2026-10-27 (04-test-001 / 06-bmc-008): 종전 install_fakes 는 rg._get(캐시 wrapper) 자체를 영구 교체해 같은 pytest
+    프로세스의 뒤 테스트 36건(unit 19 · e2e 2 · regression 15)을 깨뜨렸다. emulator_harness.run_gather 와 같은 seam
+    (_get_impl / _get_noauth / _probe_realm_hint)을 쓰므로 _get 의 캐시·인증 관측은 재생에서도 그대로 돈다.
+    되돌리는 것: 세 seam, _AUTH_OBSERVATION, 응답 캐시(_RESPONSE_CACHE/_CACHE), _NOTICES.
+    응답 맵 키(path)는 두 seam 이 같아 build_response_map 산출을 그대로 쓴다.
+    """
+    def fake_get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         if path in response_map:
             return response_map[path]
         return 404, {}, f"HTTP 404: {_reason(404)}"
@@ -304,13 +312,39 @@ def install_fakes(response_map: dict):
             return response_map[path]
         return 404, {}, f"HTTP 404: {_reason(404)}"
 
-    rg._get = fake_get
-    rg._get_noauth = fake_get_noauth
+    def fake_realm(bmc_ip, timeout, verify_ssl):
+        return None          # 미러 트리에는 realm 이 없다(manifest realm 은 Tier 1/2 의 mirror_policy 가 쓴다) — 네트워크 0
+
+    saved_seam = (rg._get_impl, rg._get_noauth, rg._probe_realm_hint)
+    saved_auth = dict(rg._AUTH_OBSERVATION)
+    saved_cache, saved_stats = dict(rg._RESPONSE_CACHE), dict(rg._CACHE)
+    saved_notices = list(rg._NOTICES)
+    rg._get_impl, rg._get_noauth, rg._probe_realm_hint = fake_get_impl, fake_get_noauth, fake_realm
+    try:
+        yield
+    finally:
+        rg._get_impl, rg._get_noauth, rg._probe_realm_hint = saved_seam
+        rg._AUTH_OBSERVATION.clear()
+        rg._AUTH_OBSERVATION.update(saved_auth)
+        rg._RESPONSE_CACHE.clear()
+        rg._RESPONSE_CACHE.update(saved_cache)
+        rg._CACHE.clear()
+        rg._CACHE.update(saved_stats)
+        del rg._NOTICES[:]
+        rg._NOTICES.extend(saved_notices)
 
 
 def run(mirror_dir: Path, manager_layout=None, firmware_scope=None):
     response_map, service_root, stats = build_response_map(mirror_dir)
-    install_fakes(response_map)
+    with installed_fakes(response_map):
+        return _run_inside(response_map, manager_layout, firmware_scope, stats)
+
+
+def _run_inside(response_map, manager_layout, firmware_scope, stats):
+    # main() gather 모드와 같은 초기 조건: 인증 관측·notice 비움, 캐시 on. 복원은 installed_fakes 가 맡는다.
+    rg._reset_auth_observation()
+    rg._reset_notices()
+    rg._reset_response_cache(enabled=True)
 
     creds = ("u", "p", 10, False)
     bmc_ip = "10.0.0.1"
