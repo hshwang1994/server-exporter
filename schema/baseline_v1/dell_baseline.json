@@ -920,7 +920,6 @@
     "cpu": {
       "sockets": 2,
       "cores_physical": 24,
-      "logical_threads": 24,
       "model": "Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz",
       "max_speed_mhz": 4000,
       "architecture": null,

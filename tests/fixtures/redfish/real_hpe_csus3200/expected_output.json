@@ -1961,7 +1961,6 @@
         "cpu": {
           "architecture": "x86",
           "cores_physical": 32,
-          "logical_threads": 64,
           "max_speed_mhz": 3700,
           "model": "Intel(R) Xeon(R) Gold 6434H Processor",
           "sockets": 4,

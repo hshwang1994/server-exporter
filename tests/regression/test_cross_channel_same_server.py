@@ -5,10 +5,11 @@
   - Dell R760 GSBPK54         : Redfish 크롤 tests/reference/redfish/dell/10_100_15_34 ↔ Linux r760-6 live envelope (2026-09-03)
 Redfish 쪽은 전수 크롤을 recording 으로 바꿔 모듈을 오프라인 재생하고(네트워크 0), hardware.uuid · cpu.* 는 normalize_standard.yml 의
 실제 식을 그 adapter 로 렌더한다. 의미가 달라서 다른 값(network.adapters 개수 · DIMM locator · fqdn · 메모리 total 기준 · NIC 펌웨어 표기)은
-단언하지 않는다 — 기록만 한다(사용자 결정 2026-10-18). 같아야 하는데 다른 값은 버그다 (X1 uuid · X2 정격 클럭 · X3 스레드 · hbas WWPN).
+단언하지 않는다 — 기록만 한다(사용자 결정 2026-10-18). 같아야 하는데 다른 값은 버그다 (X1 uuid · X2 정격 클럭 · hbas WWPN).
+2026-10-27 (FIX 1): Redfish 는 cpu.logical_threads 를 내지 않으므로 스레드 수는 비교 대상이 아니다 — OS/ESXi 값만 쓴다.
 
 알려진 펌웨어 한계(단언에서 제외 · 문서 docs/contract/03-fields.md):
-  - CIMC 4.1 은 ProcessorSummary.LogicalProcessorCount 가 없고 per-processor TotalThreads 가 코어 수(22)라 Redfish logical_threads 44 vs ESXi 88.
+  - CIMC 4.1 은 ProcessorSummary.LogicalProcessorCount 가 없고 per-processor TotalThreads 가 코어 수(22)다 — BMC 스레드 수가 OS 와 다른 사례(FIX 1 의 근거 중 하나).
   - CIMC 는 카드 2장의 vHBA 4개를 정의하지만 ESXi 는 카드 1장의 fnic 2개만 열거한다 — hbas 는 ESXi ⊆ Redfish 로 본다.
 """
 from __future__ import annotations
@@ -87,11 +88,9 @@ def pair(request):
         "model": system.get("model"),
         "sockets": len(cpus) or None,
         "cores_physical": sum(int(p.get("total_cores") or 0) for p in cpus) or None,
-        "logical_threads": _render(frag["cpu"]["logical_threads"], _rf_d_cpus=cpus, _rf_d_system=system),
         "max_speed_mhz": _render(frag["cpu"]["max_speed_mhz"], _rf_d_cpus=cpus, _rf_d_system=system),
         "turbo_max_mhz": _render(frag["cpu"]["turbo_max_mhz"], _rf_d_cpus=cpus, _rf_d_system=system),
         "hbas": (result["data"].get("network_adapters") or {}).get("fc_hbas") or [],
-        "has_lpc": bool((system.get("cpu_summary") or {}).get("logical_processor_count")),
     }
     return request.param[0], redfish, live, result
 
@@ -141,15 +140,11 @@ def test_turbo_clock_matches_within_five_percent_when_both_channels_have_it(pair
     assert redfish["turbo_max_mhz"] > redfish["max_speed_mhz"], (label, "터보 최대는 정격보다 크다")
 
 
-def test_logical_threads_match_when_the_bmc_reports_a_summary_count(pair):
-    """X3: ProcessorSummary.LogicalProcessorCount 가 있는 BMC(Dell)는 OS 와 같아야 한다. 없는 BMC(CIMC 4.1)는 TotalThreads 합이 코어 수라
-    ESXi 보다 작다 — 펌웨어 한계로 기록만 한다(크게 나오면 버그)."""
+def test_redfish_side_has_no_logical_threads(pair):
+    """2026-10-27 FIX 1: Redfish cpu 블록에 logical_threads 가 없다 — 스레드 수 비교는 OS/ESXi 채널끼리만 의미가 있다."""
     label, redfish, live, _ = pair
-    live_threads = live["data"]["cpu"]["logical_threads"]
-    if redfish["has_lpc"]:
-        assert redfish["logical_threads"] == live_threads, (label, redfish["logical_threads"], live_threads)
-    else:
-        assert redfish["logical_threads"] is not None and redfish["logical_threads"] <= live_threads, (label, redfish["logical_threads"], live_threads)
+    assert "logical_threads" not in redfish, label
+    assert live["data"]["cpu"]["logical_threads"], (label, "OS/ESXi 쪽 값은 그대로 있다")
 
 
 def test_os_hbas_are_a_subset_of_redfish_hbas_by_wwpn(pair):

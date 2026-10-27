@@ -107,7 +107,6 @@
     "cpu": {
       "sockets": 4,
       "cores_physical": 224,
-      "logical_threads": 448,
       "model": "Intel(R) Xeon(R) Platinum 8480+",
       "max_speed_mhz": 3800,
       "architecture": "x86-64",
@@ -726,7 +725,6 @@
           "cpu": {
             "sockets": 4,
             "cores_physical": 224,
-            "logical_threads": 448,
             "model": "Intel(R) Xeon(R) Platinum 8480+",
             "max_speed_mhz": 3800,
             "architecture": "x86-64",
@@ -1061,7 +1059,6 @@
           "cpu": {
             "sockets": 4,
             "cores_physical": 224,
-            "logical_threads": 448,
             "model": "Intel(R) Xeon(R) Platinum 8480+",
             "max_speed_mhz": 3800,
             "architecture": "x86-64",
@@ -1382,7 +1379,6 @@
           "cpu": {
             "sockets": 4,
             "cores_physical": 224,
-            "logical_threads": 448,
             "model": "Intel(R) Xeon(R) Platinum 8480+",
             "max_speed_mhz": 3800,
             "architecture": "x86-64",

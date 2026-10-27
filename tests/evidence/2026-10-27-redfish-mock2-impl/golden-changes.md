@@ -51,3 +51,14 @@
 | G-15 | WP7 | `real_hpe_csus3200`(1차) · `real_hpe_csus3200_01/02/03` | `multi_node.composition.resource_blocks[0].processor_count` · `memory_count` | `0` · `0` | `null` · `null` | recording `CompositionService/ResourceBlocks/r001u01`: 본문에 `Processors`/`Memory` 키 자체가 없음(키 목록 `CompositionStatus · ComputerSystems · Links · ResourceBlockType · Status …`) | 원천 배열이 없으면 세지 않는다 — 0 은 "장착 0" 이 아니라 "집계 원천 없음" (FIX 6). 다른 composition 키 불변 |
 
 - G-15 검증: 15 real_* fixture 전부 재생(`test_real_capture_replay` · `test_request_budget`) → 바뀐 golden 은 CSUS 4세트의 위 두 경로뿐(DL380 5 · Lenovo 5 · Dell 1 차이 0). 요청 예산은 CSUS 4세트만 **-11 distinct / -14 total**(`request_budget.json` `path_set_delta.removed` 11 경로 · note 기재): RackGroup/Rack1 의 `Power·PowerSubsystem·Thermal·ThermalSubsystem`(8, 종전 404) + r001u01 의 `Power·Thermal·EnvironmentMetrics`(각 ×2 — system 경로·chassis_multi 경로, 종전 404) — 섀시 본문에 그 navigation property 가 없어 요청하지 않는다. 추가 요청 0. FC HBA 카드 조건은 notice 라 golden 밖.
+
+### WP9 (FIX 1 — Redfish `cpu.logical_threads` 제거) — 2026-10-27
+
+| # | WP | fixture / baseline | 경로 | before | after | 원천 | 원인 |
+|---|---|---|---|---|---|---|---|
+| G-16 | WP9 | `real_hpe_csus3200`(1차) · `real_hpe_csus3200_01/02/03` | `multi_node.partitions[0].cpu.logical_threads` | `64` · `128` · `224` · `128` | **키 없음** | — (모듈 `_normalize_cpu_raw` 가 더 이상 내지 않는다) | 사용자 FIX 1: BMC 스레드 수(RMC 1.75 코어 수 · 1.77 스레드 수, HT 비활성 시 코어 2배)는 OS 와 같은 값을 보장하지 못한다 — top-level `cpu` 와 같은 정책. 다른 partition cpu 키 불변 |
+| G-17 | WP9 | `schema/baseline_v1/{dell,hpe,lenovo,cisco}_baseline.json` · `hpe_csus_3200_baseline.json`(합성 — FIX 5 교체 전) | `data.cpu.logical_threads`(CSUS 는 `multi_node.partitions[*].cpu.logical_threads` 3곳 포함) | `24` · `128` · `128` · `44` · `448`×4 | **키 없음** | — | rule 21 R1 의 명시 예외 = 사용자 FIX 1(실측 baseline 의 키 삭제만, 다른 값 불변). `manufacturer` 는 실측 캡처가 아니라 baseline 에 넣지 않았다(값 날조 금지) |
+
+- G-16/G-17 검증: 15 real_* fixture 재생 → 바뀐 golden 경로는 CSUS 4세트의 위 1경로뿐(요청 예산 불변 — `test_request_budget` 15/15). 비-CSUS 11 fixture 는 `multi_node: null` 이라 차이 0.
+  모듈 top-level `data.cpu` 는 GOLDEN_KEYS 안이지만 `logical_threads`/`manufacturer` 는 normalize 층 키라 golden 에 없다 — Tier 1 봉투(`tier1-after-WP9/`)로 확인. `schema/examples/redfish_success.json` ·
+  `schema/output_examples/redfish_*.jsonc`(5) 도 같은 키 제거 + `manufacturer` 예시 추가(예시는 설명용이라 표에 두지 않는다).

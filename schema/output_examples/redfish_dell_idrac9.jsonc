@@ -222,8 +222,8 @@
     "cpu": {
       "sockets": 2,                                     // 물리 socket 수
       "cores_physical": 24,                             // 물리 코어 수
-      "logical_threads": 48,                            // 논리 thread 수 (HT 활성 시 cores × 2)
       "model": "INTEL(R) XEON(R) SILVER 4510",
+      "manufacturer": "Intel",                           // Processor.Manufacturer 정규화 (2026-10-27 FIX 2 — Intel(R) Corporation → Intel)
       "max_speed_mhz": 4000,                               // Processor.MaxSpeedMHz
       "architecture": "x86",                               // Redfish 표기는 x86 (Linux 는 x86_64)
       "summary": {

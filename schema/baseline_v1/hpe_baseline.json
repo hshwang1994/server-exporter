@@ -778,7 +778,6 @@
     "cpu": {
       "sockets": 2,
       "cores_physical": 64,
-      "logical_threads": 128,
       "model": "Intel(R) Xeon(R) Gold 6430",
       "max_speed_mhz": 4000,
       "architecture": null,

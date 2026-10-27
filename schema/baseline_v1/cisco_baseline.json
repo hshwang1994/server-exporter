@@ -53,7 +53,6 @@
     "cpu": {
       "sockets": 2,
       "cores_physical": 44,
-      "logical_threads": 44,
       "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
       "max_speed_mhz": 4000,
       "architecture": null,

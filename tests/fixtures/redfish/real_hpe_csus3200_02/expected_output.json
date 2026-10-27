@@ -2027,7 +2027,6 @@
         "cpu": {
           "architecture": "x86",
           "cores_physical": 112,
-          "logical_threads": 224,
           "max_speed_mhz": 2000,
           "model": "Intel(R) Xeon(R) Platinum 8450H Processor",
           "sockets": 4,

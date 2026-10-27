@@ -2316,7 +2316,6 @@
         "cpu": {
           "architecture": "x86",
           "cores_physical": 64,
-          "logical_threads": 128,
           "max_speed_mhz": 2900,
           "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
           "sockets": 4,

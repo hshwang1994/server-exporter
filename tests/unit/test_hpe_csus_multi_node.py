@@ -413,7 +413,7 @@ def test_partition_cpu_normalized_b01_filter() -> None:
     out = rg._normalize_cpu_raw(procs)
     assert out["sockets"] == 2  # GPU 제외
     assert out["cores_physical"] == 112
-    assert out["logical_threads"] == 224
+    assert "logical_threads" not in out   # 2026-10-27 FIX 1 — partition cpu 도 top-level 과 같은 정책
     assert out["model"] == "Intel(R) Xeon(R) Platinum 8480+"
     assert out["summary"]["groups"][0]["sockets"] == 2
     assert out["summary"]["groups"][0]["total_cores"] == 112
