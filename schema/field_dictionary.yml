@@ -1667,10 +1667,14 @@ fields:
       BMC 관리 인터페이스의 IPv4 주소.
       Manager의 EthernetInterfaces에서 추출.
       서버 운영체제의 IP 주소가 아닌 BMC 전용 관리 IP.
+      선택 규칙(2026-10-27, 06-bmc-005): ① 수집 대상 주소와 같은 IPv4 를 가진 NIC → ② Links.HostInterface 가 없고 InterfaceEnabled 가 false 가 아닌 NIC(iLO 7 의
+      USB 가상 NIC 16.1.15.1 제외) → ③ 컬렉션의 첫 NIC(종전). mac_address · dns_name 은 같은 NIC 에서 뽑는다. 실측 18대는 전용 관리 NIC 이 첫 멤버라 값 불변.
     help_en: >-
       BMC management interface IPv4 address.
       Extracted from Manager's EthernetInterfaces.
       This is the BMC management IP, not the server OS IP.
+      Selection (2026-10-27, 06-bmc-005): (1) the NIC that carries the collection target address → (2) a NIC without Links.HostInterface whose InterfaceEnabled is not
+      false (excludes the iLO 7 USB virtual NIC 16.1.15.1) → (3) the first NIC of the collection (former rule). mac_address and dns_name come from the same NIC.
 
   # cycle 2026-06-14 (DELL R740 BMC-1): bmc.* 하위 필드 문서화. 모듈이 emit 하나
   # 미문서였던 필드(호출자 계약 보강). 출처 = Manager 리소스(/Managers/<id>) + 그 자체 NIC.
@@ -1706,9 +1710,13 @@ fields:
     help_ko: >-
       BMC 표시명 (벤더 라벨: iDRAC/iLO/XCC/CIMC). 호출자 노출용 친화 이름이며
       Manager.Name 원문과 다를 수 있음 (의도된 벤더 표시값).
+      집합 관리자: adapter manager_layout 이 있으면 RMC/PDHC/iLO 라벨(ADR-2026-05-12). layout 이 없어도 ManagerType 이 RackManager · EnclosureManager 면
+      vendor 라벨 대신 Manager Id(짧은 토큰, 실측 CSUS 'RMC') 또는 ManagerType 을 쓴다(2026-10-27 06-bmc-006 — DMTF enum 값으로만 가른다).
     help_en: >-
       BMC display label (iDRAC/iLO/XCC/CIMC). Caller-friendly name; may differ from
       raw Manager.Name (intended vendor label).
+      Aggregate managers: with an adapter manager_layout the RMC/PDHC/iLO labels apply (ADR-2026-05-12). Without a layout, a ManagerType of RackManager or
+      EnclosureManager yields the Manager Id (short token, CSUS 'RMC') or the ManagerType instead of the vendor label (2026-10-27 06-bmc-006 — DMTF enum only).
 
   bmc.health:
     type: "string|null"
@@ -1747,15 +1755,15 @@ fields:
     type: "string|null"
     priority: nice
     channel: [redfish]
-    help_ko: "BMC 관리 NIC 의 MAC. Manager 자체 EthernetInterface 에서 추출 (System NIC 아님)."
-    help_en: "BMC management NIC MAC, from the Manager's own EthernetInterface (not a System NIC)."
+    help_ko: "BMC 관리 NIC 의 MAC. Manager 자체 EthernetInterface 에서 추출 (System NIC 아님) — bmc.ip 를 고른 NIC 과 같은 NIC(2026-10-27)."
+    help_en: "BMC management NIC MAC, from the Manager's own EthernetInterface (not a System NIC) — the same NIC that supplied bmc.ip (2026-10-27)."
 
   bmc.dns_name:
     type: "string|null"
     priority: nice
     channel: [redfish]
-    help_ko: "BMC 자기 호스트명 (Manager NIC 의 FQDN → HostName, 예: iDRAC-<ServiceTag>). 서버 OS 이름이 아니다."
-    help_en: "BMC's own hostname (Manager NIC FQDN -> HostName, e.g. iDRAC-<ServiceTag>). Not the server OS name."
+    help_ko: "BMC 자기 호스트명 (bmc.ip 를 고른 Manager NIC 의 FQDN → HostName, 예: iDRAC-<ServiceTag>). 서버 OS 이름이 아니다."
+    help_en: "BMC's own hostname (FQDN -> HostName of the Manager NIC that supplied bmc.ip, e.g. iDRAC-<ServiceTag>). Not the server OS name."
 
   bmc.network_hostname:
     type: "string|null"
@@ -1774,8 +1782,8 @@ fields:
     type: "string|null"
     priority: nice
     channel: [redfish]
-    help_ko: "BMC 현재 시각 ISO8601 원문 (Manager.DateTime — 오프셋 포함(iDRAC -05:00) 또는 UTC Z(iLO 7 · XCC 3)). datetime_offset 와 함께 해석. 수집 시각의 BMC 시계라 매번 바뀐다 — 비교 키가 아니다(2026-10-27)."
-    help_en: "Raw BMC current time, ISO8601 (Manager.DateTime — with offset (iDRAC -05:00) or UTC Z (iLO 7 / XCC 3)). Interpret with datetime_offset. It is the BMC clock at collection time and changes every run — not a comparison key (2026-10-27)."
+    help_ko: "BMC 현재 시각 ISO8601 원문 (Manager.DateTime — 로컬시에 오프셋 포함(iDRAC -05:00 · XCC 3 +09:00 · RMC +09:00/+00:00) 또는 UTC Z(iLO 7 — 오프셋은 datetime_offset 에만)). 두 키를 함께 읽어야 같은 시각이다(2026-10-27 정정 — 06-bmc-004, 18 label 실측: XCC 3 는 Z 가 아니다). 수집 시각의 BMC 시계라 매번 바뀐다 — 비교 키가 아니다."
+    help_en: "Raw BMC current time, ISO8601 (Manager.DateTime — local time with offset (iDRAC -05:00, XCC 3 +09:00, RMC +09:00/+00:00) or UTC Z (iLO 7 — the offset is only in datetime_offset)). Read both keys together to get the same instant (corrected 2026-10-27 — 06-bmc-004, 18 mock labels: XCC 3 is not Z). It is the BMC clock at collection time and changes every run — not a comparison key."
 
   bmc.datetime_offset:
     type: "string|null"
@@ -1788,8 +1796,8 @@ fields:
     type: "string|null"
     priority: nice
     channel: [redfish]
-    help_ko: "BMC 시간대 이름 (벤더 OEM, 예: 'CST6CDT'). 없으면 null."
-    help_en: "BMC timezone name (vendor OEM, e.g. 'CST6CDT'). null when absent."
+    help_ko: "BMC 시간대 이름 — Manager.TimeZoneName(iDRAC 'CST6CDT' · HPE RMC 'Asia/Seoul'/'UTC'). 없으면(iLO 7) Oem.Hpe.Links.DateTimeService → Managers/1/DateTime 의 TimeZone.Value('JST-9:00' · 'GMT-0' — POSIX 꼴, +1 GET; 2026-10-27 06-bmc-003), 그것도 없으면 TimeZone.Name. XCC 는 이름 원천이 없어 null."
+    help_en: "BMC timezone name — Manager.TimeZoneName (iDRAC 'CST6CDT', HPE RMC 'Asia/Seoul'/'UTC'). When absent (iLO 7) the Oem.Hpe.Links.DateTimeService resource Managers/1/DateTime TimeZone.Value ('JST-9:00', 'GMT-0' — POSIX style, one extra GET; 2026-10-27 06-bmc-003), else TimeZone.Name. null on XCC (no name source)."
 
   bmc.last_reset_time:
     type: "string|null"
@@ -1851,12 +1859,16 @@ fields:
       false=인증 실패,
       null=인증 단계가 실행되지 않았거나 확인 불가.
       null은 '실패'가 아니라 '미확인' 의미.
+      Redfish(2026-10-27, 06-bmc-010): vendor 미식별 장비를 빈 자격(익명)으로 수집해 성공한 경우(details.auth.used_role = anonymous)도 null —
+      실제 자격으로 인증한 사실을 관측하지 못했기 때문이다. true 는 표준 계정(primary)으로 인증했을 때만.
     help_en: >-
       Authentication verification result.
       true=auth succeeded and collection completed,
       false=auth failed,
       null=auth stage was not executed or inconclusive.
       null means 'not verified', not 'failed'.
+      Redfish (2026-10-27, 06-bmc-010): a successful anonymous collection of a vendor-unidentified device (details.auth.used_role = anonymous) is null too —
+      no authentication with real credentials was observed. true only when the standard (primary) account authenticated.
 
   # ══════════════════════════════════════════════════════════════════════════
   # Nice to Have — 설명이 있으면 좋지만 없어도 사용 가능
@@ -3191,9 +3203,11 @@ fields:
     help_ko: >-
       표준 계정 정합(Reconciliation) 결과. **`{}` 는 정합 단계에 들어가지 않았다는 뜻**(표준 계정 1차 인증 성공 — 정상 경로, 실측 18 label 전부). 복구 계정으로 표준 계정을 만들거나 비밀번호를
       맞춘 경우에만 가족(family) · 판정(present/absent/unknown/ambiguous) · 수행한 쓰기 · 재인증 결과가 들어간다(2026-10-27 정의 문서화, 06-bmc-007).
+      write_demoted_by_device(2026-10-27, 06-bmc-002): 장비가 `@Redfish.WriteableProperties` 로 선언하지 않아 repair PATCH 에서 뺀 속성 목록(HPE RMC 는 ["Password"] 선언). Lenovo family 세대는 Manager.Model 을 따른다(06-bmc-001).
     help_en: >-
       Standard-account reconciliation result. **`{}` means reconciliation was not entered** (primary auth succeeded first — the normal path; all 18 mock labels). Only when a recovery account
       created or re-synced the standard account does it carry the BMC family, the 4-state verdict (present/absent/unknown/ambiguous), the writes performed and the re-auth result (documented 2026-10-27, 06-bmc-007).
+      write_demoted_by_device (2026-10-27, 06-bmc-002): properties left out of the repair PATCH because the device's `@Redfish.WriteableProperties` did not declare them (HPE RMC declares ["Password"]). Lenovo family generation now follows Manager.Model (06-bmc-001).
 
   "diagnosis.details.multi_node_layout":
     type: "string|null"

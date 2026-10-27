@@ -368,6 +368,8 @@ for e in response["errors"]:
 > precheck 단계에서 실패한 결과의 `auth_success` 는 **항상 `null`** 이다. 실제 인증 성공 여부는
 > 본 수집 성공 후 각 채널이 `true` 로 덮어쓴다(`redfish-gather/site.yml:191-206` 등).
 > 따라서 **`auth_success` 가 `null` 이라고 해서 인증이 실패한 것이 아니다.**
+> **2026-10-27 (06-bmc-010)** — Redfish 에서 vendor 를 식별하지 못한 장비를 빈 자격(익명)으로 수집해 성공한 결과도 `auth_success` 가 **`null`** 이다
+> (`diagnosis.details.auth.used_role = anonymous`). `true` 는 표준 계정(`primary`)으로 실제 인증했을 때만이다 — 관측한 것만 적는다.
 > (OS 채널의 포트 감지 실패 경로만 예외적으로 `false` 를 넣고 있다 — `os-gather/site.yml:162`.
 > 인증을 시도하지 않은 상태이므로 의미상 `null` 이 맞고, 정정은 별도 단계로 분리돼 있다.)
 
@@ -1055,6 +1057,11 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 ### 6.6 `data.bmc` (Redfish 전용)
 
 > 2026-06-14 (DELL R740 BMC-1): bmc 하위 필드가 field_dictionary 에 문서화됨 (이전엔 `bmc.ip` 만).
+> **2026-10-27 (2차 Mock C11 — 06-bmc-003/004/005/006)** — (1) `ip` · `mac_address` · `dns_name` 은 같은 Manager NIC 에서 뽑는다: ① 수집 대상 주소를 가진 NIC → ② `Links.HostInterface` 가
+> 없고 `InterfaceEnabled` 가 false 가 아닌 NIC(iLO 7 의 USB 가상 NIC `16.1.15.1` 제외) → ③ 첫 NIC(종전). 실측 18대 값 불변. (2) `name` 은 layout 이 없어도 `ManagerType` 이 `RackManager`/`EnclosureManager` 면
+> Manager `Id`(CSUS `RMC`) 또는 ManagerType — vendor 라벨 `iLO` 로 떨어지지 않는다. (3) `timezone` 은 `TimeZoneName`(iDRAC `CST6CDT` · RMC `Asia/Seoul`) → 없으면 iLO `DateTimeService` 의
+> `TimeZone.Value`(`JST-9:00` · `GMT-0`, +1 GET) → XCC 는 null. (4) `datetime` 표기는 벤더마다 다르다 — iLO 는 UTC `Z` + `datetime_offset`(`+09:00`) 분리, XCC · RMC · iDRAC 은 로컬시에 오프셋 포함
+> (`2026-10-22T15:48:28+09:00`). 두 키를 함께 읽어야 같은 시각이 된다; 수집 시각의 BMC 시계라 비교 키로 쓰지 않는다.
 
 ```json
 "bmc": {

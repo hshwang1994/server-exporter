@@ -22,6 +22,10 @@
 | Redfish FirmwareInventory `ReleaseDate` | XCC 3 UEFI `2026-05-11T00:00:00Z`(구조 링크 `Bios.Links.ActiveSoftwareImage → UEFI`) · iDRAC BIOS `2026-01-28`(OEM BIOSReleaseDate 와 같음) · iLO 7 System ROM `0000-01-01T00:00:00Z`(자리표시자) · RMC 번들 null | `hardware.bios_date` 폴백(OEM 날짜 없을 때만 · 연도 0000 제외 · notice) — 01-hardware-004 |
 | iDRAC9 `NetworkPorts/*.CurrentLinkSpeedMbps` | LinkDown 포트 `0`(R740 10건); 2차 11대의 Ports 리소스는 Gbps 만 | `ports[].current_link_speed_mbps` 0 → null(03-network-004) |
 | Redfish host EthernetInterface `IPv6Addresses` | 실측 18대 전부 `[]`; DMTF mockup `fe80::…` | `addresses[]` family ipv6(`prefix_length` · `origin`) — 03-network-006 |
+| iLO 7 `Managers/1/DateTime` (`#HpeiLODateTime.v2_1_0`, `Oem.Hpe.Links.DateTimeService`) | `TimeZone {Index 31, Name "Osaka, Sapporo, Tokyo, Seoul, Yakutsk", UtcOffset "+09:00", Value "JST-9:00"}` · 1차 `GMT-0`; Manager 본문에 `TimeZoneName` 없음(`DateTimeLocalOffset` 만) | `bmc.timezone` = TimeZone.Value(없으면 Name), TimeZoneName 없을 때만 +1 GET — 06-bmc-003 |
+| XCC Manager.Model 세대 표기 | XCC3 `"Lenovo XClarity Controller 3"`(2차) · `"Lenovo Xclarity Controller 3"`(1차) / XCC(1/2) `"Lenovo XClarity Controller"`(참조 미러 AFBT58B 5.70) — 숫자 유무가 세대 | 계정 Family: Manager.Model 1순위(3 → `lenovo_xcc3_accounttypes`, 숫자 없음 → `lenovo_xcc2_accounttypes`), adapter hint 는 모델이 없을 때만 — 06-bmc-001 |
+| HPE RMC `AccountService/Accounts/<id>` | `@Redfish.WriteableProperties ["Password"]` · `Enabled true` · `Locked false` · `RoleId Administrator` · `AccountTypes ["Redfish"]`(7/7 미러 동일); `AccountService` 는 `["AccountLockoutDuration","MinPasswordLength"]` | discovery 가 `writable` 로 보존, repair PATCH 는 선언 밖 속성(RoleId 등)을 보내지 않는다(`write_demoted_by_device`) — 06-bmc-002. 생성 POST 의 Enabled 미전송 계약은 그대로(2026-10-14) |
+| iLO 7 `Managers/1/EthernetInterfaces` 멤버 순서 | `1`(Dedicated · 대상 IP) · `2`(Shared · disabled · 0.0.0.0) · `3`(`Manager Virtual Network Interface` · `Oem.Hpe.InterfaceType HostInterface` · `Links.HostInterface` · `16.1.15.1/30`, 02/03/04 는 enabled) | `bmc.ip` 선택 ① 대상 IP ② 비-HostInterface·활성 ③ 첫 NIC — 06-bmc-005 |
 
 ## 일자: 2026-10-19 — HPE CSUS 3200 RMC 1.75.108 인벤토리 위치 · 펌웨어 의미 차이 (실 4노드 전수 미러) · ESXi LUN 프로토콜
 

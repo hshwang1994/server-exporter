@@ -268,3 +268,5 @@ Rollback trigger:
   2026-10-27 FIX 1 로 그 합성본의 `cpu.logical_threads`(4곳)만 먼저 제거했다.
 - **외부 계약 추정 정정**: ResourceBlock `Processors[]/Memory[]` 는 실 RMC 에 없다(composition count 는 null — FIX 6). RMC `OperatingSpeedMhz` 는 I/O 클럭(3200, PC5-6400B) 이다(FIX 3 — 원값 보존, 계약 6.2).
   `ProcessorSummary.LogicalProcessorCount` 의 뜻은 펌웨어 버전(1.75 코어 수 · 1.77 스레드 수)에 따라 달라 Redfish 는 `cpu.logical_threads` 를 내지 않는다(FIX 1).
+- **결정 1 보강(bmc.name, 2026-10-27 06-bmc-006)**: `manager_layout` 이 없어도 `ManagerType RackManager`/`EnclosureManager` 면 Manager `Id`(`RMC`) 또는 ManagerType 라벨을 쓴다 —
+  결함표 3행("RMC primary 가 `bmc.name='iLO'`")이 adapter 선택 결과에만 묶여 있던 것을 장비 값으로도 막는다(plain 재생 `RMC`). RMC 계정 `@Redfish.WriteableProperties`(06-bmc-002) 는 EXTERNAL_CONTRACTS 2026-10-27.
