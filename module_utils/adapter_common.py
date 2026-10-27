@@ -188,6 +188,15 @@ def adapter_matches(adapter, facts, aliases=None):
             return False
         # firmware가 빈 문자열(정보 없음)이면 통과 — scoring에서 보너스만 제외
 
+    # BMC 모델 패턴 매칭 (2026-10-27 01-adapter-001, opt-in) — Manager.Model 에 세대를 적는 벤더용(Lenovo XCC3
+    # "Lenovo XClarity Controller 3"). 선언한 adapter 에서만 평가하며 의미는 model_patterns 와 같다: facts.bmc_model
+    # (모듈 data.bmc.model) 이 비어 있으면 통과, 알려진 값이 어느 패턴에도 맞지 않으면 실격.
+    bmc_model_patterns = match.get("bmc_model_patterns", [])
+    if bmc_model_patterns:
+        bmc_model = facts.get("bmc_model", "")
+        if bmc_model and not pattern_match_any(bmc_model_patterns, bmc_model):
+            return False
+
     # OS 유형 매칭 (os/esxi 채널용)
     os_type = match.get("os_type")
     if os_type:
@@ -232,6 +241,8 @@ def adapter_specificity(adapter):
     if match.get("model_patterns"):
         score += 20
     if match.get("firmware_patterns"):
+        score += 20
+    if match.get("bmc_model_patterns"):   # 2026-10-27 opt-in (model_patterns 와 같은 가중치)
         score += 20
     if match.get("version_patterns"):
         score += 15
@@ -298,6 +309,16 @@ def adapter_match_score(adapter, facts, aliases=None):
             pass
         else:
             return -9999  # firmware known but doesn't match - disqualify
+
+    # BMC 모델 매칭 보너스 (2026-10-27 opt-in — adapter_matches 의 bmc_model_patterns 블록과 대칭, model 과 같은 +25)
+    bmc_model_patterns = match.get("bmc_model_patterns", [])
+    if bmc_model_patterns:
+        if pattern_match_any(bmc_model_patterns, facts.get("bmc_model", "")):
+            score += 25
+        elif not facts.get("bmc_model", ""):
+            pass  # bmc model 정보 없음 → 보너스만 제외
+        else:
+            return -9999  # bmc model known but doesn't match - disqualify
 
     # version 매칭 보너스 (Round 15: adapter_specificity(+15)와 대칭 — 이전엔 match_score 누락으로
     # version_patterns 기반 adapter 가 model/firmware 기반보다 동률 tie-break 에서 불리했음)

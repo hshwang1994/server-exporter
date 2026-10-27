@@ -46,6 +46,10 @@
       firmware: >-
         {{ ((_rf_raw_collect.data | default({}, true)).get('bmc') | default({}, true)).get('firmware_version', '')
            | default('', true) }}
+      # 2026-10-27 (01-adapter-001): Manager.Model — adapter 가 match.bmc_model_patterns 를 선언한 경우에만 평가된다(opt-in).
+      bmc_model: >-
+        {{ ((_rf_raw_collect.data | default({}, true)).get('bmc') | default({}, true)).get('model', '')
+           | default('', true) }}
   no_log: true
 
 # 종전 adapter_id 를 먼저 잡아 둔다. 재선택이 실제로 값을 바꿨는지는 아래에서 비교한다.
