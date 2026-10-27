@@ -38,12 +38,12 @@ server-exporter/
 │   ├── examples/            # success/partial/failed
 │   └── redfish_dmtf_2026.1/ # DMTF DSP8010 2026.1 subset (28 리소스 json-schema reference, rule 96 대조용)
 ├── tests/
-│   ├── redfish-probe/       # probe_redfish.py + deep_probe_redfish.py + 운영망 전수 캡처 redfish_full_mirror.py(v2) · mirror_many.sh(병렬 러너) + 재생·검증 보조(replay_full_mirror · mirror_lookup · verify_adapter_selection)
+│   ├── redfish-probe/       # probe_redfish.py + deep_probe_redfish.py + 운영망 전수 캡처 redfish_full_mirror.py(v2) · mirror_many.sh(병렬 러너) + 재생·검증 보조(replay_full_mirror · mirror_lookup · verify_adapter_selection) + mirror_replay/(2026-10-27 편입 — 전수 미러 Tier 1 HTTPS 재생·Tier 2 모듈 재생·before/after diff)
 │   ├── integration/         # HPE iLO 에뮬레이터 + DMTF 표준 mockup record/replay 오프라인 회귀 하네스
 │   ├── fixtures/            # 398 JSON (실장비 380 + HPE 에뮬레이터 15 + DMTF mockup 3) (회귀 input)
 │   ├── baseline_v1/         # 회귀 기준선
 │   ├── evidence/            # Round 검증 결과
-│   ├── scripts/             # conditional_review.py + os_esxi_verify.sh
+│   ├── scripts/             # conditional_review.py + os_esxi_verify.sh + gen_request_budget.py · inventory_parity.py(2026-10-27 — real_* 요청 예산 생성 · 디스크/FC 포트 개수 정합 판별)
 │   └── reference/           # ★ Round 11 (2026-04-28): 실장비 종합 raw reference (회귀 input 아님)
 │       └── redfish/mock2/   # 2026-10-22 2차 전수 미러 11대 zip (CSUS 3200 ×3 · DL380 Gen12 ×4 · SR650 V4 ×4, 2026-10-26 보관)
 │       ├── README.md, INDEX.md
