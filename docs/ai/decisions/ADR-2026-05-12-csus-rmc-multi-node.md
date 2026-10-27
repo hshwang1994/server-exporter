@@ -260,3 +260,11 @@ Rollback trigger:
 | 일시 | 승인자 | 대상 | 비고 |
 |---|---|---|---|
 | 2026-05-12 | hshwang1994 | 본 ADR / 8 결정 / 4 사용자 답변 / ExitPlanMode 승인 | plan 파일 + AskUserQuestion 4 답변 + ExitPlanMode 한 번에 승인 |
+
+## 2026-10-27 정정 기록 (2차 Mock 실측 · 지시서 2 FIX 5/6)
+
+- **결정 6(baseline) 이행 상태**: `schema/baseline_v1/hpe_csus_3200_baseline.json` 은 2026-10-27 현재도 mock-derived 합성본이다(ADR 의 "lab 도입 시 실측 교체 의무" 미이행 — 2차 분석 01-multi_node-003).
+  사용자 FIX 5(2026-10-27): 2차 Mock csus3200_01 의 Tier 1 실 봉투로 in-place 교체하고 소비 테스트를 같은 커밋에서 재작성한다 — 구현 Round WP11(bmc/diagnosis) 뒤 실행 예정(이 기록 시점에는 미실행).
+  2026-10-27 FIX 1 로 그 합성본의 `cpu.logical_threads`(4곳)만 먼저 제거했다.
+- **외부 계약 추정 정정**: ResourceBlock `Processors[]/Memory[]` 는 실 RMC 에 없다(composition count 는 null — FIX 6). RMC `OperatingSpeedMhz` 는 I/O 클럭(3200, PC5-6400B) 이다(FIX 3 — 원값 보존, 계약 6.2).
+  `ProcessorSummary.LogicalProcessorCount` 의 뜻은 펌웨어 버전(1.75 코어 수 · 1.77 스레드 수)에 따라 달라 Redfish 는 `cpu.logical_threads` 를 내지 않는다(FIX 1).

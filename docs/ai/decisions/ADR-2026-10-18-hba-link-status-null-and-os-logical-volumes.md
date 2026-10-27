@@ -39,3 +39,13 @@
 | 판정 함수에 링크 기술을 넣어 FC 판정 | 2026-10-15 에 폐기한 원안 — 짝 없는 기능 구조에서 같은 포트가 두 번 나온다. 포트 루프의 조건부 규칙 + 고아 가드로 처리 |
 | RAID LUN 을 physical_disks 에서 빼고 logical_volumes 로 옮김 | 호출자 파싱 변경(Additive 위반). physical_disks 유지 + logical_volumes 추가로 |
 | Redfish `cpu.max_speed_mhz` 를 그대로 두고 문서만 | 사전 정의(정격)와 다른 값이 그대로 — 같은 뜻 다른 값은 버그(사용자 결정) |
+
+## 2026-10-27 정정 기록 (2차 Mock 11대 실측 · 지시서 2 — 원문 미수정)
+
+- **결정 4 의 `cpu.logical_threads` 부분은 FIX 1 로 대체**: Redfish 는 `cpu.logical_threads` 를 내지 않는다(사용자 결정 2026-10-27). X3("LogicalProcessorCount 우선")은 2차 Mock 에서
+  HT 비활성 5대의 값이 코어의 2배로 나와(02-cpu-001) 무효가 됐다 — BMC 스레드 수는 HT 상태를 확정하지 못하고 펌웨어마다 뜻이 다르다(RMC 1.75 코어 수 · 1.77 스레드 수 · CIMC 4.1 코어 수).
+  `tests/regression/test_cross_channel_same_server.py` 의 스레드 단언은 "Redfish 쪽에 키 없음" 으로 바뀌었다. 결정 4 의 나머지(uuid 바이트 순서 · 정격/터보 · NIC 모델 폴백)는 유효.
+- **컨텍스트 (3) · 결과 2번째 항목의 FC 링크 원천 문구 보강(03-storage-004 · addendum 07)**: "FC Port 리소스에 링크 상태 속성 자체가 없다" 는 그대로 맞다. 다만 같은 카드의
+  `Chassis/{id}/PCIeDevices/{n}.Status.Conditions[]` 에 OEM 등록부 `H3Alert.1.x.LinkUp/LinkDown`(카드 · PCIe 슬롯 단위, NIC · RAID 에도 붙음)이 있다. 사용자 결정 11 **A안**(2026-10-27):
+  포트 값은 `down`(2026-10-19 규칙) 그대로 두고, FC 전용 카드 ∧ 자기 `Links.PCIeDevices` 1건 ∧ adapter 선언 등록부일 때만 notice 에 카드 조건을 참고로 덧붙인다 — 값 · 필드 · 요청 추가 0.
+  "`link_status: null` + notice" 서술은 2026-10-19 ADR 로 `down` 이 됐다(이미 폐기 표기). 근거: `tests/evidence/2026-10-27-redfish-mock2-impl/07-csus-chassis-fc.md`, `docs/contract/03-fields.md` 6.3.2.

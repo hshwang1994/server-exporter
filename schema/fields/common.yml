@@ -64,9 +64,7 @@ sections:
         type: integer
         display_name: "물리 코어 수"
 
-      logical_threads:
-        type: integer
-        display_name: "논리 스레드 수"
+      # logical_threads 는 2026-10-27(FIX 1)부터 OS/ESXi 전용 — os.yml / esxi.yml 의 cpu.extra_fields 참조 (Redfish 는 내지 않는다)
 
       model:
         type: string

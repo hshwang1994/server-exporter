@@ -52,7 +52,7 @@
       S1~S4 · E2E-D · E2E-E 봉투에서 기대값 확인 뒤 `python -m scripts.ai.prodgen promote --sha <main sha>`(자격 파일은 사용자 보관 — 2026-10-18 항목). 승격 전까지 production 은 `027409f4`.
 - [ ] **[HIGH / 사이트 — 사용자] CSUS "디스크 있음 · hbas 없음" 장비 2대 체크리스트** — 장비 JSON 에서 ① `data.network.adapters[].model` 에 FC HBA 카드 유무 ② `diagnosis.details.notices` 의 `section: network_adapters`(404 / 빈 목록 / 소유 미확인 / NetworkInterfaces 링크) ③ `errors[]` `section: network`
       ④ `data.multi_node.summary.chassis_count` ⑤ production 체크아웃 SHA(2026-10-15~18 빌드면 재수집). 실 4노드 미러에서는 디스크 · hbas 가 함께 나와 코드로 재현되지 않았다. 결과를 알려 주면 그 경로를 고친다.
-- [ ] **[HIGH / 실장비 — lab 부재] CSUS 재수집 확인** — `cpu.logical_threads` 64/128 · `hardware.part_number R9N70A` · `power.summary.total_capacity_w null` · `network.summary.adapter_count` 0/4 · `storage.controllers[]`(디스크 있는 장비는 RAID 모델 채움, 없는 장비는 []) · `firmware[]` 6/15 · 요청 수 +7/+2.
+- [ ] **[HIGH / 실장비 — lab 부재] CSUS 재수집 확인** — (`cpu.logical_threads` 는 2026-10-27 FIX 1 로 Redfish 에서 제거 — 확인 항목에서 뺌) `hardware.part_number R9N70A` · `power.summary.total_capacity_w null` · `network.summary.adapter_count` 0/4 · `storage.controllers[]`(디스크 있는 장비는 RAID 모델 채움, 없는 장비는 []) · `firmware[]` 6/15 · 요청 수 +7/+2.
 - [ ] **[MED / Portal 소비자] 안내** — 전 벤더 `power.summary.total_capacity_w` · `consumed_capacity_pct` 0 → null(용량 미제공 장비) · `network.summary.adapter_count` 감소(FC 카드 보유 장비) · OS/ESXi `network.summary.groups` 에 `speed_mbps: null` 그룹 추가 · ESXi `physical_disks[].protocol` 값 ·
       Linux `memory.summary.grand_total_gb` 0 → null · ESXi/Superdome 시리얼 `-NNN` 제거 · ESXi datastore `free_mb/used_mb/usage_percent` null 가능 · ESXi `hostname` IPv4 꼴 → null.
 - [x] **[DONE 2026-10-20] `schema/baseline_v1/esxi_baseline.json`** — 셋째 라운드 canary #314 봉투로 갱신하면서 `link_type ethernet` · `protocol`(esxi02 는 RAID LUN null) 도 실측값이 됐다. Linux/Windows baseline 은 shape 비교라 영향 없음.
@@ -69,7 +69,7 @@
 - [ ] **[LOW / 결정] CSUS 를 OS 채널로 수집하면 `vendor` 가 `hp`(Redfish 는 `hpCsus`)** — 채널 간 vendor 표시 불일치. 어느 쪽으로 맞출지 사용자 결정.
 - [ ] **[LOW / 결정] CSUS mock baseline(`schema/baseline_v1/hpe_csus_3200_baseline.json`, 3파티션 합성)을 실측으로 교체(BASE-01)** — 실 봉투는 WSL ansible + 미러 서빙 + vault 비밀번호가 있어야 만든다(사용자 몫).
 - [ ] **[LOW / 기록만] 채널 간 뜻 차이(변경 없음)** — OS `network.summary` 는 논리 NIC, Redfish 는 물리 포트/카드(계약 문서 기재). Windows `physical_disks[].model` PnP 접미사(" SCSI Disk Device") · ESXi 모델 vendor 접두 — 그룹 model 불일치. AMD L3 폴백 · DIMM type 다단어 절단 · Windows multipath 미접기.
-- [ ] **[LOW / 실장비 미검증] Superdome Flex** — `-NNN` 제거 · `processor_summary_logical_count: cores` · `firmware_inventory_scope: complex_only` 는 CSUS 와 같다고 본 사용자 지시(lab · 미러 없음). 실측 시 정정. A-11 다중 섀시 Power/Thermal 도 합성 시험만.
+- [ ] **[LOW / 실장비 미검증] Superdome Flex** — `-NNN` 제거 · `firmware_inventory_scope: complex_only` 는(`processor_summary_logical_count` 는 2026-10-27 FIX 1 로 삭제) CSUS 와 같다고 본 사용자 지시(lab · 미러 없음). 실측 시 정정. A-11 다중 섀시 Power/Thermal 도 합성 시험만.
 
 ## link_status up/down 둘뿐 · ESXi hbas 그대로 · Windows `system.version` 연도 접두 (2026-10-19) — 남은 항목
 
@@ -117,7 +117,7 @@
       `storage.logical_volumes[]` 가 OS/ESXi 에서도 채워짐 · `hardware.uuid` 가 Cisco Redfish 에서 OS 와 같은 표기로 바뀜.
 - [ ] **[LOW / lab] ESXi PERC(bcm_mpi3) 뒤 LUN 실측** — .91/.92/.93 은 PERC 에 VD 가 없어 `logical_volumes` 가 `[]` 다. VD 가 있는 PERC 호스트(또는 r760 ESXi 재구성)에서 RAID 뒤 LUN → logical_volumes · media_type null 을 확인한다. MegaRAID(lsi_mr3) 경로는 esxi01~03 에서 확인됐다(2026-10-18 #661).
 - [ ] **[LOW] `esxi_baseline.json` hbas 재캡처** — 현행 코드와 3필드 불일치(수작업 값 · 대문자 WWPN). 사이트/lab 실측으로 교체(rule 13 R4).
-- [ ] **[LOW] 사전 항목 부재** — 코드가 내는 `cpu.sockets` · `cpu.logical_threads` · `cpu.model` 이 `schema/field_dictionary.yml` 에 없다(이번 조사에서 확인). 사전 추가는 schema 작업으로 따로(rule 92 R5).
+- [x] **[LOW] 사전 항목 부재** — 2026-10-27 WP8 등재: `cpu.sockets` · `cpu.model`(3채널) · `cpu.logical_threads`(channel [os, esxi] — Redfish 는 FIX 1 로 내지 않음) + power/thermal 하위 34 · composition 5 · diagnosis.details 10 · correlation.bmc_ip.
 - [x] **[대체 2026-10-19] `storage.infiniband[].link_status`** — 위 2026-10-19 절의 LOW 항목으로 대체(hbas 는 up/down 둘뿐이 됐고 IB 는 미결).
 
 

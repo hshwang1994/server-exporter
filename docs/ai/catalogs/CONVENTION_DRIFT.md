@@ -19,6 +19,21 @@
 
 ---
 
+## DRIFT-031 (2026-10-27, resolved — Redfish 계약 · 사전 · 문서가 구현과 어긋난 묶음(2차 Mock 분석 C6) + `cpu.logical_threads` 정책 변경)
+
+- **발견 위치**: `schema/field_dictionary.yml`(`cpu.manufacturer` redfish 선언 · 미발행; `storage.controllers[].driver` redfish 선언 · 미발행; `cpu.sockets/model/logical_threads` 미등재;
+  power/thermal 하위 키 8개뿐; `hardware.health` "BMC rollup" 서술; `firmware[].updateable` boolean; `multi_node.composition`/`diagnosis.details` Redfish 키 미등재) ·
+  `docs/contract/03-fields.md`("PSU 한 대 fault → Critical" · thermal "빈 {} graceful" · `data.firmware` 절 없음 · bmc_ip FAQ) · `redfish_gather.py` `_collect_all_sections` docstring ·
+  `schema/fields/common.yml`(logical_threads 를 3채널 공통으로 분류) · ADR-2026-10-18/19 의 `logical_threads` 규칙
+- **분류**: catalog-stale(사전 · 계약 · 예시) + convention-violation(선언만 있고 안 내는 키) + external-contract-drift(BMC 스레드 수 · Health 의미 — DMTF Resource.Status)
+- **설명**: 2026-09-03 OS/ESXi 전수 검수 때 사전에 redfish 채널을 넣었지만 normalize 에 구현되지 않았고, 2026-06-14 이후 power/thermal 하위 키 · 2026-06-09 composition 키가 사전에 오르지 않았다.
+  `hardware.health` 는 코드가 `Status.Health` 를 내는데 문서는 롤업을 서술했다(iLO 7 에서 PSU Critical ↔ Warning 으로 갈림). `cpu.logical_threads` 는 BMC 값으로는 HT 상태를 확정할 수 없어
+  사용자 결정(FIX 1)으로 Redfish 발행을 중단했다 — 유일한 비-Additive 변경(키 제거).
+- **영향**: 호출자 — Redfish `data.cpu.logical_threads` 소멸 · `cpu.manufacturer` 추가; 그 밖은 사전 · 문서 정정(키 변경 0). 사전 +53 항목 · 정정 10 항목, schema_version 유지.
+- **resolved (2026-10-27)**: WP8/WP9 — normalize `manufacturer`(OS/ESXi 와 같은 표) · `logical_threads` 제거(top-level · partitions) · `hardware.health` Rollup 폴백(Health 없을 때만) · adapter 플래그 삭제 ·
+  사전/계약/예시/baseline/ADR 정정 기록 · `test_field_dictionary_channel_emit.py` 에 "redfish 선언 cpu 키는 전부 발행" 검사. 근거: `tests/evidence/2026-10-27-redfish-mock2-impl/08-contract-dictionary.md` · `09-cpu-logical-threads.md`.
+- **관련**: rule 13 R7 · rule 92 R2(Additive 예외는 사용자 FIX 1) · rule 96 R1-B · R4 · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-27
+
 ## DRIFT-028 (2026-10-17, resolved — InfiniBand 판정이 "현재 모드" 가 아닌 신호를 썼다 · 존재하지 않는 Redfish 속성 참조)
 
 - **발견 위치**: `redfish-gather/library/redfish_gather.py` `_fetch_ndf_index`(`NetworkDeviceTechnology` 읽기) · `_classify_port_protocol`(`Port.InfiniBand` 블록 존재 → IB, 충돌 시 IB 우선) ·

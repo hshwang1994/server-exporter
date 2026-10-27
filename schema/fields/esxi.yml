@@ -96,3 +96,10 @@ sections:
             type: boolean
           addresses:
             type: list
+
+  cpu:
+    extra_fields:
+      logical_threads:
+        type: integer
+        display_name: "논리 스레드 수"
+        description: "vmware_host_facts ansible_processor_vcpus. Redfish 채널은 내지 않는다 (2026-10-27 FIX 1)"

@@ -30,6 +30,10 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
+# 변경 메모 (2026-10-27): 2차 Mock 11대 구현 Round(C6 사전 drift 묶음 + FIX 1/2/4/6). +3 cpu(sockets · model · logical_threads[os, esxi] — Redfish 는 FIX 1 로
+#   logical_threads 를 내지 않는다) · +34 power/thermal 하위 키 · +1 correlation.bmc_ip · +5 multi_node.composition/fabrics · +10 diagnosis.details(Redfish 키 · account_service {} 의미).
+#   정정: cpu.manufacturer(Redfish 발행 FIX 2) · cpu.summary · cpu.architecture(채널별 어휘) · hardware.health(원천 Status.Health) · storage.controllers[].driver(redfish 제거) ·
+#   firmware[].updateable(boolean|null) · firmware[].category/pending 규칙 · bmc.uuid/datetime. Additive(채널 제거 2건은 "선언만 있고 안 내던" 키), schema_version 유지.
 # 변경 메모 (2026-10-17): +7 Nice — storage.infiniband[].adapter / .port / .port_guid / .link_status / .model / .vendor / .firmware
 #   (이미 나가던 키의 뜻을 사전에 올림 — InfiniBand 전면 검증, docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md).
 #   Additive, schema_version 유지. 기존 infiniband 설명 문구 정정은 별도 commit.
@@ -340,7 +344,9 @@ fields:
     priority: must
     channel: [redfish]
     help_ko: >-
-      서버 하드웨어 전체 상태 (BMC rollup health).
+      서버(ComputerSystem) 리소스의 Status.Health 원값 — BMC 가 그 리소스에 매긴 등급(2026-10-27 정정, 01-hardware-002: 종전 'BMC rollup health' 서술은 틀렸다 —
+      DMTF 에서 Health 는 리소스 자체, HealthRollup 은 하위 포함). Health 가 없을 때만 HealthRollup 폴백. PSU 장애가 어떤 등급으로 반영되는지는 벤더가 정한다
+      (실측 iLO 7: PSU Critical 인데 Warning — Critical 은 hardware.oem.aggregate_server_health 에만; XCC 3: Critical).
       OK=모든 하위 구성요소 정상,
       Warning=일부 구성요소 주의 필요,
       Critical=장애 발생.
@@ -348,7 +354,9 @@ fields:
       rollup에 포함되는 하위 구성요소 범위는 벤더마다 다를 수 있음.
       null=BMC가 이 필드를 제공하지 않는 경우.
     help_en: >-
-      Server hardware overall health (BMC rollup).
+      Raw Status.Health of the ComputerSystem resource — the grade the BMC assigned to that resource (corrected 2026-10-27, 01-hardware-002: the former 'BMC rollup'
+      wording was wrong — in DMTF terms Health is the resource itself, HealthRollup includes subordinates). HealthRollup is used only when Health is missing. How a PSU
+      fault is graded is vendor-defined (iLO 7: PSU Critical yet Warning — Critical only in hardware.oem.aggregate_server_health; XCC 3: Critical).
       OK=all subsystems healthy,
       Warning=some subsystems need attention,
       Critical=fault detected.
@@ -847,9 +855,10 @@ fields:
   "storage.controllers[].driver":
     type: "string|null"
     priority: nice
-    channel: [redfish, os, esxi]
+    channel: [os, esxi]
+    # 2026-10-27 (03-storage-002): Redfish 는 이 키를 내지 않는다 — 선언만 있던 redfish 채널 제거(사전 drift 정정, 키 변경 0).
     help_ko: >-
-      컨트롤러 커널 드라이버. OS(Linux): lspci 'Kernel driver in use' (예: mpi3mr/ahci/nvme).
+      컨트롤러 커널 드라이버(OS/ESXi 만 — Redfish 는 내지 않는다, 2026-10-27). OS(Linux): lspci 'Kernel driver in use' (예: mpi3mr/ahci/nvme).
       ESXi: hostBusAdapter.driver (예: lsi_mr3/vmw_ahci/nfnic).
     help_en: >-
       Controller kernel driver. OS(Linux): lspci 'Kernel driver in use' (e.g., mpi3mr/ahci/nvme).
@@ -1057,6 +1066,328 @@ fields:
       센서가 보고하는 PSU 는 Enabled(부재 PSU 는 센서가 없어 목록에 없다), health 는 그 센서들 중 최악(green/yellow/red → OK/Warning/Critical),
       model · serial · power_capacity_w 는 센서에 없어 null. power_control.power_consumed_watts 는 PSU 가 아닌 Watts 센서가 정확히 1개일 때만 그 값.
 
+  "power.power_supplies[]":
+    type: "array of object"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      전원 공급 장치 목록(Redfish Chassis Power.PowerSupplies 또는 PowerSubsystem/PowerSupplies 멤버; ESXi 는 "Power Supply N" 센서 묶음). State Absent 슬롯은 항목으로 남되 값은 null 이다(psu_count 에서 제외).
+    help_en: >-
+      Power supply list (Redfish Chassis Power.PowerSupplies or PowerSubsystem/PowerSupplies members; ESXi groups "Power Supply N" sensors). Absent slots stay as items with null values (excluded from psu_count).
+
+  "power.power_supplies[].name":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 이름(Name, 없으면 MemberId). 벤더 표기 그대로("PS1 Status" · "HpeServerPowerSupply" · "PSU1").
+    help_en: >-
+      PSU name (Name, else MemberId). Vendor wording is kept ("PS1 Status", "HpeServerPowerSupply", "PSU1").
+
+  "power.power_supplies[].model":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 모델(Model, 공백 strip — 2026-10-27). ESXi 는 센서에 없어 null.
+    help_en: >-
+      PSU model (Model, whitespace stripped — 2026-10-27). null on ESXi (not in sensors).
+
+  "power.power_supplies[].serial":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 시리얼(SerialNumber). ESXi 는 null.
+    help_en: >-
+      PSU serial (SerialNumber). null on ESXi.
+
+  "power.power_supplies[].manufacturer":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 제조사(Manufacturer 원문). ESXi 는 null.
+    help_en: >-
+      PSU manufacturer (raw Manufacturer). null on ESXi.
+
+  "power.power_supplies[].part_number":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 파트 번호(PartNumber). 없으면 null.
+    help_en: >-
+      PSU part number (PartNumber). null when absent.
+
+  "power.power_supplies[].power_capacity_w":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 정격 용량 W(PowerCapacityWatts). 장비가 주지 않으면 null(실측 HPE CSUS 3200 RMC 4개 전부 없음) — 0 으로 적지 않는다. State Absent 슬롯도 null(2026-10-27).
+    help_en: >-
+      PSU rated capacity in W (PowerCapacityWatts). null when the BMC does not provide it (HPE CSUS 3200 RMC: none of 4) — never 0. Absent slots are null too (2026-10-27).
+
+  "power.power_supplies[].firmware_version":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 펌웨어(FirmwareVersion 또는 RMC Version). "0.00" · 빈 문자열 placeholder 는 null(2026-10-27).
+    help_en: >-
+      PSU firmware (FirmwareVersion or RMC Version). "0.00" / empty placeholders become null (2026-10-27).
+
+  "power.power_supplies[].health":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU Status.Health(OK/Warning/Critical). ESXi 는 센서 최악값. state 와 별개다.
+    help_en: >-
+      PSU Status.Health (OK/Warning/Critical). ESXi: worst sensor value. Independent of state.
+
+  power.power_control:
+    type: "object"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      전력 측정 묶음(Redfish Power.PowerControl[0] 또는 PowerSubsystem/EnvironmentMetrics · TelemetryService · PSU Metrics 폴백). 키가 없는 경로의 값은 null.
+    help_en: >-
+      Power metering block (Redfish Power.PowerControl[0], or PowerSubsystem/EnvironmentMetrics, TelemetryService, PSU Metrics fallbacks). Values the path does not carry are null.
+
+  power.power_control.power_consumed_watts:
+    type: "integer|null"
+    priority: must
+    channel: [redfish, esxi]
+    help_ko: >-
+      현재 소비 전력 W. 원천 순서(2026-10-27 정리, 05-power-007): legacy PowerControl.PowerConsumedWatts → EnvironmentMetrics.PowerWatts → TelemetryService(장비가 정의한 '소비')
+      → PSU Metrics.OutputPowerWatts 합(DC 출력 — 소비에 가장 가깝다) → PSU Metrics.InputPowerWatts 합(AC 입력 — 변환 손실만큼 높다). 어느 원천인지는 값으로 알 수 없다 —
+      정밀 비교에는 쓰지 않는다. ESXi 는 Watts 센서가 정확히 1개일 때만. 없으면 null(0 은 거짓 값).
+    help_en: >-
+      Current power draw in W. Source order (settled 2026-10-27, 05-power-007): legacy PowerControl.PowerConsumedWatts → EnvironmentMetrics.PowerWatts → TelemetryService
+      (the device's own definition of consumption) → sum of PSU Metrics.OutputPowerWatts (DC output — closest to consumption) → sum of PSU Metrics.InputPowerWatts (AC input —
+      higher by conversion loss). The source is not visible in the value, so do not use it for precise comparison. ESXi: only when exactly one Watts sensor exists. null when unknown.
+
+  power.power_control.power_capacity_watts:
+    type: "integer|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      장비가 보고한 전력 예산/가용 용량 W — **벤더·경로별로 뜻이 다르다**(2026-10-27, 05-power-005): legacy PowerControl.PowerCapacityWatts(iDRAC 예산값 1050 · iLO 7 AC 입력 잃은 PSU 제외 1600),
+      PowerSubsystem.CapacityWatts(XCC 3 1300 = 이중화 설정의 MaxPowerLimit) 또는 그 값이 없을 때 PSU 용량 합(Absent 제외). 설치 PSU 정격 합은 summary.total_capacity_w 다 — 둘을 섞지 않는다.
+    help_en: >-
+      Power budget / available capacity reported by the device, in W — **meaning differs by vendor and path** (2026-10-27, 05-power-005): legacy PowerControl.PowerCapacityWatts
+      (iDRAC budget 1050, iLO 7 excludes a PSU that lost AC: 1600), PowerSubsystem.CapacityWatts (XCC 3 1300 = redundancy MaxPowerLimit), else the PSU capacity sum (Absent excluded).
+      The installed PSU rating sum is summary.total_capacity_w — do not mix the two.
+
+  power.power_control.interval_in_min:
+    type: "integer|null"
+    priority: skip
+    channel: [redfish, esxi]
+    help_ko: >-
+      min/avg/max 통계 구간(분). legacy PowerMetrics.IntervalInMin — 신 경로는 null.
+    help_en: >-
+      Statistics window in minutes (legacy PowerMetrics.IntervalInMin). null on the new schema path.
+
+  power.power_control.min_consumed_watts:
+    type: "integer|null"
+    priority: skip
+    channel: [redfish, esxi]
+    help_ko: >-
+      구간 최소 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null.
+    help_en: >-
+      Window minimum power in W (legacy PowerMetrics). null on new path / ESXi.
+
+  power.power_control.avg_consumed_watts:
+    type: "integer|null"
+    priority: skip
+    channel: [redfish, esxi]
+    help_ko: >-
+      구간 평균 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null.
+    help_en: >-
+      Window average power in W (legacy PowerMetrics). null on new path / ESXi.
+
+  power.power_control.max_consumed_watts:
+    type: "integer|null"
+    priority: skip
+    channel: [redfish, esxi]
+    help_ko: >-
+      구간 최대 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null.
+    help_en: >-
+      Window maximum power in W (legacy PowerMetrics). null on new path / ESXi.
+
+  power.summary:
+    type: "object"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU 요약(normalize 계산 — filter_plugins/power_summary.py 와 같은 규칙). State Absent 슬롯 제외. 하위 키는 아래 power.summary.* 항목.
+    help_en: >-
+      PSU summary computed at normalize time (same rules as filter_plugins/power_summary.py). Absent slots excluded. Sub-keys documented as power.summary.*.
+
+  power.summary.psu_count:
+    type: "integer"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      설치 PSU 수(Absent 제외).
+    help_en: >-
+      Installed PSU count (Absent excluded).
+
+  power.summary.psu_active:
+    type: "integer"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      State Enabled 인 PSU 수. 입력 전력 0 W 로 관측된 PSU 도 Enabled 면 센다(2026-10-27 — 그 사실은 notice 로만).
+    help_en: >-
+      PSUs whose State is Enabled. A PSU observed at 0 W input still counts when Enabled (2026-10-27 — that fact goes to a notice only).
+
+  power.summary.redundant:
+    type: "boolean"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      설치 PSU 수 ≥ 2 — 수량이지 이중화 정책이 아니다.
+    help_en: >-
+      Installed PSU count ≥ 2 — a quantity, not a redundancy policy.
+
+  power.summary.total_capacity_w:
+    type: "integer|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      용량을 아는 PSU 의 정격 합 W. 아는 PSU 가 0개면 null(2026-10-19 — 0 은 거짓 값).
+    help_en: >-
+      Sum of rated capacity over PSUs whose capacity is known. null when none is known (2026-10-19 — 0 would be a false value).
+
+  power.summary.capacity_unknown_count:
+    type: "integer"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      용량을 모르는 설치 PSU 수.
+    help_en: >-
+      Installed PSUs whose capacity is unknown.
+
+  power.summary.critical_count:
+    type: "integer"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      health Critical 인 PSU 수.
+    help_en: >-
+      PSUs with health Critical.
+
+  power.summary.warning_count:
+    type: "integer"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      health Warning 인 PSU 수.
+    help_en: >-
+      PSUs with health Warning.
+
+  power.summary.ok_count:
+    type: "integer"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      health OK 인 PSU 수.
+    help_en: >-
+      PSUs with health OK.
+
+  power.summary.unknown_health_count:
+    type: "integer"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      health 가 null 이거나 알 수 없는 PSU 수.
+    help_en: >-
+      PSUs with null / unknown health.
+
+  power.summary.health_rollup:
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      PSU health 의 최악값(Critical > Warning > OK). 설치 PSU 가 없으면 null.
+    help_en: >-
+      Worst PSU health (Critical > Warning > OK). null when no PSU is installed.
+
+  power.summary.consumed_watts:
+    type: "integer|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      power_control.power_consumed_watts 복사(요약용).
+    help_en: >-
+      Copy of power_control.power_consumed_watts for the summary.
+
+  power.summary.consumed_capacity_pct:
+    type: "number|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      consumed_watts / total_capacity_w × 100. 둘 중 하나라도 모르면 null(2026-10-19).
+    help_en: >-
+      consumed_watts / total_capacity_w × 100. null unless both are known (2026-10-19).
+
+  "thermal.temperatures[].name":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      온도 센서 이름(Name → MemberId; ThermalSubsystem 은 DeviceName → Name → DataSourceUri 마지막 세그먼트, 2026-10-27).
+    help_en: >-
+      Temperature sensor name (Name → MemberId; ThermalSubsystem: DeviceName → Name → last DataSourceUri segment, 2026-10-27).
+
+  "thermal.temperatures[].health":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      센서 Status.Health(OK/Warning/Critical). Status 가 없는 펌웨어(HPE CSUS RMC ThermalMetrics)는 null.
+    help_en: >-
+      Sensor Status.Health. null when the firmware gives no Status (HPE CSUS RMC ThermalMetrics).
+
+  "thermal.temperatures[].state":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      센서 Status.State 원문. Enabled 가 아니면 reading_celsius 는 null(2026-10-27 — UnavailableOffline 의 0 은 측정값이 아니다); State Absent 센서는 항목 자체가 없고 notice 로 건수만 남는다.
+    help_en: >-
+      Raw sensor Status.State. When not Enabled, reading_celsius is null (2026-10-27 — a 0 under UnavailableOffline is not a reading); Absent sensors are not listed at all, only counted in a notice.
+
+  "thermal.fans[].name":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      팬 이름(Name → MemberId; ThermalSubsystem 은 Name → DataSourceUri 마지막 세그먼트).
+    help_en: >-
+      Fan name (Name → MemberId; ThermalSubsystem: Name → last DataSourceUri segment).
+
+  "thermal.fans[].health":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      팬 Status.Health.
+    help_en: >-
+      Fan Status.Health.
+
+  "thermal.fans[].state":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, esxi]
+    help_ko: >-
+      팬 Status.State 원문. Enabled 가 아니면 reading 은 null; Absent 팬은 항목이 없다(2026-10-27).
+    help_en: >-
+      Raw fan Status.State. reading is null unless Enabled; Absent fans are not listed (2026-10-27).
+
   # ──────────────────────────────────────────────────────────────────────────
   # thermal (cycle 2026-06-14 Track 4) — 온도 센서 + 팬 (Chassis/Thermal · 2026-10-19 부터 ESXi 하드웨어 센서도)
   # ──────────────────────────────────────────────────────────────────────────
@@ -1142,6 +1473,44 @@ fields:
       OS: ansible_processor_count × cores_per_socket.
       Note: this is total cores, not per-socket.
 
+  cpu.sockets:
+    type: "integer|null"
+    priority: must
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      CPU 소켓(패키지) 수. Redfish: ProcessorType 이 CPU 인 Processor 멤버 수(없으면 ProcessorSummary.Count), Linux lscpu Socket(s),
+      Windows Win32_Processor 수, ESXi ansible_processor_count. 모르면 null (1 placeholder 금지). 2026-10-27 등재(02-cpu-007 — 코드는 처음부터 냈다).
+    help_en: >-
+      CPU socket (package) count. Redfish: number of Processor members whose ProcessorType is CPU (else ProcessorSummary.Count),
+      Linux lscpu Socket(s), Windows Win32_Processor count, ESXi ansible_processor_count. null when unknown (never a placeholder 1). Registered 2026-10-27.
+
+  cpu.model:
+    type: "string|null"
+    priority: must
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      CPU 모델 문자열 원문(첫 소켓). Redfish Processor.Model(없으면 ProcessorSummary.Model), Linux /proc/cpuinfo model name, Windows Win32_Processor.Name,
+      ESXi cpuPkg description. 벤더마다 공백 · "@ N.NNGHz" 접미 · 대소문자가 다르다(실측 iDRAC "INTEL(R) XEON(R) SILVER 4510") — 비교는 정규화해서 한다. 2026-10-27 등재.
+    help_en: >-
+      Raw CPU model string (first socket). Redfish Processor.Model (else ProcessorSummary.Model), Linux /proc/cpuinfo model name,
+      Windows Win32_Processor.Name, ESXi cpuPkg description. Spacing, "@ N.NNGHz" suffix and case vary by vendor — normalize before comparing. Registered 2026-10-27.
+
+  cpu.logical_threads:
+    type: "integer|null"
+    priority: must
+    channel: [os, esxi]
+    # 2026-10-27 (FIX 1 — 사용자 결정, 2차 Mock 02-cpu-001/002/006): Redfish 채널은 이 키를 내지 않는다(종전 X3 · A-2 규칙 삭제).
+    help_ko: >-
+      논리 스레드(프로세서) 수 — **OS/ESXi 채널만**. Linux /proc/cpuinfo processor 수, Windows Win32_Processor.NumberOfLogicalProcessors,
+      ESXi ansible_processor_vcpus. Redfish 는 2026-10-27 부터 이 키를 내지 않는다(FIX 1, 사용자 결정): BMC 가 주는 ProcessorSummary.LogicalProcessorCount ·
+      Processor.TotalThreads 는 HT 비활성 장비에서 코어의 2배(지원 수)로 나오고 펌웨어마다 뜻이 다르다(HPE RMC 1.75 코어 수 · 1.77 스레드 수, CIMC 4.1 코어 수) —
+      OS 가 보는 값과 같다고 보장할 수 없어 추정(코어×2)도 하지 않는다. 같은 서버의 스레드 수는 OS/ESXi 결과에서 읽는다.
+    help_en: >-
+      Logical thread (processor) count — **OS/ESXi channels only**. Linux /proc/cpuinfo processor count, Windows Win32_Processor.NumberOfLogicalProcessors,
+      ESXi ansible_processor_vcpus. Redfish stopped emitting this key on 2026-10-27 (FIX 1, user decision): BMC values (ProcessorSummary.LogicalProcessorCount,
+      Processor.TotalThreads) report the supported count (2x cores) on HT-disabled hosts and their meaning differs by firmware (HPE RMC 1.75 cores vs 1.77 threads,
+      CIMC 4.1 cores), so they cannot be guaranteed equal to what the OS sees; no cores x2 estimate is made either. Read thread counts from the OS/ESXi result.
+
   # ──────────────────────────────────────────────────────────────────────────
   # firmware
   # ──────────────────────────────────────────────────────────────────────────
@@ -1159,6 +1528,11 @@ fields:
       2026-10-19: id/name 에 'controller' 가 있으면(nic · psu 판정 뒤) storage_controller, 'gbe'(10/25GbE 류 NIC 이름)는 nic. FC HBA 는 enum 에 없어 other 다(enum 확장은 별도 계약 결정).
       adapter vendor_notes.firmware_inventory_scope 가 complex_only(HPE CSUS 3200 · Superdome Flex — FirmwareInventory 가 complex/nPar 번들만 노출)면
       섀시 PCIeDevices(`PCIeDevice.<Id>`, name=Model, component=슬롯 ServiceLabel) · PSU(`PowerSupply.<idx>`) 펌웨어가 firmware[] 에 보충된다. 다른 adapter 는 불변.
+      2026-10-27 (04-firmware-001~005 · FIX 7): **구조 근거가 1순위** — Bios.Links.ActiveSoftwareImage 가 가리키는 항목 → bios, Manager.Links.ActiveSoftwareImage → bmc,
+      멤버 RelatedItem 이 …/Bios → bios(RelatedItem → Managers/{id} 는 bmc 근거가 아니다 — Lenovo HPM-FPGA 도 같은 링크). 그 다음 검증된 토큰 사슬(diagnostic → bios|system rom|uefi →
+      cpld|programmable logic|fpga → tpm → usc|lifecycle → driver → ubm|bc bp → disk → backplane → raid|perc|megaraid → drive|nvme|ssd|hdd|boss → service → idrac|ilo|xcc|cimc|bmc →
+      FC HBA 토큰(other) → video|graphics(other) → 같은 봉투 storage.controllers[].controller_model 과 이름 일치(storage_controller) → nic 토큰 → psu → controller).
+      enum 은 그대로(FC HBA 는 전 벤더 other — Dell QLogic 도), 근거 없는 HPE CSUS `Partition{N}_FW` · `ComplexFW` 번들은 other 유지.
     help_en: >-
       Inferred firmware component category (from id/name). One of:
       bios/cpld/tpm/diagnostic/lifecycle/driver_pack/backplane/drive/
@@ -1166,6 +1540,11 @@ fields:
       2026-10-19: a 'controller' token (after nic/psu) maps to storage_controller and a 'gbe' token (10/25GbE-style NIC names) to nic; FC HBAs stay other (no enum extension). When the adapter
       declares vendor_notes.firmware_inventory_scope: complex_only (HPE CSUS 3200 / Superdome Flex, whose FirmwareInventory lists only the
       complex/nPar bundles) chassis PCIeDevices (`PCIeDevice.<Id>`) and PSUs (`PowerSupply.<idx>`) are appended to firmware[]. Other adapters are unchanged.
+      2026-10-27 (04-firmware-001~005, FIX 7): **structural evidence comes first** — the item referenced by Bios.Links.ActiveSoftwareImage → bios, by Manager.Links.ActiveSoftwareImage → bmc,
+      a member whose RelatedItem ends in /Bios → bios (RelatedItem → Managers/{id} is not bmc evidence — Lenovo HPM-FPGA shares it). Then the verified token chain (diagnostic → bios|system rom|uefi →
+      cpld|programmable logic|fpga → tpm → usc|lifecycle → driver → ubm|bc bp → disk → backplane → raid|perc|megaraid → drive|nvme|ssd|hdd|boss → service → idrac|ilo|xcc|cimc|bmc →
+      FC HBA tokens (other) → video|graphics (other) → name match with storage.controllers[].controller_model of the same envelope (storage_controller) → nic tokens → psu → controller).
+      The enum is unchanged (FC HBAs are other on every vendor, Dell QLogic included); HPE CSUS `Partition{N}_FW` / `ComplexFW` bundles stay other for lack of evidence.
 
   "firmware[].pending":
     type: "boolean"
@@ -1173,8 +1552,8 @@ fields:
     channel: [redfish]
     # cycle 2026-06-15: gather_firmware 가 id 에 'pending' 포함 시 true (Lenovo XCC pending fw).
     # pending=true + version=null 은 정상(의도된 보류), pending=false + version=null 은 데이터 누락.
-    help_ko: "펌웨어 적용 보류 여부 (Redfish id 에 'Pending' 포함 시 true)."
-    help_en: "Whether the firmware is pending application (id contains 'Pending')."
+    help_ko: "펌웨어 적용 보류 여부 (Redfish id 에 'Pending' 포함 시 true). 2026-10-27 (04-firmware-006): Status.State Disabled 이고 Version 이 비어 있는 -Pending 자리(Lenovo XCC3 스테이징 슬롯)는 항목 자체를 제외하고 notice 로 남긴다 — pending=true 는 Version 이 있는 예정 업데이트만."
+    help_en: "Whether the firmware is pending application (id contains 'Pending'). 2026-10-27 (04-firmware-006): a -Pending slot with Status.State Disabled and an empty Version (Lenovo XCC3 staging slot) is dropped and noted — pending=true only for a scheduled update that has a Version."
 
   "firmware[].component":
     type: "string|null"
@@ -1352,7 +1731,7 @@ fields:
     priority: nice
     channel: [redfish]
     help_ko: >-
-      Manager UUID (Manager.UUID/ServiceIdentification). System.UUID(hardware.uuid)와
+      Manager UUID (Manager.UUID — 2026-10-27 정정: ServiceIdentification 아님). System.UUID(hardware.uuid)와
       다른 값 — 혼동 주의 (BMC 식별자이지 서버 식별자 아님).
     help_en: >-
       Manager UUID (Manager.UUID). Different from System.UUID (hardware.uuid) —
@@ -1389,8 +1768,8 @@ fields:
     type: "string|null"
     priority: nice
     channel: [redfish]
-    help_ko: "BMC 현재 시각 ISO8601 (Manager.DateTime). datetime_offset 와 함께 해석."
-    help_en: "BMC current time ISO8601 (Manager.DateTime). Interpret with datetime_offset."
+    help_ko: "BMC 현재 시각 ISO8601 원문 (Manager.DateTime — 오프셋 포함(iDRAC -05:00) 또는 UTC Z(iLO 7 · XCC 3)). datetime_offset 와 함께 해석. 수집 시각의 BMC 시계라 매번 바뀐다 — 비교 키가 아니다(2026-10-27)."
+    help_en: "Raw BMC current time, ISO8601 (Manager.DateTime — with offset (iDRAC -05:00) or UTC Z (iLO 7 / XCC 3)). Interpret with datetime_offset. It is the BMC clock at collection time and changes every run — not a comparison key (2026-10-27)."
 
   bmc.datetime_offset:
     type: "string|null"
@@ -1423,6 +1802,17 @@ fields:
     help_en: >-
       BMC vendor OEM extension. Keys vary by vendor (Dell: idrac_url/idrac_ipmi_version/
       idrac_last_update_time/idrac_last_inventory_time, etc.). From Manager.Oem.<Vendor>.
+
+  correlation.bmc_ip:
+    type: "string|null"
+    priority: must
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      Redfish: Manager EthernetInterfaces 중 IPv4 주소를 가진 **첫 NIC** 의 주소(0.0.0.0 제외) — 요청 대상 주소(host_ip)와 보통 같지만 NAT/VIP 로 접근하거나 공유 NIC 이
+      먼저 나열되는 장비에서는 다를 수 있다(2026-10-27 정의 문서화, 01-correlation-010). OS/ESXi: BMC 를 알 수 없어 null.
+    help_en: >-
+      Redfish: address of the **first** Manager EthernetInterface that has an IPv4 address (0.0.0.0 excluded) — usually equal to the request target (host_ip), but it can differ
+      behind NAT/VIP or when a shared NIC is listed first (definition documented 2026-10-27, 01-correlation-010). OS/ESXi: null (the BMC is unknown).
 
   correlation.host_ip:
     type: "string"
@@ -1647,8 +2037,14 @@ fields:
     # cycle 2026-06-15 (SCHEMA-05): redfish 도 cpu.architecture emit — normalize_standard.yml:503
     # (ProcessorArchitecture) + 5 redfish baseline 이 정본. channel 에 redfish 누락이던 것 정정.
     channel: [redfish, os, esxi]
-    help_ko: "CPU 아키텍처 (예: x86_64)."
-    help_en: "CPU architecture (e.g., x86_64)."
+    help_ko: >-
+      CPU 아키텍처 — 채널마다 어휘가 다르다(2026-10-27 정리, 02-cpu-004): Redfish 는 DMTF Processor.ProcessorArchitecture enum(`x86` · `ARM` …, 실측 18대 `x86`; 없으면
+      InstructionSet `x86-64`), Linux/Windows 는 `x86_64`(uname · 정규화), ESXi 는 ansible_machine. 같은 서버를 채널 간 비교할 때 문자열 동일성을 가정하지 않는다 —
+      표기 통일은 결정 항목(값의 뜻은 같다).
+    help_en: >-
+      CPU architecture — vocabulary differs by channel (settled 2026-10-27, 02-cpu-004): Redfish uses the DMTF Processor.ProcessorArchitecture enum (`x86`, `ARM`, …;
+      all 18 mock labels `x86`; else InstructionSet `x86-64`), Linux/Windows `x86_64` (uname / normalized), ESXi ansible_machine. Do not assume string equality
+      across channels for the same server — unifying the spelling is a pending decision (the meaning is the same).
 
   system.hosting_type:
     type: "string"
@@ -1678,11 +2074,11 @@ fields:
     help_en: "Server uptime in seconds."
 
   "firmware[].updateable":
-    type: "boolean"
+    type: "boolean|null"
     priority: skip
     channel: [redfish]
-    help_ko: "펌웨어 업데이트 가능 여부."
-    help_en: "Whether firmware is updateable."
+    help_ko: "펌웨어 업데이트 가능 여부(SoftwareInventory.Updateable). 원천에 키가 없으면 null — HPE CSUS 3200 complex_only 보충 항목(PCIeDevice.* · PowerSupply.*)은 Updateable 이 없어 null(2026-10-27, 04-firmware-007)."
+    help_en: "Whether the firmware is updateable (SoftwareInventory.Updateable). null when the source has no such key — HPE CSUS 3200 complex_only supplements (PCIeDevice.*, PowerSupply.*) carry none (2026-10-27, 04-firmware-007)."
 
   # ──────────────────────────────────────────────────────────────────────────
   # Group Summary — 단위용량 × 수량 × 그룹총량 (storage / network 그룹 단위 합계)
@@ -1696,15 +2092,14 @@ fields:
       CPU 그룹 summary. groups[]={model, sockets, cores_per_socket, total_cores}.
       같은 model 의 socket 들을 합쳐 보여준다 — 운영 가시성용.
       cores_per_socket 은 세 채널 모두 total_cores // sockets (Redfish 는 2026-10-19 부터 — 종전 첫 소켓 값; 동질 CPU 는 값이 같다).
-      cpu.logical_threads (Redfish): ProcessorSummary.LogicalProcessorCount 가 정본이되, adapter vendor_notes.processor_summary_logical_count 가
-      cores 인 펌웨어(HPE CSUS 3200 · Superdome Flex RMC — 실측 LogicalProcessorCount == 코어 수, Bios HThread Enabled)는 per-processor TotalThreads 합을 우선한다.
+      groups[].manufacturer 는 cpu.manufacturer 와 같은 정규화값이다(2026-10-27 FIX 2). cpu.logical_threads 는 OS/ESXi 채널만 낸다(2026-10-27 FIX 1 —
+      Redfish BMC 스레드 수는 HT 상태를 확정하지 못한다; 종전 LogicalProcessorCount 우선 · adapter 플래그 규칙은 삭제).
     help_en: >-
       CPU group summary. groups[]={model, sockets, cores_per_socket, total_cores}.
       Aggregates sockets sharing the same model for operational visibility.
       cores_per_socket is total_cores // sockets on all channels (Redfish since 2026-10-19; previously the first socket's value).
-      cpu.logical_threads (Redfish): ProcessorSummary.LogicalProcessorCount is authoritative unless the adapter declares
-      vendor_notes.processor_summary_logical_count: cores (HPE CSUS 3200 / Superdome Flex RMC report the core count there), in which
-      case the per-processor TotalThreads sum wins.
+      groups[].manufacturer is normalized like cpu.manufacturer (2026-10-27 FIX 2). cpu.logical_threads is emitted by the OS/ESXi channels only
+      (2026-10-27 FIX 1 — BMC thread counts cannot establish the HT state; the former LogicalProcessorCount-first / adapter-flag rules were removed).
 
   "memory.summary":
     type: "object"
@@ -2444,11 +2839,56 @@ fields:
     priority: nice
     channel: [redfish]
     help_ko: >-
-      partition_count / manager_count / chassis_count / representative_partition.
+      partition_count / manager_count / chassis_count / representative_partition / resource_block_count / fabric_count(2026-10-27 등재 — 뒤 둘은 composition · fabrics 가 null 이면 null).
       호출자가 멀티-노드 규모 파악 시 사용.
     help_en: >-
-      partition_count / manager_count / chassis_count / representative_partition.
+      partition_count / manager_count / chassis_count / representative_partition / resource_block_count / fabric_count (documented 2026-10-27 — the last two are null when composition / fabrics is null).
       Used by callers to gauge multi-node scale.
+
+  multi_node.composition:
+    type: "object|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      CompositionService + ResourceBlocks 요약(enabled · state · health · resource_block_count · resource_blocks[]). ServiceRoot 에 CompositionService 가 없으면 null.
+    help_en: >-
+      CompositionService + ResourceBlocks summary (enabled, state, health, resource_block_count, resource_blocks[]). null when the ServiceRoot has no CompositionService.
+
+  "multi_node.composition.resource_blocks[]":
+    type: "object[]"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      ResourceBlock 마다 id · name · resource_block_types[] · state · health · composition_state · processor_count · memory_count · chassis[] · computer_systems[].
+    help_en: >-
+      Per ResourceBlock: id, name, resource_block_types[], state, health, composition_state, processor_count, memory_count, chassis[], computer_systems[].
+
+  "multi_node.composition.resource_blocks[].processor_count":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      ResourceBlock.Processors idRef 배열 길이. 배열이 없으면 **null**(2026-10-27 FIX 6 — 실측 HPE CSUS 3200 RMC 는 두 배열을 주지 않는다; 종전 0 은 거짓 값).
+    help_en: >-
+      Length of the ResourceBlock.Processors idRef array. **null** when the array is absent (2026-10-27 FIX 6 — HPE CSUS 3200 RMC does not expose it; the former 0 was a false value).
+
+  "multi_node.composition.resource_blocks[].memory_count":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      ResourceBlock.Memory idRef 배열 길이. 배열이 없으면 null(FIX 6).
+    help_en: >-
+      Length of the ResourceBlock.Memory idRef array. null when absent (FIX 6).
+
+  multi_node.fabrics:
+    type: "object[]|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      Fabrics 요약 목록(id · name · fabric_type · state · health · switch_count · endpoint_count · switches[] · endpoints[]). Fabrics 컬렉션이 없으면 null. CSUS 3200 FlexGrid 는 fabric_type null(DMTF enum 에 NUMAlink 없음).
+    help_en: >-
+      Fabric summaries (id, name, fabric_type, state, health, switch_count, endpoint_count, switches[], endpoints[]). null without a Fabrics collection. CSUS 3200 FlexGrid has fabric_type null (no NUMAlink in the DMTF enum).
 
   "multi_node.partitions[]":
     type: "object[]"
@@ -2646,6 +3086,98 @@ fields:
       BMC NetworkProtocol.HostName (management-controller name, not the OS hostname) / none =
       neither present, hostname=null. Lets callers know whether hostname is a true OS name.
 
+  diagnosis.details.channel:
+    type: "string"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      수집 채널(redfish / os / esxi) — target_type 과 같다.
+    help_en: >-
+      Collection channel (redfish / os / esxi) — same as target_type.
+
+  diagnosis.details.checked_ports:
+    type: "array"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      사전 점검에서 확인한 관리 포트 목록(Redfish [443], OS [5986, 5985, 22] 순서).
+    help_en: >-
+      Management ports probed during precheck (Redfish [443]; OS [5986, 5985, 22] in order).
+
+  diagnosis.details.selected_port:
+    type: "integer|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      실제로 쓴 관리 포트. 열린 포트가 없으면 null.
+    help_en: >-
+      Management port actually used. null when none was open.
+
+  diagnosis.details.adapter_candidate:
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      1차(무인증) adapter 선택 결과(adapter_id). 로그인 뒤 재선택이 바뀌면 adapter_first_pass 에 1차 값이 남고 meta.adapter_id 가 최종값이다.
+    help_en: >-
+      First-pass (unauthenticated) adapter choice (adapter_id). If the post-login reselection differs, adapter_first_pass keeps this value and meta.adapter_id is the final one.
+
+  diagnosis.details.adapter_first_pass:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      재선택으로 adapter 가 **바뀐 경우에만** 1차 선택값(예: Dell idrac10 → idrac9). 바뀌지 않으면 null.
+    help_en: >-
+      First-pass adapter id **only when** reselection changed it (e.g. Dell idrac10 → idrac9). null otherwise.
+
+  diagnosis.details.auth:
+    type: "object|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      표준 계정 인증 시도 요약 {attempted_count, used_label, used_role(primary|recovery|anonymous), fallback_used}. 성공 결과의 used_role 은 primary 뿐이다(recovery 로 수집한 정상 결과는 없다). 비밀값 없음.
+    help_en: >-
+      Standard-account authentication summary {attempted_count, used_label, used_role (primary|recovery|anonymous), fallback_used}. A successful result only ever has used_role primary. No secrets.
+
+  diagnosis.details.product:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      ServiceRoot.Product 원문(예: "HPE ProLiant Compute DL380 Gen12", "Integrated Dell Remote Access Controller"). adapter 선택 facts 중 하나.
+    help_en: >-
+      Raw ServiceRoot.Product (e.g. "HPE ProLiant Compute DL380 Gen12"). One of the adapter-selection facts.
+
+  diagnosis.details.redfish_version:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      ServiceRoot.RedfishVersion(예: 1.22.1).
+    help_en: >-
+      ServiceRoot.RedfishVersion (e.g. 1.22.1).
+
+  diagnosis.details.systems_uri:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      ServiceRoot.Systems 컬렉션 경로(예: /redfish/v1/Systems).
+    help_en: >-
+      ServiceRoot.Systems collection path (e.g. /redfish/v1/Systems).
+
+  diagnosis.details.account_service:
+    type: "object"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      표준 계정 정합(Reconciliation) 결과. **`{}` 는 정합 단계에 들어가지 않았다는 뜻**(표준 계정 1차 인증 성공 — 정상 경로, 실측 18 label 전부). 복구 계정으로 표준 계정을 만들거나 비밀번호를
+      맞춘 경우에만 가족(family) · 판정(present/absent/unknown/ambiguous) · 수행한 쓰기 · 재인증 결과가 들어간다(2026-10-27 정의 문서화, 06-bmc-007).
+    help_en: >-
+      Standard-account reconciliation result. **`{}` means reconciliation was not entered** (primary auth succeeded first — the normal path; all 18 mock labels). Only when a recovery account
+      created or re-synced the standard account does it carry the BMC family, the 4-state verdict (present/absent/unknown/ambiguous), the writes performed and the re-auth result (documented 2026-10-27, 06-bmc-007).
+
   "diagnosis.details.multi_node_layout":
     type: "string|null"
     priority: nice
@@ -2710,8 +3242,14 @@ fields:
     type: "string|null"
     priority: nice
     channel: [redfish, os, esxi]
-    help_ko: "CPU 제조사 정규화값 (Intel / AMD). Linux /proc/cpuinfo vendor_id, Windows Win32_Processor.Manufacturer, ESXi cpuPkg.vendor 또는 브랜드 문자열."
-    help_en: "Normalized CPU manufacturer (Intel / AMD). Linux /proc/cpuinfo vendor_id, Windows Win32_Processor.Manufacturer, ESXi cpuPkg.vendor or brand string."
+    help_ko: >-
+      CPU 제조사 정규화값 (Intel / AMD). Linux /proc/cpuinfo vendor_id, Windows Win32_Processor.Manufacturer, ESXi cpuPkg.vendor 또는 브랜드 문자열.
+      Redfish(2026-10-27 발행 — FIX 2, 02-cpu-003): Processor.Manufacturer — `Intel(R) Corporation`(iLO 7 · XCC 3 · RMC) · `Intel`(iDRAC) → Intel,
+      `Advanced Micro Devices, Inc.` · `AMD` → AMD, 그 밖(Ampere 등)은 원문 strip, 없으면 null. cpu.summary.groups[].manufacturer 도 같은 표.
+    help_en: >-
+      Normalized CPU manufacturer (Intel / AMD). Linux /proc/cpuinfo vendor_id, Windows Win32_Processor.Manufacturer, ESXi cpuPkg.vendor or brand string.
+      Redfish (emitted since 2026-10-27 — FIX 2, 02-cpu-003): Processor.Manufacturer — `Intel(R) Corporation` (iLO 7 / XCC 3 / RMC) or `Intel` (iDRAC) → Intel,
+      `Advanced Micro Devices, Inc.` / `AMD` → AMD, anything else (e.g. Ampere) is kept stripped, null when absent. cpu.summary.groups[].manufacturer uses the same table.
 
   cpu.max_speed_mhz:
     type: "integer|null"

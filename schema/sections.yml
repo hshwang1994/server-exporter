@@ -92,6 +92,8 @@ sections:
       portgroups: []
       driver_map: []
       # 본딩(Linux) / 팀(Windows LBFO·SET) / 브리지 토폴로지 — bond/team 없으면 빈 []
+      # 2026-10-27 각주(2차 Mock 관찰 O-11): bonds · bridges · teams 는 OS 채널 전용 키다 — Redfish · ESXi 의 data.network 와
+      #   common/tasks/normalize/build_empty_data.yml 에는 이 키가 없다(스키마 변경 아님 — 호출자는 키 부재를 "없음" 으로 읽는다).
       bonds: []
       bridges: []
       teams: []

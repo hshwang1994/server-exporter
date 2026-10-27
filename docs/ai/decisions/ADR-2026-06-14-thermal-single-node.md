@@ -42,3 +42,10 @@ schema 에 thermal 섹션이 없어 "거짓"은 아니나(설계 범위), 호출
 2. **data.power.fans/temperatures 병합**: 섹션 추가 회피하나 power 의미 확장 → 호출자 계약(power=PSU/전력)
    오염. 기각.
 3. **단일노드 미수집 유지(설계 범위)**: 변경 0이나 호출자 온도/팬 영구 부재. 검수 EXC-1 미해결. 기각.
+
+## 2026-10-27 정정 기록 (2차 Mock 실측 — 05-thermal-001/005)
+
+- "미지원 벤더는 빈 `{temperatures:[],fans:[]}`" 문구: 2026-10-12 부터 Thermal · ThermalSubsystem 둘 다 404 면 `sections.thermal = not_supported` 다(`test_redfish_power_thermal_absent_not_supported.py`).
+  2026-10-27 부터 섀시 본문에 두 링크가 없으면 요청 없이 같은 분류다. `_collect_all_sections` docstring 도 같이 정정했다.
+- 센서 의미 보강(2026-10-27): `Status.State Absent` 센서 · 팬은 항목에서 제외하고 건수 notice 만 남긴다(iLO 7 미장착 슬롯 0 °C); `Enabled` 가 아니면 reading 은 null(전원 Off `UnavailableOffline`);
+  음수 reading 은 스로틀 마진 센서(Lenovo DTS TMargin · CSUS THROT_OFFSET)라 그대로 보존한다 — 계약 6.7.

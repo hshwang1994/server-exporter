@@ -171,6 +171,13 @@ sections:
                 type: string
                 description: "IPv6 주소 범위 global / link / host / site (IPv4 는 키 없음)"
 
+  cpu:
+    extra_fields:
+      logical_threads:
+        type: integer
+        display_name: "논리 스레드 수"
+        description: "Linux /proc/cpuinfo processor 수 · Windows Win32_Processor.NumberOfLogicalProcessors. Redfish 채널은 내지 않는다 (2026-10-27 FIX 1 — BMC 스레드 수는 HT 상태를 확정하지 못함)"
+
   users:
     display_name: "시스템 사용자 목록"
     item_fields:
