@@ -67,7 +67,7 @@
       | Redfish `PCIeFunction` · `PCIeSlots` · HPE OEM `HpeServerDevice/HpeServerPciDevice/HpeServerPCISlot` · Dell OEM `DellNIC/DellMemory/DellProcessor/DellController/DellPhysicalDisk/DellSlot` · `LenovoSlot` | 전수 크롤에서 미요청(인벤토리성) | 슬롯 점유표 · PCI ID · 제조일 등 — 새 필드라 schema 결정 필요(rule 92 R5) |
       | Windows `Win32_BaseBoard` · ESXi `otherIdentifyingInfo(SerialNumberTag/EnclosureSerialNumberTag)` | 미읽음 | 보드 시리얼 — `hardware.serial` 과 다른 식별자(계약 결정) |
 - [ ] **[LOW / 결정] CSUS 를 OS 채널로 수집하면 `vendor` 가 `hp`(Redfish 는 `hpCsus`)** — 채널 간 vendor 표시 불일치. 어느 쪽으로 맞출지 사용자 결정.
-- [ ] **[LOW / 결정] CSUS mock baseline(`schema/baseline_v1/hpe_csus_3200_baseline.json`, 3파티션 합성)을 실측으로 교체(BASE-01)** — 실 봉투는 WSL ansible + 미러 서빙 + vault 비밀번호가 있어야 만든다(사용자 몫).
+- [x] **[DONE 2026-10-27 — FIX 5] CSUS mock baseline 실측 교체(BASE-01)** — `hpe_csus_3200_baseline.json` 을 2차 Mock csus3200_01 의 Tier 1 봉투(WSL ansible + HTTPS 미러)로 교체, registry `hpe_csus_3200_redfish`, 가드 테스트 실측 구조로 재작성(`tests/regression/test_csus_mock_consistency.py`).
 - [ ] **[LOW / 기록만] 채널 간 뜻 차이(변경 없음)** — OS `network.summary` 는 논리 NIC, Redfish 는 물리 포트/카드(계약 문서 기재). Windows `physical_disks[].model` PnP 접미사(" SCSI Disk Device") · ESXi 모델 vendor 접두 — 그룹 model 불일치. AMD L3 폴백 · DIMM type 다단어 절단 · Windows multipath 미접기.
 - [ ] **[LOW / 실장비 미검증] Superdome Flex** — `-NNN` 제거 · `firmware_inventory_scope: complex_only` 는(`processor_summary_logical_count` 는 2026-10-27 FIX 1 로 삭제) CSUS 와 같다고 본 사용자 지시(lab · 미러 없음). 실측 시 정정. A-11 다중 섀시 Power/Thermal 도 합성 시험만.
 
@@ -911,7 +911,7 @@
 
 ### 잔여 — gated (보호 경로 / Ansible(Linux) / lab 실측 / envelope 계약 — 자율 미수정)
 
-- [ ] **[HIGH] CSUS baseline 실측 교체 (BASE-01)**: `schema/baseline_v1/hpe_csus_3200_baseline.json` 이 구 MOCK
+- [x] **[DONE 2026-10-27 — FIX 5, 위 BASE-01 참조] CSUS baseline 실측 교체 (BASE-01)**: (종전 기술) `schema/baseline_v1/hpe_csus_3200_baseline.json` 이 구 MOCK
   (가상 3-partition/4-manager, 날조 PSU/WWPN/토폴로지) — 실 4노드와 전면 불일치. 라이브러리는 정상(faithful),
   회귀 기준선 무력. **Ansible control node(Linux) 필요 — 본 Windows 환경 미지원**(DL380 과 동일 제약). 실 site.yml
   실행으로 정규화 envelope 생성 후 교체 (rule 13 R4 — AI 임의 편집 금지). 교체 시 `test_csus_mock_consistency.py` MOCK 가드 동반 갱신.

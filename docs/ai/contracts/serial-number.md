@@ -381,7 +381,7 @@ if isinstance(chassis_data, dict):
 
 - endpoint: `Chassis/{eff_chassis_uri}/NetworkAdapters/{id}` (`:2835-2839`), 실패 시 Systems 경로 fallback(`:4446-4450` 주석)
 - 여기만 `_strip_or_none` 이 아니라 `or None` 을 쓴다 → 빈 문자열은 `None` 이 되지만 **trailing space 는 남는다** (다른 필드와 미세하게 다른 정규화)
-- 실측: `hpe_csus_3200_baseline.json` → `'MT2210CSUS01'`
+- 실측: 2차 Mock csus3200_01(`hpe_csus_3200_baseline.json`, 2026-10-27 교체) → `network.adapters[].serial_number` 6장 전부 값 있음 — `'1I061900DT'`(MLX MCX631102) · `'3Y21301735'`(SN1100Q FC HBA) 등, trailing space 없음 (종전 합성본의 `'MT2210CSUS01'` 은 지어낸 값이었다)
 
 ### 6-5. PSU 시리얼 — `data.power.power_supplies[].serial`
 
@@ -1346,8 +1346,8 @@ System Serial 이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다.
 파생되므로(9절) OS · Redfish 채널 모두 자동으로 정규화된 값을 받는다.
 
 > [INFO] 2026-10-17 부터 같은 장비를 OS 로 봐도 Redfish 로 봐도 `SGHD3TLNDD` 다. 종전 Redfish 결과(`SGHD3TLNDD-000`)를
-> 저장한 호출자는 값이 바뀐다는 점을 알아야 한다. mock baseline(`hpe_csus_3200_baseline.json`)·예시의 `hardware.serial` /
-> `correlation.serial_number` 는 `MOCK-CSUS-P0-001` → `MOCK-CSUS-P0` 로 같이 갱신했다(mock-derived — 실측 아님).
+> 저장한 호출자는 값이 바뀐다는 점을 알아야 한다. 종전 mock baseline 의 `hardware.serial` / `correlation.serial_number` 는 `MOCK-CSUS-P0-001` → `MOCK-CSUS-P0` 로 같이 갱신했었고,
+> 2026-10-27 실측 교체 뒤 baseline 은 `hardware.serial = SGHD4MGNLH` · `multi_node.partitions[0].system.serial = SGHD4MGNLH-000`(원문, `-000` 유지) 이다 — 같은 규칙의 실측 사례.
 
 ### 30-3. 발동 조건 (셋을 모두 만족할 때만)
 

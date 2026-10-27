@@ -46,3 +46,11 @@
 | 03-storage-004 | FIXED (A안 — 카드 조건 참고 notice, 값·필드·요청 불변) + MOCK_LIMITATION (포트 단위 링크는 RMC 가 주지 않아 재생으로 확정 불가; 59 카드 조건 전부 LinkUp 이라 LinkDown 분기는 합성만) |
 | 02-memory-002 | DOC_CORRECTED (FIX 3 — 원값 보존, 벤더 의미 계약 명시) |
 | 01-multi_node-003 | HOLD→WP11 뒤 FIXED 예정 (FIX 5 — 실측 baseline 교체는 bmc/diagnosis 변경 뒤 1회) |
+
+## FIX 5 이행 (WP11 뒤, 2026-10-27)
+
+- `schema/baseline_v1/hpe_csus_3200_baseline.json` 을 **2차 Mock csus3200_01 의 Tier 1 실 봉투**(`tier1-after-WP11/csus3200_01/gather_output.json`, build `mirror-replay-wp11-after`, RMC 1.77.30-20260911_061319 · Redfish 1.19.0 · 캡처 2026-10-22)로 in-place 교체했다. 수정 2곳만: 재생 서버 주소 `127.0.0.1` → Manager NIC 실측 주소 `11.65.23.24`(`ip` · `correlation.host_ip`), `diagnosis.details.baseline_origin` 에 출처·재생 한계·수정 지점 기재(실측 표기). 그 밖 바이트 동일(G-25).
+- 실 구조: 1 nPartition(`Partition0`, serial `SGHD4MGNLH-000`) · 1 Manager(`RMC` primary) · 3 Chassis(`RackGroup`/`Rack1`/`r001u01` — 전원·온도는 `r001u01` 만) · composition 1 block(count null — FIX 6) · fabrics FlexGrid(switch 2 · endpoint 0) · 디스크 4 · FC HBA 4 == FC 포트 4 · `sections.system not_supported` + hostname `yicdspdb01`(FIX 4) · `cpu.logical_threads` 없음(FIX 1). 종전 합성본(3 파티션 · 4 Manager · Base/Expansion · `MOCK-CSUS-P0` 시리얼 · 합성 PSU/WWPN)은 git 이력에만 남는다.
+- 같은 커밋: `tests/regression/conftest.py` registry `hpe_csus_3200_redfish_MOCK` → `hpe_csus_3200_redfish`(주석 정정), `tests/regression/test_csus_mock_consistency.py` 를 실측 구조 가드(요약 카운트 == 길이 · 1/1/3 · composition/fabric 모양 · origin 실측·MOCK 시리얼 없음 · 디스크/FC 개수 정합 · FIX 1/4 계약)로 재작성(파일 이름은 이력상 유지), `test_cross_channel_consistency.py` T10 주석 · `test_hba_ib_canonical.py` 머리말(FC 2 → 4) 정정. `test_vendor_output_display.py` D3(`hpCsus`) · `tests/e2e/test_output_schema.py` · `test_failure_code_contract.py` 는 교체본으로 그대로 PASS.
+- 문서: `schema/baseline_v1/README.md`(표 행 · "합성 기준선 0 개"), `docs/contract/03-fields.md` §9 예시를 실측 구조로 교체 + "Lab 부재 주의"/"현재 mock fixture" 문단 정정, 합성 fixture `tests/fixtures/redfish/hpe_csus_3200/README.md` 에 "합성 설명 모델" 명시, `docs/ai/contracts/serial-number.md`(HBA serial 실측 null · 시리얼 사례), `NEXT_ACTIONS` BASE-01 2곳 DONE, ADR-2026-05-12 결정 6 이행 기록, `LAB_PENDING_MATRIX` C2, decision-log.
+- 처분: 01-multi_node-003(ADR 결정 6 미이행) → FIXED. 합성 `schema/output_examples/redfish_hpe_csus_3200.jsonc` 는 주석 예시(README: "기준선과 장비가 정확히 같지 않을 수 있다")로 두었다 — 실측 구조로 바꾸는 일은 별도(OBSERVATION).

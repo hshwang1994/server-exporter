@@ -1354,65 +1354,74 @@ CSUS 3200 은 `data.system.hostname` 을 RMC 이름으로 정하므로 `hostname
 ```json
 {
   "data": {
-    "system": { ... },
-    "bmc":    { "name": "RMC", ... },
-    "cpu":    { ... },
+    "system": { "hostname": "yicdspdb01", "fqdn": null, "...": null },
+    "bmc":    { "name": "RMC", "timezone": "Asia/Seoul", "...": {} },
+    "cpu":    { "sockets": 4, "cores_physical": 64, "manufacturer": "Intel", "...": {} },
     "...":    {},
     "multi_node": {
       "enabled": true,
       "layout": "rmc_primary",
       "summary": {
-        "partition_count": 3,
-        "manager_count": 4,
+        "partition_count": 1,
+        "manager_count": 1,
         "chassis_count": 3,
         "representative_partition": "Partition0",
-        "resource_block_count": 3,
+        "resource_block_count": 1,
         "fabric_count": 1
       },
       "partitions": [
         { "id": "Partition0", "system_uri": "/redfish/v1/Systems/Partition0",
-          "system": {}, "cpu": {}, "memory": {}, "storage": {}, "network": {},
-          "boot": { "boot_order": ["Boot0001", "Boot0002"],
+          "system": { "serial": "SGHD4MGNLH-000", "model": "Compute Scale-up Server 3200", "power_state": "On", "...": {} },
+          "cpu": {}, "memory": {}, "storage": {}, "network": {},
+          "boot": { "boot_order": ["Boot0003", "Boot0001"],
                     "boot_source_override_enabled": "Disabled",
                     "boot_source_override_target": "None",
-                    "boot_source_override_mode": "UEFI" } },
-        { "id": "Partition1" },
-        { "id": "Partition2" }
+                    "boot_source_override_mode": "UEFI",
+                    "boot_next": null, "uefi_target": null } }
       ],
       "managers": [
-        { "id": "RMC",       "uri": "/redfish/v1/Managers/RMC",
-          "role": "primary",   "bmc": { "name": "RMC" },
-          "log_services": [ { "id": "IML", "name": "Integrated Management Log",
-                              "overwrite_policy": "WrapsWhenFull", "service_enabled": true } ] },
-        { "id": "PDHC0",     "role": "secondary", "bmc": { "name": "PDHC" }, "log_services": [] },
-        { "id": "Bay1.iLO5", "role": "secondary", "bmc": { "name": "iLO" }, "log_services": [] }
+        { "id": "RMC", "uri": "/redfish/v1/Managers/RMC",
+          "role": "primary", "bmc": { "name": "RMC", "...": {} },
+          "log_services": [ { "id": "IDC", "name": "IDC Log Service",
+                              "overwrite_policy": "WrapsWhenFull", "service_enabled": true,
+                              "log_entry_type": "OEM", "date_time": null },
+                            { "id": "Debug", "...": {} } ] }
       ],
       "chassis": [
-        { "id": "Base",       "kind": "base",      "chassis_type": "Enclosure",
-          "power": {}, "thermal": { "temperatures": [ { "name": "Inlet", "reading_celsius": 22, "health": "OK" } ],
-                                    "fans": [ { "name": "Fan 1", "reading": 8000, "reading_units": "RPM", "health": "OK" } ] } },
-        { "id": "Expansion1", "kind": "expansion" },
-        { "id": "Expansion2", "kind": "expansion" }
+        { "id": "RackGroup", "kind": "rackgroup", "chassis_type": "RackGroup",
+          "model": "Compute Scale-up Server 3200", "power": {}, "thermal": {} },
+        { "id": "Rack1",     "kind": "rack",      "chassis_type": "Rack", "power": {}, "thermal": {} },
+        { "id": "r001u01",   "kind": "rackmount", "chassis_type": "RackMount",
+          "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+          "power":   { "power_supplies": [ { "name": "rack1/chassis_u1/psu0", "...": {} } ], "...": {} },
+          "thermal": { "temperatures": [ { "name": "...", "reading_celsius": 0, "health": "OK" } ],
+                       "fans": [ { "name": "...", "reading": 0, "reading_units": "RPM", "health": "OK" } ] } }
       ],
       "composition": {
-        "enabled": true, "state": "Enabled", "health": "OK", "resource_block_count": 3,
+        "enabled": true, "state": "Enabled", "health": "OK", "resource_block_count": 1,
         "resource_blocks": [
-          { "id": "Block0", "resource_block_types": ["Compute"], "composition_state": "Composed",
-            "processor_count": 4, "memory_count": 8,
-            "chassis": ["/redfish/v1/Chassis/Base"],
+          { "id": "r001u01", "name": "Compute Resource Block rack1/chassis_u1",
+            "resource_block_types": ["ComputerSystem"], "composition_state": "Composed",
+            "processor_count": null, "memory_count": null,
+            "chassis": ["/redfish/v1/Chassis/r001u01"],
             "computer_systems": ["/redfish/v1/Systems/Partition0"] }
         ]
       },
       "fabrics": [
-        { "id": "FlexGrid", "fabric_type": "PCIe", "health": "OK",
-          "switch_count": 2, "endpoint_count": 2,
-          "switches":  [ { "id": "Switch0", "switch_type": "PCIe", "health": "OK" } ],
-          "endpoints": [ { "id": "Endpoint0", "endpoint_protocol": "PCIe", "health": "OK" } ] }
+        { "id": "FlexGrid", "name": "Flex Grid", "fabric_type": null, "state": "Enabled", "health": "OK",
+          "switch_count": 2, "endpoint_count": 0,
+          "switches":  [ { "id": "r001u01_HARP0", "name": "rack1/chassis_u1/harp0", "switch_type": null, "health": "OK" },
+                         { "id": "r001u01_HARP1", "name": "rack1/chassis_u1/harp1", "switch_type": null, "health": "OK" } ],
+          "endpoints": [] }
       ]
     }
   }
 }
 ```
+
+> 위 예시는 2026-10-27 용인 2차 Mock `csus3200_01`(RMC 1.77.30) 실측 봉투(`schema/baseline_v1/hpe_csus_3200_baseline.json`)를 줄인 것이다 — 1 nPartition · 1 Manager(RMC) · 3 Chassis(RackGroup → Rack1 → r001u01) 가 실제 모양이고,
+> 2026-05-12 ~ 2026-10-27 의 합성 예시(3 파티션 · 4 Manager · Base/Expansion 섀시)는 실측과 달라 교체했다(사용자 FIX 5). 전원·온도는 장비 섀시 `r001u01` 에만 있다(RackGroup/Rack1 은 navigation property 가 없어 요청하지 않는다 — C5).
+> `composition.resource_blocks[].processor_count/memory_count` 는 ResourceBlock 에 Processors/Memory 배열이 없어 **null** 이다(FIX 6 — 0 으로 지어내지 않는다). `fabric_type`/`switch_type` 은 RMC 가 값을 주지 않아 null.
 
 ### 확장 컴포넌트 (2026-06-09)
 
@@ -1426,7 +1435,8 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | `composition` | `CompositionService` + `ResourceBlocks` | `enabled`, `state/health`, `resource_block_count`, `resource_blocks[]` (id/types/composition_state/processor_count/memory_count/`chassis[]`/`computer_systems[]`) | nPartition 조합 구조. 각 ResourceBlock ↔ chassis 대응 (설명 모델). ServiceRoot 미노출 시 `null`. **2026-10-27 (FIX 6)**: ResourceBlock 본문에 `Processors`/`Memory` 배열이 없으면 `processor_count`/`memory_count` 는 `null`(0 으로 적지 않는다 — 실측 CSUS 3200 RMC `ResourceBlocks/r001u01` 은 두 배열이 없다; 위 예시의 4/8 은 설명 모델) |
 | `fabrics` | `Fabrics` + `Fabrics/{id}` (Switches/Endpoints) | `[]` of {id/fabric_type/health/`switch_count`/`endpoint_count`/`switches[]`/`endpoints[]`} | NUMAlink FlexGrid (Switches+Endpoints, Links/Zones 미사용 — 설명 모델). ServiceRoot 미노출 시 `null` |
 
-> **Lab 부재 주의**: 위 5종은 lab 부재 web sources (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정.
+> **실측 (2026-10-27)**: 위 5종은 2026-06-09 당시 lab 부재 web sources 합성 검증이었고, 용인 2차 Mock 3대(RMC 1.77.30)에서 실제 모양을 확인했다 — `boot` 있음, `thermal`/`power` 는 장비 섀시(`r001u01`)만, `log_services` IDC/Debug 등,
+> `composition` 1 block(count null — FIX 6), `fabrics` FlexGrid(switch 2 HARP0/1 · endpoint 0, `fabric_type` null — RMC 가 값을 주지 않는다; 종전 placeholder `PCIe` 는 합성본과 함께 사라졌다).
 
 ### 호출자 가이드
 
@@ -1437,11 +1447,11 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | 확장 컴포넌트 인식 호출자 | `multi_node.composition` / `multi_node.fabrics` (null 가드) + `partitions[].boot` / `chassis[].thermal` / `managers[].log_services` 순회 |
 | RMC 응답 없음 | `diagnosis.failure_stage` 가 `protocol` 이면 사이트 RMC 의 Redfish 서비스가 꺼져 있을 수 있다 ([../operate/06-rmc-activation.md](../operate/06-rmc-activation.md)) |
 
-### Lab 부재 한계
-- (2026-10-10) `multi_node.partitions[].network.summary` 는 빈 그룹, `memory.total_basis` 는 고정값이다 — CSUS lab 이 없어 파티션 단위 계산 근거를
-  만들 수 없다. 두 값은 파티션 하위 섹션의 한계로 두고 지어내지 않는다.
+### 파티션 하위 요약의 한계
+- (2026-10-10, 2026-10-27 실측 재확인) `multi_node.partitions[].network.summary` 는 빈 그룹, `memory.total_gb` 는 null · `total_basis` 는 고정값이다 — 파티션 단위 요약은 계산하지 않는다.
+  실측(csus3200_01: slots 32 · interfaces 8)에서도 같다. 두 값은 파티션 하위 섹션의 한계로 두고 지어내지 않는다(관찰 — 변경 없음).
 
-현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 의무 (내부 후속 작업 목록 C1~C8 참조).
+실측 fixture: `tests/fixtures/redfish/real_hpe_csus3200_{01,02,03}`(2차) · `real_hpe_csus3200`(1차) 와 baseline `hpe_csus_3200_baseline.json`(2차 csus3200_01). 합성 fixture `tests/fixtures/redfish/hpe_csus_3200/` 는 설명 모델로만 남아 있다(README 참조).
 
 ---
 

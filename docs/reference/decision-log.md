@@ -123,7 +123,9 @@
 - **영향**: envelope 13 필드 · `sections` · `status` 판정 불변. 호출자가 볼 변화: Redfish `data.cpu.logical_threads` **키 소멸**(유일한 비-Additive — Portal 은 OS/ESXi 값 사용), `cpu.manufacturer` 추가,
   Lenovo XCC3 `meta.adapter_id = redfish_lenovo_xcc3`, 전원 Off/Absent 값 null · 항목 제외, firmware category 재분류(Lenovo UEFI → bios 등), CSUS 요청 -14 · composition count null, notice 문구 추가.
 - **회귀**: WP 마다 unit(5118) · integration(497) · e2e+regression(1094) · WSL 엔진 23 · syntax 3채널 · Tier 1 18/18(허용목록 밖 0) · 개수 정합 18 PASS · INV-5 0. 독립 검증은 새 Fable 세션이 같은 SHA 로 Tier 0/1/2 를 재실행한다.
-  evidence `tests/evidence/2026-10-27-redfish-mock2-impl/`(00~09 · golden-changes · tier0/tier1-*).
+  evidence `tests/evidence/2026-10-27-redfish-mock2-impl/`(00~11 · golden-changes · tier0/tier1-*).
+- **FIX 5 이행(WP11 뒤)**: `schema/baseline_v1/hpe_csus_3200_baseline.json` 을 2차 Mock csus3200_01 의 Tier 1 실 봉투로 교체(재생 주소 127.0.0.1 → BMC IP 2곳만 수정, `baseline_origin` 실측 표기). 실 구조 1 파티션 · 1 RMC · 3 섀시 — 합성본(3 파티션 · 4 Manager)과 달라
+  registry 라벨 `hpe_csus_3200_redfish`, 가드 테스트(`test_csus_mock_consistency.py`) 를 실측 구조·개수 정합으로 재작성, 03-fields §9 예시를 실측으로 교체. 2026-10-27 현재 합성 baseline 은 0 개다.
 
 ## 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round (분석 단계 — 코드 변경 0)
 

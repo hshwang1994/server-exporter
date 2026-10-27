@@ -62,7 +62,7 @@
 | # | 항목 | trigger | skill / 파일 |
 |---|---|---|---|
 | C1 | 사이트 fixture 캡처 (CSUS 3200 / Superdome Flex 각 1대) | RMC IP 확보 + Redfish 활성화 (`docs/operate/06-rmc-activation.md` 4 절) | `capture-site-fixture` — `tests/fixtures/redfish/hpe_csus_3200/` 17 파일 |
-| C2 | baseline JSON 추가 (`hpe_csus_3200_baseline.json` + `hpe_superdome_flex_baseline.json`) | C1 완료 | `update-vendor-baseline` (rule 13 R4) |
+| C2 | baseline JSON 추가 (`hpe_csus_3200_baseline.json` + `hpe_superdome_flex_baseline.json`) | CSUS: **2026-10-27 실측 교체 완료**(2차 Mock csus3200_01 미러 재생, FIX 5) · Superdome Flex: lab 부재 유지 | `update-vendor-baseline` (rule 13 R4) |
 | C3 | lab cycle `hpe-csus-rmc-lab-validation` round | C1 + C2 완료 | 신 round — mock fixture 정정 + adapter origin 갱신 |
 | C4 | vault 분리 결정 (`vault/<loc>/redfish/hpe_csus.yml`) | 사용자 명시 승인 + 사이트 자격증명 정책 | rule 50 R2 단계 4 |
 | C5 | ServiceRoot.Product 실측 — 정확 model 문자열 | C1 | adapter `model_patterns` 정밀화 |
