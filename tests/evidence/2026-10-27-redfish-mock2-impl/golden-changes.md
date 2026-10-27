@@ -34,3 +34,4 @@
 | G-12 | WP5 | `real_lenovo_sr650` · `_v4_01..04` | `data.system.oem.machine_type` · `led_indicator` | `null` · `null` | `"7DGD"` · `"Off"` | recording `Systems/1.SubModel "7DGD"` · `IndicatorLED "Off"` (Chassis.Oem.Lenovo 에 MachineType/LEDIndicators 없음) | chassis OEM 이 비면 System 값으로 채움(원천 있는 2키). 다른 oem 키는 그대로(null 유지 — 원천 없음) |
 
 - G-09~G-12 검증: 15 fixture 전부 재생 → 바뀐 경로는 Lenovo 5세트의 위 네 묶음뿐(CSUS 4 · DL380 5 · Dell 1 차이 0). 요청 예산 불변. 호스트 EthernetInterfaces 의 FC 제외(03-network-001)는 normalize 층이라 모듈 golden 에 없다 — Tier 1 봉투(`tier1-after-WP5/`)와 INV-5 로 확인.
+| G-13 | WP5 | `dmtf_rackmount1`(DMTF 공개 mockup, baseline 아님) | `data.memory.slots[0..2].locator` | `"1"`, `"2"`, `"3"` (Slot) | `"DIMM 1"`, `"DIMM 2"`, `"DIMM 3"` | recording `Systems/437XR1138R2/Memory/DIMM1..3`: `DeviceLocator` 없음, `Location.PartLocation.ServiceLabel "DIMM n"`, `MemoryLocation.Slot n` | G-10 과 같은 규칙(ServiceLabel 우선) — 표준 mockup 도 같은 순서를 따른다 |
