@@ -110,8 +110,9 @@ def test_powered_on_host_only_absent_sensor_readings_change():
     assert [p["state"] for p in psus] == ["Enabled", "UnavailableOffline"]
     assert all(p["power_capacity_w"] == 1600 and p["firmware_version"] == "2.00" for p in psus)   # Absent 가 아니면 불변
     temps = res["data"]["thermal"]["temperatures"]
-    absent = [t for t in temps if t["state"] == "Absent"]
-    assert len(absent) == 7 and all(t["reading_celsius"] is None for t in absent)
+    # WP3 는 Absent 센서의 0 을 null 로 두었고, WP6(C10 05-thermal-001)이 그 항목 자체를 제외한다 — 7건은 건수 notice 로만 남는다
+    assert not [t for t in temps if t["state"] == "Absent"] and len(temps) == 49
+    assert any(m.startswith("Absent 센서 7건 제외") for m in notices)
     enabled_now = [(t["name"], t["reading_celsius"]) for t in temps if t["state"] == "Enabled"]
     enabled_gold = [(t["name"], t["reading_celsius"]) for t in gold["data"]["thermal"]["temperatures"] if t["state"] == "Enabled"]
     assert enabled_now == enabled_gold and len(enabled_now) == 49
@@ -223,7 +224,7 @@ def test_sensor_reading_null_only_when_state_present_and_not_enabled(monkeypatch
     t = {x["name"]: x for x in data["thermal"]["temperatures"]}
     assert t["t-enabled"]["reading_celsius"] == 31
     assert t["t-offline"]["reading_celsius"] is None and t["t-offline"]["state"] == "UnavailableOffline" and t["t-offline"]["upper_critical"] == 70
-    assert t["t-absent"]["reading_celsius"] is None and t["t-absent"]["state"] == "Absent"
+    assert "t-absent" not in t                                    # WP6: Absent 항목은 제외 (test_redfish_thermal_power_meaning.py)
     assert t["t-nostatus"]["reading_celsius"] == 0 and t["t-nostatus"]["state"] is None
     assert t["t-enabled-zero"]["reading_celsius"] == 0
     f = {x["name"]: x for x in data["thermal"]["fans"]}
