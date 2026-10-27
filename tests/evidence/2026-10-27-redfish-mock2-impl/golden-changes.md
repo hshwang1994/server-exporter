@@ -11,3 +11,15 @@
 
 - G-01~03 검증: 추가 전후 모듈 산출을 전체 평탄 비교 → 차이는 `data.bios` 뿐(각 N+1 경로). `test_real_capture_replay`·`test_request_budget`·`test_inventory_count_parity`(해당 3세트 + 2차) PASS. `request_budget.json` 3종 불변.
 - 1차 `real_hpe_csus3200` 은 recording 에 `get::Systems/Partition0/Bios` 가 이미 있어 변경 없음.
+
+### WP3 (C2 — 전원 Off 호스트 · 빈 DIMM 슬롯 · Absent PSU placeholder · 비-Enabled 센서) — 2026-10-27
+
+| # | WP | fixture / baseline | 경로 | before | after | 원천 | 원인 |
+|---|---|---|---|---|---|---|---|
+| G-04 | WP3 | `real_hpe_dl380_gen12_03` | `data.memory.slots[]` | 32 항목(빈 슬롯 16 포함: `capacity_mb 0`, 제조사/부품/시리얼 null) | **16 항목**(장착 DIMM 만), `total_mib` 524288 불변 | recording `Systems/1/Memory/proc1dimm11` 등 16건: `Status` 없음 · `CapacityMiB: 0` · Manufacturer/PartNumber/SerialNumber null(DeviceLocator 만) | 빈 슬롯은 DIMM 이 아니다 → 제외 + notice "빈 DIMM 슬롯 16개 제외 (…)" |
+| G-05 | WP3 | `real_hpe_dl380_gen12_03` | `data.power.power_supplies[0..1].{power_capacity_w, firmware_version}` | `0`, `"0.00"` ×2 | `null`, `null` ×2 (`state: Absent` · `health: Warning` 유지) | recording `Chassis/1/Power.PowerSupplies[]`: `Status.State Absent`, `PowerCapacityWatts 0`, `FirmwareVersion "0.00"` | 미장착 슬롯의 0 W·"0.00" 은 값이 아니라 placeholder. `power_control.power_capacity_watts 1600` 은 BMC 가 준 값이라 불변 |
+| G-06 | WP3 | `real_hpe_dl380_gen12_03` | `data.thermal.temperatures[0..41].reading_celsius` · `fans[0..5].reading` | 전부 `0` | 전부 `null` (`state: UnavailableOffline` · `upper_critical` 유지) | recording `Chassis/1/Thermal`: 42 센서·6 팬 전부 `Status.State UnavailableOffline`, reading 0 (호스트 PowerState Off) | Enabled 가 아닌 센서의 0 은 측정값이 아니다 → null. 전원 Off 는 notice 1건 |
+| G-07 | WP3 | `real_hpe_dl380_gen12_01` / `_02` / `_04` | `data.thermal.temperatures[*].reading_celsius` (State Absent 항목만) | `0` ×7 / ×8 / ×8 | `null` ×7 / ×8 / ×8 (Enabled 센서 49/36/46 건 값 불변) | recording `Chassis/1/Thermal` Temperatures `Status.State Absent`, `ReadingCelsius 0` | 미장착 슬롯 센서의 0 °C 는 placeholder (WP6 에서 Absent 항목 자체를 제외) |
+| G-08 | WP3 | `real_hpe_dl380` (1차) | `data.thermal.temperatures[*].reading_celsius` (State Absent 9건) | `0` ×9 | `null` ×9 (Enabled 43 건 불변) | 같음 (1차 iLO 7 1.20.00) | 같음 |
+
+- G-04~G-08 검증: 15 real_* fixture 전부 재생해 평탄 비교 — 바뀐 경로가 위 다섯 fixture 의 위 경로뿐임을 확인한 뒤 썼다(CSUS 4 · Lenovo 5 · Dell 1 = 차이 0; CSUS ThermalMetrics 는 Status 가 없어 규칙이 닿지 않는다). 요청 예산 불변.
