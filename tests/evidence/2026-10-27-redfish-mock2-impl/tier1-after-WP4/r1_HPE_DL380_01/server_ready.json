@@ -1,0 +1,1 @@
+{"mirror": "/root/se_mirrors/mock1/HPE_DL380/01", "keys": 2054, "raw": 0, "hang": ["ComponentIntegrity/TPM-1"], "realm": null, "noauth_root": true, "statuses": {"200": 2022, "404": 30, "405": 1, "400": 1}, "load_s": 1.8, "pid": 3262}

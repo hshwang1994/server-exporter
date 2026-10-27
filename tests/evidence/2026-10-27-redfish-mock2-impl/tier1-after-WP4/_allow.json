@@ -1,0 +1,71 @@
+[
+ {
+  "labels": [
+   "dl380_gen12_03"
+  ],
+  "path_prefix": "data.memory.slots",
+  "issue": "02-memory-001",
+  "note": "빈 DIMM 슬롯 16 제외 (Status 없음·CapacityMiB 0·식별자 없음) — 32→16"
+ },
+ {
+  "labels": [
+   "dl380_gen12_03"
+  ],
+  "path_prefix": "data.memory.summary",
+  "issue": "02-memory-001",
+  "note": "슬롯 요약"
+ },
+ {
+  "labels": [
+   "dl380_gen12_03"
+  ],
+  "path_prefix": "data.power.power_supplies",
+  "issue": "05-power-001",
+  "note": "Absent PSU 의 0 W·\"0.00\" → null"
+ },
+ {
+  "labels": [
+   "dl380_gen12_03"
+  ],
+  "path_prefix": "data.power.summary",
+  "issue": "05-power-001",
+  "note": "PSU 용량 합 요약 (Absent 제외)"
+ },
+ {
+  "labels": [
+   "dl380_gen12_03"
+  ],
+  "path_prefix": "data.thermal",
+  "issue": "05-thermal-002",
+  "note": "UnavailableOffline 센서·팬 reading → null (상태 유지)"
+ },
+ {
+  "labels": [
+   "dl380_gen12_01",
+   "dl380_gen12_02",
+   "dl380_gen12_04",
+   "r1_HPE_DL380_01"
+  ],
+  "path_re": "^data\\.thermal\\.temperatures\\[\\d+\\]\\.reading_celsius$",
+  "issue": "05-thermal-001",
+  "note": "Absent 센서 reading 0 → null"
+ },
+ {
+  "labels": [
+   "dl380_gen12_01",
+   "dl380_gen12_02",
+   "dl380_gen12_03",
+   "dl380_gen12_04",
+   "r1_HPE_DL380_01"
+  ],
+  "path_prefix": "diagnosis.details.notices",
+  "issue": "C2",
+  "note": "notice 추가: 호스트 전원 Off(gen12_03) · 빈 DIMM 슬롯 16(gen12_03)"
+ },
+ {
+  "labels": "*",
+  "path_re": "^data\\.firmware\\[\\d+\\]\\.category$",
+  "issue": "04-firmware-001~005 (C9 FIX 7)",
+  "note": "구조 근거(firmware_links) 1순위 + 검증된 토큰 사슬 + controller_model 조인 — enum 확장 없음, 바뀐 항목은 04-firmware-category-matrix.md"
+ }
+]
