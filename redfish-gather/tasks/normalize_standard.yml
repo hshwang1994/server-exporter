@@ -301,9 +301,14 @@
                                               'cores_per_socket': (_new_total // _new_sockets) if _new_total is not none else none}) -%}
         {%- else -%}
           {%- set _ = ns.seen.update({m: ns.groups | length}) -%}
+          {#- 2026-10-27 (FIX 2): groups[].manufacturer 도 top-level cpu.manufacturer 와 같은 표(intel → Intel · amd|advanced micro devices → AMD · 그 밖 원문 · 없으면 null) -#}
+          {%- set _mf_raw = p.manufacturer | default(none) -%}
+          {%- set _mf_s = (_mf_raw | string | trim) if _mf_raw is not none else '' -%}
+          {%- set _mf_l = _mf_s | lower -%}
+          {%- set _mf = 'Intel' if ('intel' in _mf_l) else ('AMD' if ('amd' in _mf_l or 'advanced micro devices' in _mf_l) else (_mf_s if _mf_s else none)) -%}
           {%- set _ = ns.groups.append({
             'model': m,
-            'manufacturer': p.manufacturer | default(none),
+            'manufacturer': _mf,
             'max_speed_mhz': p.speed_mhz | default(none),
             'architecture': p.architecture | default(p.instruction_set | default(none)),
             'sockets': 1,
@@ -668,21 +673,11 @@
         cores_physical: >-
           {%- set s = (_rf_d_cpus | map(attribute='total_cores') | select | list | sum) if _rf_d_cpus else 0 -%}
           {{ s if s else (_rf_d_system.cpu_summary | default({})).core_count | default(none) }}
-        # 2026-10-18 (X3): System.ProcessorSummary.LogicalProcessorCount 가 있으면 정본 — per-processor TotalThreads 합은 일부 펌웨어에서
-        #   코어 수로 보인다(실측 Cisco CIMC 4.1: 22/소켓 → 44, ESXi 88). 없으면(실측 iLO · XCC · CIMC) 종전처럼 합산.
-        # 2026-10-19 (A-2): 반대 펌웨어도 있다 — HPE CSUS 3200 RMC 1.75.108 은 LogicalProcessorCount 가 **코어 수**다(실측 4노드:
-        #   LogicalProcessorCount == Count × TotalCores, per-CPU TotalThreads == 2 × TotalCores, Bios HThread=Enabled → X3 규칙이 32/64 로 과소집계,
-        #   같은 봉투의 multi_node.partitions[].cpu.logical_threads(합산) 와도 불일치). adapter vendor_notes.processor_summary_logical_count 가
-        #   'cores' 면 per-processor 합을 우선하고 합을 모를 때만 요약값. 값으로 가르고 vendor 이름으로 가르지 않는다(rule 12).
-        logical_threads: >-
-          {%- set lpc = (_rf_d_system.cpu_summary | default({})).logical_processor_count | default(none) -%}
-          {%- set s = (_rf_d_cpus | map(attribute='total_threads') | select | list | sum) if _rf_d_cpus else 0 -%}
-          {%- set _lpc_means = (((_selected_adapter | default({})).vendor_notes | default({})).processor_summary_logical_count | default('', true)) | string | trim | lower -%}
-          {%- if _lpc_means == 'cores' -%}
-          {{ s if s else (lpc if (lpc is not none and (lpc | int) > 0) else none) }}
-          {%- else -%}
-          {{ lpc if (lpc is not none and (lpc | int) > 0) else (s if s else none) }}
-          {%- endif -%}
+        # 2026-10-27 (FIX 1 — 사용자 결정, 2차 Mock 02-cpu-001/002/006): Redfish 는 cpu.logical_threads 를 **내지 않는다**.
+        #   BMC 값(ProcessorSummary.LogicalProcessorCount · per-CPU TotalThreads)은 HT 비활성 장비에서 코어의 2배(지원 수)로 나오고 펌웨어마다 뜻이
+        #   달라(RMC 1.75 코어 수 · 1.77 스레드 수 · CIMC 4.1 코어 수) OS/ESXi 와 같은 값을 보장할 수 없다 — 스레드 수는 OS/ESXi 채널 값만 쓴다
+        #   (사전 channel [os, esxi]). HT 추정(코어×2)도 하지 않는다. sockets · cores_physical 은 그대로. 종전 X3(2026-10-18) · A-2(2026-10-19)
+        #   규칙과 adapter 플래그 processor_summary_logical_count 는 함께 삭제(소비처 0). 모듈 raw system.cpu_summary.logical_processor_count 는 BMC 원값으로 남는다.
         # BUG-C fix (2026-06-04, HP CSUS 3200): per-processor list 가 비면 (Superdome/CSUS
         # partition System 은 /Processors drill-in 부재 — sdflexutils system.json 실측:
         # Processors/Memory/Storage/EthernetInterfaces sub-collection 부재, ProcessorSummary 만 존재)
@@ -691,6 +686,19 @@
         model: >-
           {%- set _m = _rf_d_cpus | map(attribute='model') | select | list | first | default(none) -%}
           {{ _m if _m else (_rf_d_system.cpu_summary | default({})).model | default(none) }}
+        # 2026-10-27 (FIX 2 — 2차 Mock 02-cpu-003): Processor.Manufacturer 를 OS/ESXi 와 같은 표로 정규화 — 소문자에 'intel' → Intel,
+        #   'amd' 또는 'advanced micro devices' → AMD(DMTF mockup · iDRAC AMD 는 회사 전체 이름을 쓴다), 그 밖(Ampere 등)은 원문 strip, 없으면 null.
+        #   첫 CPU 값(동질 CPU). 모듈 raw(_rf_d_cpus[].manufacturer)는 그대로.
+        #   실측: iLO 7 · XCC 3 · RMC "Intel(R) Corporation", iDRAC "Intel". 값 정규화이지 vendor 이름 분기가 아니다(rule 12).
+        manufacturer: >-
+          {%- set _mf_raw = _rf_d_cpus | map(attribute='manufacturer', default=none) | select | list | first | default(none) -%}
+          {%- set _mf = (_mf_raw | string | trim) if _mf_raw is not none else '' -%}
+          {%- set _mf_l = _mf | lower -%}
+          {%- if 'intel' in _mf_l -%}Intel
+          {%- elif 'amd' in _mf_l or 'advanced micro devices' in _mf_l -%}AMD
+          {%- elif _mf -%}{{ _mf }}
+          {%- else -%}{{ none }}
+          {%- endif -%}
         # 2026-10-18 (X2): max_speed_mhz 는 정격(base) — 모듈 speed_mhz(BaseSpeedMHz → Oem 정격 → 브랜드 "@ N.NNGHz" → OperatingSpeedMHz 순).
         #   터보 최대(MaxSpeedMHz)는 turbo_max_mhz — OS 채널(lscpu CPU max MHz)과 같은 뜻. 둘 다 사전 정의대로(2026-09-03 3채널 공통 정격).
         max_speed_mhz: >-

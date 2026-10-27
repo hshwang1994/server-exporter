@@ -2635,7 +2635,11 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
         'uuid':           _ne('UUID'),
         'hostname':       hostname,
         'power_state':    _safe(data, 'PowerState'),
-        'health':         _safe(data, 'Status', 'Health'),
+        # 2026-10-27 (01-hardware-002): System.Status.Health 가 없을 때만 HealthRollup 폴백(memory_summary · cpu_summary 와 같은 패턴).
+        #   값이 있으면 그대로 — 리소스 자체 health 다(DMTF: Health 는 리소스 자체, HealthRollup 은 하위 포함). 18 label 실측은 전부 Health 가
+        #   있어 값 불변(1차 SR650 Health Warning · HealthRollup OK 는 Warning 유지). PSU 장애의 등급은 벤더가 정한다(iLO 7 Warning · XCC 3 Critical).
+        'health':         (_safe(data, 'Status', 'Health') if _safe(data, 'Status', 'Health') not in (None, '')
+                           else _safe(data, 'Status', 'HealthRollup')),
         'state':          _safe(data, 'Status', 'State'),
         'led_state':      led_state,
         'bios_version':   _ne('BiosVersion'),
@@ -6126,12 +6130,12 @@ def _normalize_cpu_raw(procs):
 
     cycle 2026-05-29: top-level normalize_standard.yml 의 B01 필터 + 합산 + summary 와
     동일 결과를 Python 에서 생성 (multi_node.partitions[].cpu 일관성).
+    2026-10-27 (FIX 1 — 사용자 결정): logical_threads 를 내지 않는다 — top-level cpu 와 같은 정책(BMC 스레드 수는 HT 상태를 확정하지 못한다).
     """
     procs = procs if isinstance(procs, list) else []
     cpus = [p for p in procs if isinstance(p, dict)
             and (str(p.get('processor_type') or '').strip().upper() in ('CPU', 'CORE', ''))]
     cores = sum(_safe_int(p.get('total_cores'), 0) for p in cpus)  # rule 95 R1 #7: 비-숫자 cores str 방어
-    threads = sum(_safe_int(p.get('total_threads'), 0) for p in cpus)
     models = [p.get('model') for p in cpus if p.get('model')]
     speeds = [p.get('speed_mhz') for p in cpus if p.get('speed_mhz')]
     archs = [p.get('architecture') for p in cpus if p.get('architecture')]
@@ -6154,7 +6158,6 @@ def _normalize_cpu_raw(procs):
     return {
         'sockets': (len(cpus) or None),
         'cores_physical': (cores or None),
-        'logical_threads': (threads or None),
         'model': (models[0] if models else None),
         'max_speed_mhz': (speeds[0] if speeds else None),
         'architecture': (archs[0] if archs else (isets[0] if isets else None)),
@@ -6769,8 +6772,9 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     (capability 미지원 = noise 아님).
 
     cycle 2026-06-14 (Track 4): thermal 단일노드 배선 (이전엔 multi_node 경로만).
-    gather_power 패턴 mirror — /Thermal 404 시 /ThermalSubsystem fallback. 미지원 시
-    {} graceful (collected 이지만 빈 dict). normalize 가 data.thermal 로 passthrough.
+    gather_power 패턴 mirror — /Thermal 404 시 /ThermalSubsystem fallback. 둘 다 404 면
+    sections.thermal 은 not_supported 다(2026-10-12 — 종전 "{} graceful · collected" 서술은 2026-10-27 05-thermal-005 로 정정).
+    normalize 가 data.thermal 로 passthrough.
 
     cycle 2026-05-12 (ADR-2026-05-12): `manager_layout` 옵션 인자 추가 (Additive).
     None 시 기존 동작 100% 보존. RMC primary adapter 만 `gather_bmc` 라벨 분기 활성.
