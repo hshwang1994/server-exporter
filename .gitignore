@@ -74,3 +74,8 @@ b[0-9][0-9].log
 # vault 복호화 헬퍼 scripts/ai/vault_decrypt_check.py — 2026-05-01 에는 fallback password 평문 때문에 .gitignore 였다.
 # 2026-08-12 에 기본 비밀번호가 제거됐고(--password-file / SE_VAULT_PASSWORD 만), tests/unit/test_vault_check_no_secret_output.py 가
 # 비밀값 미출력을 강제한다. 2026-10-04 검토 C6: CI Verify 가 정식 바인딩으로 이 도구를 실행해야 하므로 다시 추적한다(production 제외 경로).
+
+# 2026-10-27 mirror_replay (FIX 8): 재생 서버 인증서는 실행 시 임시 디렉터리에만 만든다 — 저장소 안 pem/key 커밋 금지
+tests/redfish-probe/mirror_replay/**/*.pem
+tests/redfish-probe/mirror_replay/**/*.key
+tests/redfish-probe/mirror_replay/_tls/
