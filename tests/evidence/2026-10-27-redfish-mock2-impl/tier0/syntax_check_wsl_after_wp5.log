@@ -1,0 +1,9 @@
+## os-gather/site.yml
+
+playbook: os-gather/site.yml
+## esxi-gather/site.yml
+
+playbook: esxi-gather/site.yml
+## redfish-gather/site.yml
+
+playbook: redfish-gather/site.yml

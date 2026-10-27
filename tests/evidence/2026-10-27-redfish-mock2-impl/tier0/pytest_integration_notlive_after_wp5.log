@@ -1,0 +1,38 @@
+........................................................................ [ 14%]
+............................F........................................... [ 28%]
+.....s.ss............................................................... [ 43%]
+........................................................................ [ 57%]
+........................................................................ [ 72%]
+........................................................................ [ 86%]
+....................................................................     [100%]
+================================== FAILURES ===================================
+___________ TestDmtfMockupReplay.test_golden_match[dmtf_rackmount1] ___________
+
+self = <test_dmtf_mockup_replay.TestDmtfMockupReplay object at 0x000001C8AE0747D0>
+replay_case = ({'vendor': 'unknown', 'status': 'success', 'collected': ['bmc', 'firmware', 'memory', 'network', 'power', 'processors...tions': [], ...}, WindowsPath('C:/github/ClovirONE/clovirone-server-gathering/tests/fixtures/redfish/dmtf_rackmount1'))
+
+    def test_golden_match(self, replay_case):
+        """모듈 gather 산출이 golden 과 strict 일치 (핵심 회귀 게이트).
+    
+        redfish_gather.py 의 표준 경로 파싱이 바뀌면 본 테스트가 어떤 필드가 어떻게
+        변했는지 드러낸다. 의도된 변경이면 convert_dmtf_mockup.py 로 golden 재생성.
+        """
+        result, golden, case_dir = replay_case
+        for key in H.GOLDEN_KEYS:
+>           assert _json_norm(result[key]) == golden[key], (
+                f"{case_dir.name}: golden mismatch on '{key}' — 표준 경로 파싱 회귀. "
+                f"의도된 변경이면 convert_dmtf_mockup.py 로 golden 재생성."
+            )
+E           AssertionError: dmtf_rackmount1: golden mismatch on 'data' — 표준 경로 파싱 회귀. 의도된 변경이면 convert_dmtf_mockup.py 로 golden 재생성.
+E           assert {'bios': {'cu...: 98304}, ...} == {'bios': {'cu...: 98304}, ...}
+E             
+E             Omitting 10 identical items, use -vv to show
+E             Differing items:
+E             {'memory': {'slots': [{'base_module_type': 'RDIMM', 'bus_width_bits': 72, 'capacity_mb': 32768, 'data_width_bits': 64,...e_module_type': 'RDIMM', 'bus_width_bits': 72, 'capacity_mb': 32768, 'data_width_bits': 64, ...}], 'total_mib': 98304}} != {'memory': {'slots': [{'base_module_type': 'RDIMM', 'bus_width_bits': 72, 'capacity_mb': 32768, 'data_width_bits': 64,...e_module_type': 'RDIMM', 'bus_width_bits': 72, 'capacity_mb': 32768, 'data_width_bits': 64, ...}], 'total_mib': 98304}}
+E             Use -v to get more diff
+
+tests\integration\test_dmtf_mockup_replay.py:80: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/integration/test_dmtf_mockup_replay.py::TestDmtfMockupReplay::test_golden_match[dmtf_rackmount1]
+1 failed, 496 passed, 6 skipped, 1 deselected in 21.51s
+rc=1
