@@ -891,6 +891,8 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 > **2026-10-27 (C8 03-network-004/006/007)** — Redfish: (1) `ports[].current_link_speed_mbps` 는 링크가 없는 포트에서 `null` 이다(iDRAC9 `NetworkPorts` 의 `0` 도 — 종전 0; Gbps 경로와 같은 규칙).
 > 호스트 NIC `interfaces[].speed_mbps` 의 `0` 은 원문 그대로다. (2) `interfaces[].mtu` 는 호스트 EthernetInterface 에 `MTUSize` 가 없으면 같은 MAC 의 NetworkDeviceFunction `Ethernet.MTUSize` 로 채운다
 > (실측 XCC 3 · iLO 7 일부 1500, 요청 0 증가, 모듈 raw 는 그대로). (3) `IPv6Addresses` 도 `addresses[]` 에 `family: ipv6`(`prefix_length` · `origin`)로 들어간다 — 실측 18대는 전부 비어 있어 DMTF mockup 으로 검증.
+> (4) **단위 관찰(03-network-003, 변경 없음)** — XCC 3 호스트 NIC `interfaces[].speed_mbps` 는 `EthernetInterfaces.SpeedMbps` 원문이며 Gbps×1024 꼴(25 GbE = `25600`, 32 G = `32768`)이고, 같은 봉투의 `ports[].current_link_speed_mbps`(`CurrentSpeedGbps`×1000 = `25000`/`32000`)와 단위 정의가 다르다.
+> 두 값은 각각의 원천을 그대로 두며(값을 고치거나 환산하지 않는다), 비교할 때는 포트 값을 쓴다. iDRAC 9 는 두 값이 같고(10000/10000), iLO 7 · RMC 는 호스트 NIC 에 `SpeedMbps` 가 없어 `interfaces[].speed_mbps` 가 null 이다(2026-10-27 2차 Mock 실측).
 
 ```json
 "network": {

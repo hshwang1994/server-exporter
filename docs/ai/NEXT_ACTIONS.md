@@ -4,14 +4,19 @@
 
 > 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/ISSUES.md`(§7 사용자 결정) · `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md`(작업 묶음 WP1~WP11). 분석 산출물은 브랜치 `docs/redfish-mock2-audit-20261026`(main 미병합), Mock 은 main `7c22ca4a`. 제품 코드 변경 0.
 
+- [ ] **[HIGH / 사용자 — 새 Fable 세션] 독립 검증** — 브랜치 `fix/redfish-mock2-20261027` 최종 SHA 에서 Tier 0/1/2 재실행 + 73건 처분표·golden 원장 대조(`tests/evidence/2026-10-27-redfish-mock2-impl/INDEPENDENT_REVIEW_HANDOFF.md`). 결과는 `INDEPENDENT_REVIEW_RESULT.md`.
+- [ ] **[HIGH / 사용자 승인] `main` 병합(squash 기본, rule 93 R2 4요소) → `python -m scripts.ai.prodgen promote` production 승격 + canary** — 독립 검증 PASS 뒤. 호출자 공지: Redfish `data.cpu.logical_threads` 키 소멸(FIX 1, 유일한 비-Additive).
+- [ ] **[MED / 사용자 결정] 03-storage-001 (b) 전원 Off 호스트 controllers 보강(PCIeFunctions)** — 구현 Round 의 유일한 HOLD. dl380_gen12_03 의 storage/firmware 칸(MR416i-o category other)이 ISSUE 로 남는 원인.
+- [ ] **[LOW / 실장비] MOCK_LIMITATION 2건 실장비 확인** — CSUS FC 포트 단위 링크(03-storage-004, A안 notice 로만 기재) · Lenovo XCC3 복구 경로 401 → Family 세대(06-bmc-001). RMC `@Redfish.WriteableProperties` repair 거동(06-bmc-002)도 실장비에서만 확인된다.
+- [ ] **[LOW / 문서] `schema/output_examples/redfish_hpe_csus_3200.jsonc` 를 실측 구조(1 파티션 · 1 RMC · 3 섀시)로 재작성** — 주석 예시라 OBSERVATION 으로 둠(FIX 5 범위 밖).
 - [x] **[DONE 2026-10-22 캡처 · 2026-10-26 보관] 용인 11대 전수 미러** — 아래 절의 HIGH 항목 완료. `tests/reference/redfish/mock2/`(zip 11, 치환 없음 — 사용자 결정).
-- [ ] **[사용자 결정 12건 — 구현 전] ISSUES.md §7** — HT 규칙 적용 전 OS/ESXi 실측(5대) · `cpu.manufacturer` 구현 vs 사전 · CSUS DIMM 속도 단위 · `data.system` 섹션 정합 · CSUS baseline 교체 · composition null · category enum · 재생 서버/2차 fixture 편입 · golden 갱신 범위 · `data.users` · CSUS FC HBA 카드 단위 링크 조건 반영 방식(03-storage-004, 결정 11 — 2026-10-27 추가) · 분석 브랜치 병합 방식.
-- [ ] **[HIGH / 구현 중 — 브랜치 `fix/redfish-mock2-20261027`] WP2 adapter 재선택 규칙 (01-adapter-001)** — 사용자 2차 검토(2026-10-27)로 공통 실격 규칙 B 는 기각, **opt-in `match.bmc_model_patterns`**(facts `bmc_model` = `Manager.Model`, 선언한 adapter 만 평가) + `lenovo_xcc3.yml` 의 실 펌웨어에 없는 `XCC\s*3\b` 제거 + 18 label 선택 전수 회귀 + 미선언 31 adapter 점수 불변 증명(CLAUDE.md §5).
-- [ ] **[HIGH / 실측 뒤 구현] WP9 CPU HT 규칙 (02-cpu-001/002)** — `ProcessorSummary.ThreadingEnabled` → BIOS HT 속성 값 → 종전; ADR-2026-10-18/19 정정. OS 실측 없이는 적용 금지(추정).
+- [x] **[DONE 2026-10-27] 사용자 결정 12건 → FIX 1~11 + 결정 11 A안 확정(지시서 2)** — 구현 Round 에 반영(`tests/evidence/2026-10-27-redfish-mock2-impl/ISSUE_DISPOSITION.md`).
+- [x] **[DONE 2026-10-27] WP2 adapter 재선택 규칙 (01-adapter-001)** — opt-in `match.bmc_model_patterns`(facts `bmc_model`), 커밋 `6b3dae27`, evidence 02(31 adapter 점수 불변 증명).
+- [x] **[대체 2026-10-27 — FIX 1] WP9 CPU HT 규칙 (02-cpu-001/002)** — HT 계산은 폐기, Redfish `data.cpu.logical_threads` 키 제거(커밋 `e650cb47`), OS/ESXi 불변, evidence 09.
 - [x] **[DONE 2026-10-27] WP1 테스트 기반** — `installed_fakes` context manager + 루트 `tests/conftest.py` seam 누출 가드(04-test-001 해소: `tests/unit` 4915 passed · 33 skipped · 1 failed(= WP1(d) 로 바뀐 fixture 를 가정한 기대값 1건, 갱신 뒤 PASS — seam 누출 19 → 0) · 한 프로세스 6009 passed · 45 skipped · 6 xfailed · 1 failed(같은 1건 — seam 누출 36 → 0)), 2차 11대 축약 fixture(`real_*_0N`, golden = 수정 전 기준선) + 1차 3세트 Bios 보강(FIX 9 G-01~03), Tier 1/2 도구 `tests/redfish-probe/mirror_replay/` 편입(FIX 8), 개수 정합 판별기(사용자 3차 지시). evidence `tests/evidence/2026-10-27-redfish-mock2-impl/`.
-- [ ] **[MED / 구현] WP3 전원 Off 공통 처리 · WP4 firmware category · WP5 XCC3 모양 · WP6 전원·온도 의미 · WP7 CSUS 섀시 gating(+03-storage-004 카드 조건 폴백, 결정 11 뒤) · WP11 bmc/diagnosis** — 티켓 §4 순서, 묶음마다 3단 검증(구현 → 회귀 → 최종 독립).
-- [ ] **[MED / 문서] WP8 계약·사전 drift 묶음 + ADR 정정 제안(ISSUES §5)** — ADR 원문 수정 여부는 사용자 결정, 아니면 decision-log 기록만.
-- [ ] **[LOW / 구현] WP10 기존 필드 보강** — link/speed·mtu·wwn·bios_date·rank·캐시(요청 추가 0~최소).
+- [x] **[DONE 2026-10-27] WP3 전원 Off · WP4 firmware category · WP5 XCC3 모양 · WP6 전원·온도 · WP7 CSUS 섀시 gating(+결정 11 A안) · WP11 bmc/diagnosis** — evidence 03~07 · 11, 처분표.
+- [x] **[DONE 2026-10-27] WP8 계약·사전 drift 묶음 + ADR 정정 기록(원문 보존 append)** — evidence 08, 사전 262 항목.
+- [x] **[DONE 2026-10-27] WP10 기존 필드 보강** — mtu · wwn · 캐시 · rank · bios_date · ports 0 → null · IPv6, 요청 0 증가, evidence 10.
 - [ ] **[LOW / 정리] 분석 임시물** — 추출본 `C:\github\ClovirONE\mock2-audit-20261026\extract\`, WSL `/root/se_mirrors`·`/root/se_mirror_tls`, WSL `~/.se_vault_pass`(600 사본), 로컬 `git config core.longpaths true` 정리 여부.
 
 ## Redfish 전수 미러 v2.2 (2026-10-22) — 남은 항목

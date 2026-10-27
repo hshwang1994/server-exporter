@@ -1,5 +1,7 @@
 # Handoff — Redfish 2차 Mock 11대 분석 결과 구현 계획 (Fable 5.1 / effort=max 구현 세션용)
 
+> **2026-10-27 구현 완료 — 독립 검증 대기.** 이 티켓의 WP1~WP11 은 지시서 2 의 WP0~WP12 + FIX 5 로 구현됐다(브랜치 `fix/redfish-mock2-20261027`, 제품 코드 마지막 커밋 `b31d131d`). 결과·처분·핸드오프: `tests/evidence/2026-10-27-redfish-mock2-impl/{IMPLEMENTATION_SUMMARY,ISSUE_DISPOSITION,INDEPENDENT_REVIEW_HANDOFF}.md`. `main` 병합·`production` 승격은 독립 검증 PASS + 사용자 승인 뒤.
+>
 > 2026-10-26 분석 Round(`tests/evidence/2026-10-26-redfish-mock2-audit/`)의 결론을 **구현 세션**이 그대로 집어들 수 있게 적은 cold-start 티켓이다.
 > 분석 단계에서는 제품 소스·ADR·기존 테스트·Mock 을 한 글자도 바꾸지 않았다. 여기 적힌 수정은 전부 **제안**이며, 구현은 사용자가 별도 지시서로 시작한다.
 > 모델 정책(사용자 2026-10-26): 구현·회귀 검증·최종 독립 검증 모두 **Fable 5.1 / effort=max**. 종전 "Opus 5.5 구현 계획" 표현은 쓰지 않는다.

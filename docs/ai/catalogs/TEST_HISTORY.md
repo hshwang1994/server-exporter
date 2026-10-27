@@ -1,5 +1,21 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-27 — Redfish 2차 Mock 구현 Round WP2~WP12 + FIX 5 — 최종 측정 (구현 세션 자기 측정 · 독립 검증 전)
+
+> 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/IMPLEMENTATION_SUMMARY.md` 3절 · `tier0/*.log` · `tier1-final/` · `tier2-final/` · `coverage-132-after.md` · `inventory-parity.md`. 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7 / WSL Ubuntu-24.04 HTTPS 미러.
+
+| 구분 | 결과 |
+|---|---|
+| `pytest tests/unit` 전체 | **5226 passed · 33 skipped · 0 failed** (WP11 뒤, `tier0/pytest_unit_after_wp11.log`; WP 별 5118 → 5127 → 5197 → 5226) |
+| `pytest tests/integration -m "not live"` | **497 passed · 6 skipped** (FIX 5 뒤, `tier0/pytest_integration_notlive_after_fix5.log`) |
+| `pytest tests/e2e tests/regression` | **1098 passed · 12 skipped · 5 xfailed** (FIX 5 뒤; 종전 1094 + CSUS 실측 가드) |
+| WSL 엔진 2파일 · `ansible-playbook --syntax-check` 3채널 | 23 passed · 3/3 OK |
+| Tier 1 최종(실제 playbook + HTTPS 미러, 18 label) | 18/18 rc 0 · success · errors 0 · `tier1-after-WP11` 대비 봉투·요청 차이 0 · `tier1-before` 대비 차이는 WP 별 allowlist 로 전부 설명(미설명 0) |
+| Tier 2 최종(`tier2_replay.py`, 18 label) | 18/18 success · golden 보유 15 label GOLDEN_KEYS 차이 0 |
+| 개수 정합(디스크·FC 포트, 18 label) · INV-5 | 18/18 PASS · UNEXPLAINED 0 · INV-5 위반 0 |
+| 132칸 재판정 | PASS 120 · ISSUE 2(dl380_gen12_03 storage/firmware — HOLD 원인) · MOCK_LIMITATION 2(csus3200_01/03 storage) · N/A 8 |
+| 게이트 | `validate_field_dictionary.py` PASS(262) · schema drift 정합 · vendor boundary 통과(`b31d131d` 표기 보강 뒤) · harness consistency 통과 · 평문 비밀 0 |
+
 ## 2026-10-27 — Redfish 2차 Mock 구현 Round WP0~WP1 — 기준선 재측정 · 테스트 격리 뒤 재실행 (제품 코드 변경 0)
 
 > 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/00-baseline-recheck.md`(수치·bisect·Tier 1/2) · `01-fixtures-origin.md`. 실행 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7 / pytest 9.0.3.

@@ -1,0 +1,1 @@
+READY {"mirror": "/root/se_mirrors/mock1/DELL_R740/01", "keys": 6075, "raw": 0, "hang": [], "realm": null, "noauth_root": true, "statuses": {"200": 6073, "403": 2}, "load_s": 6.6, "pid": 2275}

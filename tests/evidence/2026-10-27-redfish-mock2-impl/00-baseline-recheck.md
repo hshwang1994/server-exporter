@@ -100,7 +100,7 @@ Tier 1/2 영향 0: 둘 다 `replay_full_mirror.run()` 을 쓰지 않는다(Tier 
 
 ## 4. Tier 2 기준선 (편입판 `tier2_replay.py`, 18 label)
 
-- 명령: `tier2_replay.py tier2-before <CSUS 7 label=<mirror>> --layout rmc_primary --firmware-scope complex_only --tag adapter` + `<나머지 11 label> --tag plain` (Windows, 네트워크 0; 2차는 `mock2-audit-20261026/extract/<server>`, 1차는 `C:\github\서버mock데이터차\<VENDOR>\<nn>`).
+- 명령: `tier2_replay.py tier2-before <CSUS 7 label=<mirror>> --layout rmc_primary --firmware-scope complex_only --tag adapter` + `<나머지 11 label> --tag plain` (Windows, 네트워크 0; 2차는 `mock2-audit-20261026/extract/<server>`, 1차는 `C:\github\서버mock데이터\1차\<VENDOR>\<nn>`).
 - 18/18 `status=success`(`tier2-before/_summary.{adapter,plain}.json`, `<label>.<tag>.module.json`).
 - **전수 미러 재생 ↔ 축약 fixture golden(GOLDEN_KEYS 9키) 1:1**: fixture 가 있는 15 label 전부 **차이 경로 0**(`tier2-before/_vs_golden.md`) — 2차 11세트 golden 과 WP1(d) 뒤 1차 3세트(bios 포함)가 전수 미러 재생과 같다. fixture 없는 r1_HPE_CSUS3200_02/03/04 는 success 만 확인.
 - WSL 엔진 2파일 WP1 뒤 재실행: 23 passed (`tier0/pytest_engine_wsl_after_wp1.log`).

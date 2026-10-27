@@ -1,5 +1,7 @@
 # 통합 이슈 목록 — Redfish 2차 Mock 11대 전수 분석 (2026-10-26)
 
+> **2026-10-27 처분(구현 Round)**: 73건 전부의 처분은 `../2026-10-27-redfish-mock2-impl/ISSUE_DISPOSITION.md`(FIXED 43 · DOC_CORRECTED 19 · OBSERVATION_ONLY 11 · 병기 MOCK_LIMITATION 2 · VALIDATED_EXISTING 1 · HOLD 1). 이 파일 본문은 분석 시점 원문 그대로다.
+
 보고서 6개(`analysis/01~06`)의 §4 이슈를 기계 추출(`tools/extract_issues.py`)해 ID·심각도·확실성을 그대로 두고, 메인이 공통 원인별 클러스터(C1~C11)와 처리 유형을 붙였다. 합계 73건 — HIGH 2 · MED 19 · LOW 51 · 미분류 1(2026-10-27 메인 추가 검증 `analysis/07-main-addendum-csus-hba-link.md` 의 `03-storage-004` 포함). 같은 원인의 중복은 §4 에 표시했고 ID 는 삭제하지 않았다(보고서 추적성). 심각도·확실성은 작업자 판정이며 메인이 표본을 Mock 원본·Tier 1 봉투로 재검증한 항목은 '메인 검증' 열에 적었다.
 
 처리 유형: `code-common` 공통 로직 수정 / `code-oem` OEM 분기·adapter 수정 / `category` 펌웨어 분류 규칙 / `docs` 문서·사전 정정(스키마 변경 아님) / `test` 테스트·재생 도구 / `decision` 사용자 결정 필요 / `observe` 관찰(변경 제안 없음).

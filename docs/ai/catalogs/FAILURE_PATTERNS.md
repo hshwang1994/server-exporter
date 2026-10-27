@@ -1196,3 +1196,14 @@
 - 수정: `analysis/07` addendum, ISSUES `03-storage-004`(MED) + §5 행 + §7 결정 11, coverage-132·SUMMARY·CURRENT_STATE·decision-log·티켓 WP7·NEXT_ACTIONS 갱신(2026-10-27)
 - 재발 방지: "장비가 주지 않는다 → 미제공" 으로 판정하기 전 3단계를 거친다 — (1) 식별값(WWN·MAC·시리얼·슬롯 라벨)을 미러 전 파일에서 역추적해 같은 장치를 가리키는 리소스를 모은다, (2) 링크·상태 어휘를 바이너리·로그까지 전 파일 스캔한다, (3) `Status.Conditions`·OEM 로그·등록부 메시지 정의를 읽어 뜻을 확정한다. ADR 의 "장비가 안 준다" 문장은 새 미러가 들어올 때마다 재검증 항목으로 등록한다
 - 관련 rule: rule 25 R7-B(추정 → 실측 격상 금지) · rule 95 R1 #8(single-vendor silent) · rule 96 R2(외부 계약 질의 우선) · 지시서 검증 기준(2026-10-26 사용자 수정 1)
+
+## 2026-10-27 — 셸 heredoc 의 백슬래시가 제어문자로 들어가 evidence 경로가 깨졌고, 패치 스크립트의 사전 수정 실패를 체인하지 않아 틀린 문장이 문서에 적용됐다
+
+- 카테고리: tooling-escape (Git Bash heredoc 안 `\\` 가 `\` 로 접히고 Python 비-raw 문자열의 `'\1'`·`'\01'` 이 chr(1) 이 됨) · process-miss (수정 단계 실패를 `&&` 로 묶지 않아 다음 단계가 옛 텍스트로 실행)
+- 발견 위치: `tests/evidence/2026-10-27-redfish-mock2-impl/golden-changes.md` G-24 · `00-baseline-recheck.md`(경로 `서버mock데이터\1차` 가 `…데이터` + U+0001 + `차`) · `docs/ai/contracts/serial-number.md`(FIX 5 문서 패치 1문장)
+- 증상: 원장·evidence 의 Windows 경로에 U+0001 제어문자가 들어갔다(렌더링에선 보이지 않는다). serial-number 계약에 "hbas serial 은 null" 이라는 사실과 다른 문장이 한 번 적용됐다(실측은 `network.adapters[].serial_number` 6장 전부 값 있음).
+- 원인: (1) Bash 도구가 heredoc 본문의 `\\` 를 접어 Python 8진 escape 로 해석됐다. (2) 패치 스크립트를 고치는 python 단계와 실행 단계를 개행으로만 이어 앞 단계가 실패(assert)해도 뒤 단계가 돌았다.
+- 영향: 문서 3곳(제품 코드 0). 같은 세션(WP11/FIX 5/WP12)에서 발견·정정 — 제어문자 전수 스캔(`[\x00-\x08\x0b\x0c\x0e-\x1f]`) 0, 문장은 봉투 값으로 재확인.
+- 수정: 백슬래시가 든 문자열은 `chr(92)` 조합 또는 Write 도구로 쓰고 heredoc 에는 넣지 않는다; 다단계 패치는 `&&` 체인 + 결과 assert; 패치 뒤 `git diff` 로 문장을 다시 읽는다.
+- 재발 방지: WP 마무리 절차에 evidence·docs 제어문자 스캔을 넣는다; 문서 문장은 실제 봉투 값(`grep`/python 조회)으로 확인한 뒤 적는다(rule 25 R7-B — 추정을 사실로 쓰지 않음).
+- 관련 rule: rule 25 R7-A/R7-B · rule 70 R3(실제 결과만 기록)
