@@ -1213,6 +1213,18 @@ def _walk_cut_text(first_path, cut):
     return '%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존' % (first_path, arg[0], arg[2] or arg[1])
 
 
+def _walk_complete(state):
+    """_collection_walk 상태 → 컬렉션을 끝까지 온전히 읽었는가 (2026-10-29, SA-01).
+
+    개수를 정수로 확정해도 되는 조건이다 — 절단 없음 · 비객체/Members 부재/목록 아님/중복 없음(계정 열거의 anomalies 와 같은 기준).
+    하나라도 있으면 모은 멤버 수는 원천의 개수가 아니므로 호출부가 개수를 null 로 둔다. 목록 자체는 종전대로 읽은 만큼 남긴다.
+    """
+    if not isinstance(state, dict) or state.get('cut') is not None:
+        return False
+    return not (state.get('non_object') or state.get('members_absent')
+                or state.get('members_not_list') or state.get('duplicates'))
+
+
 def _walk_cut_detail(cut):
     """계정 열거 요약 오류의 detail 조각. HTTP 상태는 'status=' 숫자로만 적는다 — 'HTTP 404' 글자가 들어가면 요약 오류까지
     404 신호로 읽혀 '계정 관리 미지원' 으로 잘못 분류된다(_is_404_only_error)."""
@@ -1227,7 +1239,7 @@ def _walk_cut_detail(cut):
 
 
 def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
-                        section, errors):
+                        section, errors, state_out=None):
     """컬렉션 첫 페이지(coll, 이미 조회됨)의 Members 를 모으고 Members@odata.nextLink 를 따라간다.
 
     - 후속 페이지 실패 / 페이지 상한 / 다른 origin 링크 / 순환: **앞 페이지 멤버는 보존**하고
@@ -1236,8 +1248,11 @@ def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_
     - Members@odata.count 가 있고 모은 수와 다르면 notice (정보 없음과 불일치를 구분).
     errors 가 None 인 호출부(보조 헬퍼)는 notice 로만 남긴다. nextLink 가 없으면 종전과 완전히 같다.
     2026-10-10 (C3): 순회는 _collection_walk 가 한다. 반환 멤버 · 요청 순서 · errors · notices 는 종전과 같다.
+    2026-10-29 (SA-01): state_out(dict)을 주면 'complete'(끝까지 온전히 읽고 상한 절단도 없음)를 적는다 — 개수 확정용. 주지 않으면 종전과 같다.
     """
     members, state = _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl)
+    if state_out is not None:
+        state_out['complete'] = _walk_complete(state) and len(members) <= MAX_COLLECTION_MEMBERS
     first_path = _str(path).split('?', 1)[0]
     truncated = state['cut'] is not None
     if truncated:
@@ -1766,7 +1781,7 @@ def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, ver
     return _safe(members[0], '@odata.id'), st, None
 
 
-def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
+def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl, state_out=None):
     """컬렉션 URI → 모든 Members 의 @odata.id 추출 (cycle 2026-05-12 — ADR-2026-05-12).
 
     `_resolve_first_member_uri` 의 Additive 확장. RMC (HPE Compute Scale-up Server 3200 /
@@ -1781,24 +1796,34 @@ def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, veri
 
     Returns: (members: list[dict], status_code, error_msg)
         members: [{'uri': str, 'id': str}]  (Member ID = URI 의 마지막 path segment)
+
+    2026-10-29 (SA-01): state_out(dict)을 주면 'complete' 를 적는다 — 컬렉션 200 을 끝까지 온전히 읽었고 버린 멤버가 없을 때만 참이다.
+    200 · 멤버 0 은 'members 없음' 오류지만 complete=True(확인한 0)다. 반환값은 종전과 같다.
     """
+    if state_out is not None:
+        state_out['complete'] = False
     if not coll_uri:
         return [], None, 'collection uri 없음'
     st, coll, err = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if err or st != 200:
         return [], st, err or f'HTTP {st}'
+    walk = {}
     raw_members = _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout,
-                                      verify_ssl, 'multi_node', None)
+                                      verify_ssl, 'multi_node', None, state_out=walk)
     if not isinstance(raw_members, list):  # rule 95 R1 #2: 비-list Members 방어 (Round 2 #15)
         raw_members = []
     out = []
+    dropped = 0
     for m in raw_members:
         uri = _safe(m, '@odata.id')
         if not uri or not isinstance(uri, str):  # Round 3 #3: 비-str @odata.id .rstrip 방어
+            dropped += 1
             continue
         # Member ID = URI 의 마지막 path segment (trailing '/' 제거)
         mid = uri.rstrip('/').rsplit('/', 1)[-1] if '/' in uri else uri
         out.append({'uri': uri, 'id': mid})
+    if state_out is not None:
+        state_out['complete'] = bool(walk.get('complete')) and not dropped
     if not out:
         return [], st, 'members 없음'
     return out, st, None
@@ -6126,12 +6151,15 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     rule 92 R2 Additive only — 기존 `gather_bmc` 함수 변경 0. 다른 vendor 영향 0
     (이 함수는 manager_layout 정의된 vendor 만 호출).
 
-    Returns: {'managers': [{id, uri, role, bmc, log_services}], 'errors': [...]}
+    Returns: {'managers': [{id, uri, role, bmc, log_services}], 'errors': [...], 'complete': bool}
+        complete (2026-10-29, SA-01) — Managers 컬렉션을 끝까지 읽었고 상한 절단이 없음. manager_count 를 정수로 둘 근거다.
     """
     out = {'managers': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, managers_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, managers_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.managers',
             f'Managers 컬렉션 실패: {err}'))
@@ -6391,12 +6419,15 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
     network = {dns_servers, default_gateways, interfaces, adapters, ports, summary}.
 
     Returns: {'partitions': [{id, system_uri, system, cpu, memory, storage, network, boot}],
-              'errors': [...]}
+              'errors': [...], 'complete': bool}
+        complete (2026-10-29, SA-01) — Systems 컬렉션을 끝까지 읽었고 상한 절단이 없음. partition_count 를 정수로 둘 근거다.
     """
     out = {'partitions': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, systems_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, systems_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.partitions',
             f'Systems 컬렉션 실패: {err}'))
@@ -6468,12 +6499,15 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
     Base / Expansion / Compute Module 구분 + ChassisType 표준 fallback.
 
     Returns: {'chassis': [{id, uri, kind, chassis_type, manufacturer, model, ..., power, thermal}],
-              'errors': [...]}
+              'errors': [...], 'complete': bool}
+        complete (2026-10-29, SA-01) — Chassis 컬렉션을 끝까지 읽었고 상한 절단이 없음. chassis_count 를 정수로 둘 근거다.
     """
     out = {'chassis': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, chassis_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, chassis_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.chassis',
             f'Chassis 컬렉션 실패: {err}'))
@@ -6552,6 +6586,9 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
     lab 부재 — 사이트 실측 시 정정 의무 (NEXT_ACTIONS).
 
     Returns: (dict_or_None, errors_list)
+
+    2026-10-29 (SA-01): resource_block_count 는 ResourceBlocks 컬렉션을 끝까지 읽고 나열된 블록을 모두 읽었을 때만 정수다.
+    링크 없음 · 404 · 컬렉션 실패 · 절단 · 블록 일부 실패는 null(목록 resource_blocks 는 읽은 블록만 — 종전과 같다).
     """
     errors = []
     if not isinstance(service_root, dict):
@@ -6565,6 +6602,7 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                       [_err('multi_node.composition', f'CompositionService 실패: {cerr or st}')])
 
     blocks = []
+    rb_complete = False   # 2026-10-29 (SA-01): 링크 없음 · 실패 · 절단 · 블록 일부 실패면 개수 null
     rb_link = _safe(comp, 'ResourceBlocks', '@odata.id')
     if rb_link:
         rst, rcoll, rerr = _get(bmc_ip, _p(rb_link), username, password, timeout, verify_ssl)
@@ -6573,16 +6611,20 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                 errors.append(_err('multi_node.composition',
                                    f'ResourceBlocks 컬렉션 실패: {rerr or rst}'))
         else:
+            walk = {}
+            rb_complete = True
             for m in _collection_members(bmc_ip, _p(rb_link), rcoll, username, password, timeout,
-                                         verify_ssl, 'multi_node.composition', errors):
+                                         verify_ssl, 'multi_node.composition', errors, state_out=walk):
                 uri = _safe(m, '@odata.id')
                 if not uri:
+                    rb_complete = False
                     continue
                 bst, bd, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
                 if bst != 200 or not isinstance(bd, dict):
                     if bst != 404:   # RD-F18 (2026-10-10): 나열된 멤버를 못 읽었다 — 조용히 세지 않는다
                         errors.append(_err('multi_node.composition', f'ResourceBlock {uri} 실패: {_e or bst}',
                                            detail={'status_code': bst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    rb_complete = False
                     continue
                 # 각 ResourceBlock 의 chassis 대응 + 조합된 ComputerSystems (nPartition) 링크
                 chassis_links = [
@@ -6613,13 +6655,14 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     'chassis':              chassis_links,
                     'computer_systems':     systems_links,
                 })
+            rb_complete = rb_complete and bool(walk.get('complete'))
     return {
         # cycle 2026-06-09 (review): 비-dict/null 200 body 는 enabled=None (정직한 unknown).
         # dict 면 ServiceEnabled 누락 시 DMTF 관례상 True. sibling gather_manager_logs 와 정합.
         'enabled':              (bool(comp.get('ServiceEnabled', True)) if isinstance(comp, dict) else None),
         'state':                _safe(comp, 'Status', 'State'),
         'health':               _safe(comp, 'Status', 'Health'),
-        'resource_block_count': len(blocks),
+        'resource_block_count': (len(blocks) if rb_complete else None),
         'resource_blocks':      blocks,
     }, errors
 
@@ -6629,26 +6672,33 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
 
     kind='switch' → SwitchType / Status. kind='endpoint' → EndpointProtocol / Status.
     source (rule 96 R1-A): DMTF DSP0266 Switch / Endpoint.
+
+    2026-10-29 (SA-01): (멤버 목록, 확인 여부)를 돌려준다. 확인 = 컬렉션을 끝까지 온전히 읽었고 나열된 멤버를 모두 읽음.
+    링크 없음 · 404 · GET 실패 · 절단 · 멤버 일부 실패는 미확인 — 호출부가 개수를 null 로 둔다. 목록은 읽은 멤버만(미제공이면 []).
     """
     if not coll_uri:
-        return []
+        return [], False
     st, coll, cerr = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if cerr or st != 200:
         if st != 404:   # RD-F18 (2026-10-10)
             errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} 컬렉션 {coll_uri} 실패: {cerr or st}',
                                detail={'status_code': st}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
-        return []
+        return [], False
     out = []
+    walk = {}
+    complete = True
     for m in _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout, verify_ssl,
-                                 f'multi_node.fabrics.{kind}', errors):
+                                 f'multi_node.fabrics.{kind}', errors, state_out=walk):
         uri = _safe(m, '@odata.id')
         if not uri:
+            complete = False
             continue
         mst, md, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if mst != 200 or not isinstance(md, dict):
             if mst != 404:   # RD-F18 (2026-10-10)
                 errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} {uri} 실패: {_e or mst}',
                                    detail={'status_code': mst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
             continue
         if kind == 'switch':
             out.append({
@@ -6666,10 +6716,10 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
                 'state':             _safe(md, 'Status', 'State'),
                 'health':            _safe(md, 'Status', 'Health'),
             })
-    return out
+    return out, (complete and bool(walk.get('complete')))
 
 
-def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl):
+def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl, state_out=None):
     """Fabrics + FlexGrid (Switches/Endpoints) 수집 (cycle 2026-06-09, ADR-2026-06-09).
 
     설명 모델 요구 — HPE CSUS 3200 은 NUMAlink fabric 을 표준 Redfish Fabric 모델로
@@ -6684,8 +6734,13 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
     lab 부재 — 사이트 실측 시 정정 의무 (NEXT_ACTIONS).
 
     Returns: (list_of_fabrics_or_None, errors_list)
+
+    2026-10-29 (SA-01): switch_count · endpoint_count 는 그 컬렉션을 확인했을 때만 정수(_gather_fabric_members), 아니면 null.
+    state_out(dict)을 주면 'complete' — Fabrics 컬렉션을 끝까지 읽고 나열된 Fabric 을 모두 읽음(fabric_count 근거)을 적는다.
     """
     errors = []
+    if state_out is not None:
+        state_out['complete'] = False
     if not isinstance(service_root, dict):
         return None, errors
     fab_uri = _safe(service_root, 'Fabrics', '@odata.id')
@@ -6696,21 +6751,25 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
         return None, ([] if st == 404 else
                       [_err('multi_node.fabrics', f'Fabrics 컬렉션 실패: {ferr or st}')])
     fabrics = []
+    walk = {}
+    complete = True
     for m in _collection_members(bmc_ip, _p(fab_uri), fcoll, username, password, timeout, verify_ssl,
-                                 'multi_node.fabrics', errors):
+                                 'multi_node.fabrics', errors, state_out=walk):
         furi = _safe(m, '@odata.id')
         if not furi:
+            complete = False
             continue
         fst, fdata, _e = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
         if fst != 200 or not isinstance(fdata, dict):
             if fst != 404:   # RD-F18 (2026-10-10)
                 errors.append(_err('multi_node.fabrics', f'Fabric {furi} 실패: {_e or fst}',
                                    detail={'status_code': fst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
             continue
-        switches = _gather_fabric_members(
+        switches, switches_ok = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Switches', '@odata.id'),
             username, password, timeout, verify_ssl, errors, kind='switch')
-        endpoints = _gather_fabric_members(
+        endpoints, endpoints_ok = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Endpoints', '@odata.id'),
             username, password, timeout, verify_ssl, errors, kind='endpoint')
         fabrics.append({
@@ -6719,11 +6778,14 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
             'fabric_type':    _safe(fdata, 'FabricType'),
             'state':          _safe(fdata, 'Status', 'State'),
             'health':         _safe(fdata, 'Status', 'Health'),
-            'switch_count':   len(switches),
-            'endpoint_count': len(endpoints),
+            # 2026-10-29 (SA-01, 실측 CSUS FlexGrid: Endpoints 링크 없음 → 종전 0): 확인한 컬렉션만 정수, 미제공 · 실패는 null
+            'switch_count':   (len(switches) if switches_ok else None),
+            'endpoint_count': (len(endpoints) if endpoints_ok else None),
             'switches':       switches,
             'endpoints':      endpoints,
         })
+    if state_out is not None:
+        state_out['complete'] = complete and bool(walk.get('complete'))
     return fabrics, errors
 
 
@@ -6741,7 +6803,7 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
             'layout': str,
             'summary': {partition_count, manager_count, chassis_count,
                         representative_partition,
-                        resource_block_count, fabric_count},
+                        resource_block_count, fabric_count},   # 개수는 int | None (2026-10-29, SA-01)
             'partitions': list, 'managers': list, 'chassis': list,
             'composition': dict | None, 'fabrics': list | None,
             'errors': list,
@@ -6768,11 +6830,12 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     )
     # cycle 2026-06-09: CompositionService/ResourceBlocks + Fabrics/FlexGrid 수집
     # (설명 모델 요구). ServiceRoot 에 링크 부재 시 None (graceful — Additive).
+    fab_state = {}
     composition, comp_errs = gather_composition_service(
         bmc_ip, service_root, username, password, timeout, verify_ssl,
     )
     fabrics, fab_errs = gather_fabrics(
-        bmc_ip, service_root, username, password, timeout, verify_ssl,
+        bmc_ip, service_root, username, password, timeout, verify_ssl, state_out=fab_state,
     )
 
     partitions = sys_result.get('partitions') or []
@@ -6780,18 +6843,20 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     chassis    = chs_result.get('chassis')    or []
 
     representative = partitions[0].get('id') if partitions else None  # rule 95 R1 #2: 방어적 .get (id 누락 KeyError 회피)
-    rb_count = composition.get('resource_block_count', 0) if isinstance(composition, dict) else 0
+    # 2026-10-29 (SA-01 · SA-02): 개수는 원천 컬렉션을 끝까지 읽었을 때만 정수(0 포함)다. 링크 없음 · 404 · 실패 · 절단은 null —
+    #   종전 `else 0` 은 "보지 못함" 을 "0개" 로 적었다. 목록(partitions/managers/chassis/fabrics)은 종전과 같다.
+    rb_count = composition.get('resource_block_count') if isinstance(composition, dict) else None
     return {
         'enabled': True,
         'layout':  manager_layout,
         'summary': {
-            'partition_count':           len(partitions),
-            'manager_count':             len(managers),
-            'chassis_count':             len(chassis),
+            'partition_count':           (len(partitions) if sys_result.get('complete') else None),
+            'manager_count':             (len(managers) if mgr_result.get('complete') else None),
+            'chassis_count':             (len(chassis) if chs_result.get('complete') else None),
             'representative_partition':  representative,
             # cycle 2026-06-09: composition / fabric 규모 (Additive 신 키)
             'resource_block_count':      rb_count,
-            'fabric_count':              len(fabrics) if isinstance(fabrics, list) else 0,
+            'fabric_count':              (len(fabrics) if isinstance(fabrics, list) and fab_state.get('complete') else None),
         },
         'partitions': partitions,
         'managers':   managers,
