@@ -2923,7 +2923,9 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                         errors.append(_err('bmc', f'EthernetInterface {nuri} 실패: {nerr2 or nst2}',
                                            detail={'status_code': nst2}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
-                # IPv4 — 첫 매칭만 result['ip']/['mac_address']/['dns_name'] 에 사용,
+                # IPv4 — NIC 마다 0.0.0.0 이 아닌 주소를 모으고(첫 주소 = 그 NIC 의 대표), result['ip']/['mac_address']/['dns_name'] 은
+                # 루프 뒤 선택 규칙(① 대상 주소를 가진 NIC → ② Links.HostInterface 가 없고 InterfaceEnabled 가 false 가 아닌 NIC → ③ IPv4 를 가진
+                # 첫 NIC — 2026-10-27 06-bmc-005)으로 고른 한 NIC 에서 뽑는다.
                 # 모든 NIC 의 Gateway 는 누적 (멀티 NIC: dedicated + shared 등 대비)
                 nic_first_ip = None
                 nic_ips = []
@@ -7014,8 +7016,10 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     sections['bios'] = bios
     # 2026-10-27 (C2, 실측 iLO 7 DL380 Gen12 전원 Off 스냅샷: Storage 멤버 0 · DIMM 16/32 빈 슬롯 · PSU Absent · 센서 전부 0):
     # 전원 Off 는 관측 사실로만 1회 남긴다 — 섹션 status 는 바꾸지 않고(수집은 성공), 인과 해석은 계약 문서(03-fields 6.7)에 둔다.
+    # 2026-10-28 (독립 검증 F-03, 사용자 결정): 원 이슈(03-storage-001)가 storage/network 신호 없음이라 문구에 '네트워크' 를 넣는다(실측 Off 호스트:
+    #   interfaces 4 unknown · 카드 ports 0). 조건 · section · 건수는 그대로다.
     if _str(bios_link.get('power_state')).strip().lower() == 'off':
-        _notice('system', '호스트 전원 Off 관측 — 저장/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
+        _notice('system', '호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
     # 2026-10-27 (C9 FIX 7): 구조 근거 firmware_links — 최종 firmware[].id 로 키잉. data 밖(모듈 최상위 firmware_links)으로 나가고
     # normalize 의 category 가 1순위로 쓴다. 발행 키·요청 수는 늘지 않는다.
     _fw_links_final = _firmware_links_by_id(

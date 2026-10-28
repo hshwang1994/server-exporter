@@ -66,6 +66,17 @@ def test_power_off_host_stays_success_and_is_noticed_once(off_host):
     assert res["data"]["system"]["power_state"] == "Off"
 
 
+def test_power_off_notice_names_the_network_inventory_too():
+    """2026-10-28 (독립 검증 F-03, 사용자 결정): 원 이슈가 storage/network 신호 없음이었다 — 문구에 네트워크를 넣는다.
+
+    실측 Off 호스트(dl380_gen12_03)의 network 는 interfaces 4건이 unknown 이고 카드 포트가 0 이다. 조건 · section · 건수는 그대로.
+    """
+    _replay("real_hpe_dl380_gen12_03")
+    off = [n for n in rg.notices() if OFF_NOTICE in n["message"]]
+    assert [(n["section"], n["message"]) for n in off] == [
+        ("system", "호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음")]
+
+
 def test_power_off_host_empty_dimm_slots_are_excluded_with_count(off_host):
     res, notices = off_host
     slots = res["data"]["memory"]["slots"]
