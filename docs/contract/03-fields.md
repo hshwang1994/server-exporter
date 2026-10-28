@@ -756,8 +756,8 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 - **HBA `link_status` (2026-10-19, 사용자 결정 — 2026-10-18 의 null 규칙을 뒤집음)** — 값은 **항상 `up` 또는 `down`** 이다. `null` 도 `unknown` 도 없다.
   `up` 은 장비가 링크 활성을 보고한 경우만이고, 그 밖은 전부 `down` 이다 — 명시적 링크 없음 · 협상 중 · 관리상 offline · 진단/루프백뿐 아니라 **장비가 링크 상태를
   주지 않거나(키/파일 없음) 값을 up/down 으로 정규화하지 못한 경우**(Unknown · null 값 · unbound · 미인식 문자열)도 `down` 이다. 채널별 매핑은 `schema/field_dictionary.yml`
-  `storage.hbas[].link_status` 가 정본이다: Redfish `LinkStatus`(LinkUp·Up·Connected → up / 그 밖 → down; 키가 없으면 down + notice `링크 상태 미제공, down 으로 기록`,
-  키는 있는데 값이 null·Unknown·미인식이면 down + notice `링크 상태 값 미확정, down 으로 기록`), Linux `port_state`(Online·Marginal → up / 그 밖·없음·읽기 실패 → down),
+  `storage.hbas[].link_status` 가 정본이다: Redfish 포트 `LinkStatus`(표준 링크 값 LinkUp·Up·Connected → up / 그 밖 → down; 키가 없으면 down + notice `링크 상태 미제공, down 으로 기록`,
+  키는 있는데 값이 null·Unknown·미인식이거나 Enabled·Active 이면 down + notice `링크 상태 값 미확정, down 으로 기록`), Linux `port_state`(Online·Marginal → up / 그 밖·없음·읽기 실패 → down),
   Windows `OperationalStatus`(2 → up / 3~8 → down / 1·없음 → MSFC `PortState` 2 → up, 그 밖 → down), ESXi `status`(online → up / 그 밖·없음 → down;
   `HostBusAdapter.status` 는 어댑터(패브릭 로그인) 상태라 Redfish 포트 `LinkStatus`(물리/업링크 링크)와 다를 수 있다 — 실측 2026-10-18 Jenkins #647·#648 연속 빌드에서
   esxi02 FC 2포트가 ESXi `down` · CIMC `up`). HPE CSUS 3200(RMC 1.75.108 · Redfish 1.19.0)은 FC Port 리소스에 `LinkStatus`·`Status` 키가 없어 Redfish 로는 **항상 `down`**
@@ -810,12 +810,16 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 
 어느 경우든 `status` 와 `sections` 는 바뀌지 않는다. HBA 수집은 보조 수집이고, HBA 가 없다는 이유로 수집이 실패가 되지 않는다.
 
-**`link_status`** — 포트의 `LinkStatus` 가 `up`(LinkUp · Up · Connected) 으로 정규화되면 `up`, 그 밖은 전부 `down` 이다 (2026-10-19 사용자 결정 — 값은 항상 들어가고
-`null` · `unknown` 은 없다; 2026-10-18 의 "키 없음 → null" 은 폐지). `down` 가운데 "장비가 down 이라 한 것" 과 구분해야 하는 두 경우는 notice 로 남는다.
+**`link_status`** — 포트의 `LinkStatus` 가 표준 링크 값(`LinkUp` · 구 NetworkPort 의 `Up` · 종전부터 받던 `Connected`)이면 `up`, 그 밖은 전부 `down` 이다
+(2026-10-19 사용자 결정 — 값은 항상 들어가고 `null` · `unknown` 은 없다; 2026-10-18 의 "키 없음 → null" 은 폐지). `down` 가운데 "장비가 down 이라 한 것" 과 구분해야 하는 두 경우는 notice 로 남는다.
 (a) **미제공** — notice `네트워크 카드 … 링크 상태 미제공, down 으로 기록`: 포트 응답에 `LinkStatus` 키가 없다(실측 HPE CSUS 3200 RMC 1.75.108: FC Port 리소스의 키는
-`FibreChannel.AssociatedWorldWideNames` · `Id` · `Name` 셋뿐이고 다른 어느 리소스에도 FC 링크 상태가 없다), 또는 FC 기능에 짝이 되는 포트 리소스가 없고 이름(`<PortId>-n`)으로
+`FibreChannel.AssociatedWorldWideNames` · `Id` · `Name` 셋뿐이고, 포트 단위 FC 링크 상태는 어느 리소스에도 없으며 카드 단위 조건만 있다 — 아래 문단), 또는 FC 기능에 짝이 되는 포트 리소스가 없고 이름(`<PortId>-n`)으로
 부모 포트도 못 찾았다(이때 `link_speed_gbps` 는 `null`). 부모를 찾으면 그 포트의 링크 · 속도를 상속한다(iDRAC8 형).
-(b) **값 미확정** — notice `네트워크 카드 … 링크 상태 값 미확정, down 으로 기록`(포트=원문): 키는 있는데 값이 `null` · `Unknown` · 미인식 벤더 문자열이다.
+(b) **값 미확정** — notice `네트워크 카드 … 링크 상태 값 미확정, down 으로 기록`(포트=원문): 키는 있는데 값이 `null` · `Unknown` · 미인식 벤더 문자열이거나
+`Enabled` · `Active` 다. `Enabled` · `Active` 는 표준 `Port.LinkStatus` 에서 링크 의미가 정해지지 않은 값이라 2026-10-28 사용자 결정으로 `up` 에서 `down` 으로 바뀌었다
+(2026-10-28 기준 Mock 미러 18대 · fixture 출현 0). 벤더 OEM 의 포트별 값이 실제 링크 활성을 뜻한다는 근거(벤더 문서 또는 실장비 캡처와 같은 포트의 OS 측 상태 대조)가
+확인되면 그 벤더만 별도로 정규화한다 — 카드 단위 값은 대상이 아니다. 네트워크 쪽(`network.*.link_status`)은 이 규칙을 쓰지 않아 같은 포트가 `network.ports[]` 에서는 `up`
+으로 보일 수 있다. 카드 · 컨트롤러 상태(`Health OK` · `State Enabled`), `Port.LinkState`(관리 상태), 속도 값은 포트 링크 근거로 쓰지 않는다.
 실제 링크 상태가 필요하면 OS 채널 결과와 `wwpn` 으로 맞춰 본다 — Portal 은 그렇게 표시한다.
 
 **카드 단위 조건은 포트 상태가 아니다 (2026-10-27, 03-storage-004 — 사용자 결정 11 A안)** — HPE CSUS 3200 RMC 는 FC 링크를 Port 가 아니라

@@ -171,6 +171,129 @@ def test_condition_helper():
     assert rg._pcie_port_link_condition(None, ["H3Alert"]) is None
 
 
+# ── 1b. 2026-10-28: 카드 정상 · 카드 LinkUp 은 FC 포트 링크가 아니다 (사례 5 · 6 · 7) ─────────────────────────────────────────
+
+def _csus01_recording():
+    return json.loads((FIX / "real_hpe_csus3200_01" / "recording.json").read_text(encoding="utf-8"))
+
+
+def _has_linkup_condition(status):
+    return any(str(c.get("MessageId", "")).endswith(".LinkUp") for c in (status or {}).get("Conditions") or [])
+
+
+def test_csus_healthy_fc_cards_without_port_link_status_stay_down():
+    """사례 5 (실측 녹화 재생): 카드는 정상(PCIeDevice Health OK · State Enabled · H3Alert LinkUp 조건)이고 FC 포트에 LinkStatus 가 없다 → down.
+
+    카드 상태 · 카드 조건은 포트 링크 값이 아니다 — `링크 상태 미제공` notice 끝에 카드 단위 참고로만 붙고(A안), `값 미확정` notice 는 없다.
+    """
+    rec = _csus01_recording()
+    for card in ("11", "14"):
+        st = rec[f"get::Chassis/r001u01/PCIeDevices/{card}"][1]["Status"]
+        assert st["Health"] == "OK" and st["State"] == "Enabled" and _has_linkup_condition(st), card
+        for port in ("1", "2"):
+            assert "LinkStatus" not in rec[f"get::Chassis/r001u01/NetworkAdapters/PCIeCard{card}/Ports/PCIeCard{card}Port{port}"][1]
+    data, _, notices, _, _ = _collect("real_hpe_csus3200_01", H3)
+    got = {(h["adapter_id"], h["port_id"]): h["link_status"] for h in data["network_adapters"]["fc_hbas"]}
+    assert got == {("PCIeCard11", "PCIeCard11Port1"): "down", ("PCIeCard11", "PCIeCard11Port2"): "down",
+                   ("PCIeCard14", "PCIeCard14Port1"): "down", ("PCIeCard14", "PCIeCard14Port2"): "down"}
+    assert len(_fc_notices(notices)) == 2 and not [m for m in notices if "링크 상태 값 미확정" in m]
+
+
+def test_csus_raid_and_nic_card_linkup_never_becomes_an_fc_hba():
+    """사례 6 (실측 녹화 재생): RAID(PCIeDevices/3) · NIC(1/8/9/16) 카드도 같은 LinkUp 조건을 갖지만 FC HBA 가 생기지 않고 up 도 없다.
+
+    FC 포트의 network ports 쪽 link_status 는 네트워크 정규화 그대로(unknown) — HBA 의 down 정책이 네트워크로 넘어가지 않는다.
+    """
+    rec = _csus01_recording()
+    for dev in ("1", "3", "8", "9", "16"):
+        assert _has_linkup_condition(rec[f"get::Chassis/r001u01/PCIeDevices/{dev}"][1]["Status"]), dev
+    data, _, _, _, _ = _collect("real_hpe_csus3200_01", H3)
+    na = data["network_adapters"]
+    assert {h["adapter_id"] for h in na["fc_hbas"]} == {"PCIeCard11", "PCIeCard14"}
+    assert all(h["link_status"] == "down" for h in na["fc_hbas"])
+    nic = [p for p in na["ports"] if p["adapter_id"] in ("PCIeCard1", "PCIeCard8", "PCIeCard9", "PCIeCard16")]
+    assert len(nic) == 8 and all(p["port_type"] == "Ethernet" for p in nic)
+    fc_ports = [p for p in na["ports"] if p["adapter_id"] in ("PCIeCard11", "PCIeCard14")]
+    assert len(fc_ports) == 4 and all(p["port_type"] == "FibreChannel" and p["link_status"] == "unknown" for p in fc_ports)
+
+
+def _synthetic_card(card, ports, pcie_condition=None):
+    """합성 카드 1장의 응답 경로(실장비 응답이 아니다). ports = [(port_id, 본문)].
+
+    pcie_condition 이 있으면 Controllers[0].Links.PCIeDevices 1건 + 그 PCIeDevice(Health OK · State Enabled · 조건 1건)를 둔다.
+    """
+    base = "Chassis/X/NetworkAdapters/" + card
+    uri = "/redfish/v1/" + base
+    adapter = {"Id": card, "Model": "Synthetic " + card, "Manufacturer": "Synthetic", "Ports": {"@odata.id": uri + "/Ports"}}
+    routes = {
+        "Chassis/X/NetworkAdapters": (200, {"Members": [{"@odata.id": uri}]}, None),
+        base + "/Ports": (200, {"Members": [{"@odata.id": uri + "/Ports/" + pid} for pid, _ in ports]}, None),
+    }
+    for pid, body in ports:
+        routes[base + "/Ports/" + pid] = (200, dict(body, Id=pid), None)
+    if pcie_condition:
+        adapter["Controllers"] = [{"Links": {"PCIeDevices": [{"@odata.id": "/redfish/v1/Chassis/X/PCIeDevices/" + card}]}}]
+        routes["Chassis/X/PCIeDevices/" + card] = (200, {"Id": card, "Status": {"Health": "OK", "State": "Enabled", "Conditions": [
+            {"MessageId": pcie_condition, "MessageArgs": ["syn/" + card], "Timestamp": "2026-10-28T00:00:00Z"}]}}, None)
+    routes[base] = (200, adapter, None)
+    return routes
+
+
+def _gather_synthetic(monkeypatch, routes):
+    rg._reset_notices()
+    monkeypatch.setattr(rg, "_get", _routed(routes, []))
+    out, _ = rg.gather_network_adapters_chassis("ip", "/redfish/v1/Chassis/X", *CREDS, pcie_link_registries=H3)
+    return out, [x["message"] for x in rg.notices()]
+
+
+def _fc_port(n, **kw):
+    return dict({"FibreChannel": {"AssociatedWorldWideNames": ["10:00:00:00:c9:00:00:%02x" % n]}}, **kw)
+
+
+def test_synthetic_healthy_looking_fc_port_without_link_status_is_down(monkeypatch):
+    """사례 5 (합성 — 실장비 Up 근거 아님): 포트 Status OK · LinkState Enabled · CurrentSpeedGbps 32 와 카드 LinkUp 조건이 다 있어도
+    포트 LinkStatus 가 없으면 down + `링크 상태 미제공`. 관리 상태 · 속도 · 장치 상태는 링크 판정 필드가 아니다."""
+    looks_fine = {"Status": {"Health": "OK", "State": "Enabled"}, "LinkState": "Enabled", "CurrentSpeedGbps": 32}
+    out, msgs = _gather_synthetic(monkeypatch, _synthetic_card(
+        "FC5", [("1", _fc_port(1, **looks_fine)), ("2", _fc_port(2, **looks_fine))], pcie_condition="H3Alert.1.8.LinkUp"))
+    assert [(h["port_id"], h["link_status"]) for h in out["fc_hbas"]] == [("1", "down"), ("2", "down")]
+    fc = _fc_notices(msgs)
+    assert len(fc) == 1 and "네트워크 카드 FC5: FC 포트 1, 2 링크 상태 미제공, down 으로 기록" in fc[0]
+    assert "카드 syn/FC5 조건 LinkUp(2026-10-28T00:00:00Z, 카드 단위)" in fc[0]
+    assert not [m for m in msgs if "링크 상태 값 미확정" in m]
+
+
+def test_synthetic_fused_card_ethernet_linkup_never_lifts_the_fc_port(monkeypatch):
+    """사례 6 (합성 — 실장비 Up 근거 아님): 한 카드에 Ethernet 포트(LinkUp)와 LinkStatus 없는 FC 포트가 함께 있다.
+
+    FC hba 는 down, Ethernet 링크 up 은 network ports 에만 있다. 이더넷 포트가 있는 카드라 카드 조건 문구도 붙지 않는다(A안 조건 (1)).
+    """
+    eth = {"Ethernet": {"AssociatedMACAddresses": ["AA:BB:CC:00:00:01"]}, "LinkStatus": "LinkUp"}
+    out, msgs = _gather_synthetic(monkeypatch, _synthetic_card("MIX6", [("1", eth), ("2", _fc_port(2))], pcie_condition="H3Alert.1.8.LinkUp"))
+    assert [(h["port_id"], h["link_status"]) for h in out["fc_hbas"]] == [("2", "down")]
+    ports = {p["port_id"]: (p["port_type"], p["link_status"]) for p in out["ports"]}
+    assert ports == {"1": ("Ethernet", "up"), "2": ("FibreChannel", "unknown")}
+    fc = _fc_notices(msgs)
+    assert len(fc) == 1 and "FC 포트 2 링크 상태 미제공" in fc[0] and "조건 LinkUp" not in fc[0]
+
+
+def test_synthetic_four_fc_ports_are_judged_one_by_one(monkeypatch):
+    """사례 7 (합성 — 실장비 Up 근거 아님): 한 카드 4포트 LinkUp · LinkDown · 키 없음 · Enabled → up · down · down · down.
+
+    미제공 · 미확정 notice 에는 해당 포트만 적힌다. network ports 는 네트워크 정규화 그대로라 Enabled 포트가 up 으로 남는다
+    (HBA 정책을 네트워크에 쓰지 않는다 — 2026-10-28 사용자 결정. 같은 포트가 두 곳에서 다르게 보이는 것은 의도이며 실측 출현 0).
+    """
+    out, msgs = _gather_synthetic(monkeypatch, _synthetic_card("FC7", [
+        ("1", _fc_port(1, LinkStatus="LinkUp")), ("2", _fc_port(2, LinkStatus="LinkDown")),
+        ("3", _fc_port(3)), ("4", _fc_port(4, LinkStatus="Enabled"))]))
+    assert [(h["port_id"], h["link_status"]) for h in out["fc_hbas"]] == [("1", "up"), ("2", "down"), ("3", "down"), ("4", "down")]
+    assert [m for m in msgs if "링크 상태 미제공" in m] == [
+        "네트워크 카드 FC7: FC 포트 3 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)"]
+    assert [m for m in msgs if "링크 상태 값 미확정" in m] == [
+        "네트워크 카드 FC7: FC 포트 4=Enabled 링크 상태 값 미확정, down 으로 기록 (storage.hbas link_status)"]
+    assert {p["port_id"]: p["link_status"] for p in out["ports"]} == {"1": "up", "2": "down", "3": "unknown", "4": "up"}
+
+
 # ── 2. 섀시 링크 gating — 요청 수 ────────────────────────────────────────────────────────────────────────────────────────
 
 def test_csus_fixed_path_404s_are_no_longer_requested():

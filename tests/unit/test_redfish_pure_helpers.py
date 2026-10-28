@@ -200,15 +200,52 @@ def test_normalize_link_status_unknown_vendor_value_preserved(rfg):
 
 
 # ── _hba_link_status / _hba_link_missing / _hba_link_unresolved (2026-10-19: storage.hbas[].link_status 는 up/down 둘뿐) ──
+# 2026-10-28 사용자 결정: up 은 표준 링크 값(LinkUp · Up · Connected)뿐이다. 네트워크 정규화가 up 으로 보는 Enabled · Active 는
+#   HBA 에서 down + '값 미확정' notice 다(표준 Port.LinkStatus 에서 링크 의미 불명). 종전 이 시험은 enabled · active 를 up 으로 고정했다.
 def test_hba_link_status_is_up_only_for_an_active_link(rfg):
-    for v in ("LinkUp", "Up", "Connected", "enabled", "active"):
+    for v in ("LinkUp", "Up", "Connected", " linkup ", "LINKUP", "up"):
         assert rfg._hba_link_status({"LinkStatus": v}) == "up", v
 
 
 def test_hba_link_status_everything_else_is_down(rfg):
     for pdata in ({"LinkStatus": "LinkDown"}, {"LinkStatus": "NoLink"}, {"LinkStatus": "Starting"}, {"LinkStatus": "Training"},
-                  {"LinkStatus": None}, {"LinkStatus": "Unknown"}, {"LinkStatus": "WeirdState"}, {"Id": "1"}, {}, None):
+                  {"LinkStatus": None}, {"LinkStatus": "Unknown"}, {"LinkStatus": "WeirdState"}, {"Id": "1"}, {}, None,
+                  {"LinkStatus": "Down"}, {"LinkStatus": "Disconnected"}, {"LinkStatus": "Degraded"}, {"LinkStatus": ""},
+                  {"LinkStatus": 123}, {"LinkStatus": True}, {"LinkStatus": "Link Up"}, {"LinkStatus": ["LinkUp"]}):
         assert rfg._hba_link_status(pdata) == "down", pdata
+
+
+def test_hba_link_status_enabled_and_active_are_down_not_up(rfg):
+    """2026-10-28 사용자 결정 — Enabled · Active 는 HBA 에서 down. 네트워크 정규화는 그대로 up 이다(정책을 섞지 않는다)."""
+    for v in ("Enabled", "enabled", "Active", " ACTIVE "):
+        assert rfg._hba_link_status({"LinkStatus": v}) == "down", v
+        assert rfg._normalize_link_status(v) == "up", v
+
+
+def test_hba_up_values_are_standard_link_values_and_a_subset_of_the_network_up_set(rfg):
+    assert rfg._HBA_LINK_UP_VALUES == frozenset(("linkup", "up", "connected"))
+    for v in rfg._HBA_LINK_UP_VALUES:
+        assert rfg._normalize_link_status(v) == "up", v
+    assert not {"enabled", "active"} & rfg._HBA_LINK_UP_VALUES
+
+
+@pytest.mark.parametrize("raw", ["LinkUp", "Up", "Connected", "LinkDown", "Down", "NoLink", "Disconnected", "Disabled", "Starting",
+                                 "Training", "Enabled", "Active", "Degraded", "Unknown", "", None, 123, "Link Up", "<absent>"])
+def test_hba_every_down_says_why(rfg, raw):
+    """값은 up/down 둘뿐이고, down 은 셋 중 정확히 하나로 설명된다 — 장비가 down 이라 함 · 키 없음(notice) · 값 미확정(notice).
+
+    up 이면 notice 가 없다. 어떤 값도 근거 없이 조용히 down 이 되지 않는다.
+    """
+    pdata = {"Id": "1"} if raw == "<absent>" else {"LinkStatus": raw}
+    link = rfg._hba_link_status(pdata)
+    assert link in ("up", "down")
+    missing = rfg._hba_link_missing(pdata)
+    unresolved = rfg._hba_link_unresolved(pdata)
+    said_down = (not missing) and rfg._normalize_link_status(pdata.get("LinkStatus")) == "down"
+    if link == "up":
+        assert not missing and unresolved is None and not said_down
+    else:
+        assert [said_down, missing, unresolved is not None].count(True) == 1, (raw, said_down, missing, unresolved)
 
 
 def test_hba_link_missing_is_key_absence_only(rfg):
@@ -222,6 +259,21 @@ def test_hba_link_unresolved_returns_the_raw_value_only_when_not_up_or_down(rfg)
     assert rfg._hba_link_unresolved({"LinkStatus": " WeirdState "}) == "WeirdState"
     for pdata in ({"LinkStatus": "LinkUp"}, {"LinkStatus": "LinkDown"}, {"LinkStatus": "Training"}, {"Id": "1"}, None):
         assert rfg._hba_link_unresolved(pdata) is None, pdata
+    # 2026-10-28: 추가 사례 — 원문 표기를 그대로(앞뒤 공백만 제거) 남긴다. 비문자열은 문자열로.
+    assert rfg._hba_link_unresolved({"LinkStatus": "Degraded"}) == "Degraded"
+    assert rfg._hba_link_unresolved({"LinkStatus": "Link Up"}) == "Link Up"
+    assert rfg._hba_link_unresolved({"LinkStatus": ""}) == ""
+    assert rfg._hba_link_unresolved({"LinkStatus": 123}) == "123"
+    for pdata in ({"LinkStatus": "Up"}, {"LinkStatus": "Connected"}, {"LinkStatus": "Down"}, {"LinkStatus": "NoLink"},
+                  {"LinkStatus": "Disconnected"}, {"LinkStatus": "Starting"}, {}):
+        assert rfg._hba_link_unresolved(pdata) is None, pdata
+
+
+def test_hba_link_unresolved_reports_enabled_and_active_as_undetermined(rfg):
+    """2026-10-28 사용자 결정 — Enabled · Active 는 값 down + `링크 상태 값 미확정` notice(원문 표기)."""
+    assert rfg._hba_link_unresolved({"LinkStatus": "Enabled"}) == "Enabled"
+    assert rfg._hba_link_unresolved({"LinkStatus": " active "}) == "active"
+    assert rfg._hba_link_missing({"LinkStatus": "Enabled"}) is False
 
 
 # ── _normalize_port_speed (Round 17 #3) ──────────────────────────────────────

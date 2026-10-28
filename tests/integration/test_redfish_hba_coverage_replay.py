@@ -149,6 +149,56 @@ def test_unmodified_recordings_get_no_new_network_adapter_notices_or_errors(monk
     assert not [e for e in r["errors"] if e.get("section") == "network_adapters"]
 
 
+# ── 2026-10-28: 녹화본 FC 포트 링크 — 포트마다 자기 원문 LinkStatus 로 (실제 Up · 실제 Down · 같은 카드 안 포트 독립) ──
+# 실장비 캡처 녹화본의 재생이다(실장비 실시간 검증이 아니다). 표 = (adapter_id, port_id) → (녹화본 포트 경로, 원문 LinkStatus, 기대 link_status).
+#   dl380_gen12_01 · sr650_v4_03: 같은 카드의 Ports/1 LinkUp · Ports/2 LinkDown 이 포트별로 갈린다 — 카드 하나가 up 이라고 다른 포트가 up 이 되지 않는다.
+#   r740: 구 NetworkPort 스키마 'Down'. 명시적 down 은 notice 를 남기지 않는다(장비가 down 이라 해서 down).
+_RECORDED_FC_LINKS = {
+    "real_hpe_dl380_gen12_01": {
+        ("DE040000", "1"): ("Chassis/1/NetworkAdapters/DE040000/Ports/1", "LinkUp", "up"),
+        ("DE040000", "2"): ("Chassis/1/NetworkAdapters/DE040000/Ports/2", "LinkDown", "down"),
+        ("DE043000", "1"): ("Chassis/1/NetworkAdapters/DE043000/Ports/1", "LinkUp", "up"),
+        ("DE043000", "2"): ("Chassis/1/NetworkAdapters/DE043000/Ports/2", "LinkDown", "down"),
+    },
+    "real_hpe_dl380_gen12_02": {
+        ("DE041000", "1"): ("Chassis/1/NetworkAdapters/DE041000/Ports/1", "LinkDown", "down"),
+        ("DE041000", "2"): ("Chassis/1/NetworkAdapters/DE041000/Ports/2", "LinkDown", "down"),
+        ("DE044000", "1"): ("Chassis/1/NetworkAdapters/DE044000/Ports/1", "LinkDown", "down"),
+        ("DE044000", "2"): ("Chassis/1/NetworkAdapters/DE044000/Ports/2", "LinkDown", "down"),
+    },
+    "real_lenovo_sr650_v4_03": {
+        ("slot5_0x4c0000", "1"): ("Chassis/1/NetworkAdapters/slot5_0x4c0000/Ports/1", "LinkUp", "up"),
+        ("slot5_0x4c0000", "2"): ("Chassis/1/NetworkAdapters/slot5_0x4c0000/Ports/2", "LinkDown", "down"),
+        ("slot6_0xa70000", "1"): ("Chassis/1/NetworkAdapters/slot6_0xa70000/Ports/1", "LinkUp", "up"),
+        ("slot6_0xa70000", "2"): ("Chassis/1/NetworkAdapters/slot6_0xa70000/Ports/2", "LinkDown", "down"),
+    },
+    "real_lenovo_sr650_v4_02": {
+        ("slot5_0x4c0000", "1"): ("Chassis/1/NetworkAdapters/slot5_0x4c0000/Ports/1", "LinkDown", "down"),
+        ("slot5_0x4c0000", "2"): ("Chassis/1/NetworkAdapters/slot5_0x4c0000/Ports/2", "LinkDown", "down"),
+        ("slot8_0xc90000", "1"): ("Chassis/1/NetworkAdapters/slot8_0xc90000/Ports/1", "LinkDown", "down"),
+        ("slot8_0xc90000", "2"): ("Chassis/1/NetworkAdapters/slot8_0xc90000/Ports/2", "LinkDown", "down"),
+    },
+    "real_dell_r740": {
+        ("FC.Slot.1", "FC.Slot.1-1"): ("Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-1", "Down", "down"),
+        ("FC.Slot.1", "FC.Slot.1-2"): ("Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-2", "Down", "down"),
+        ("FC.Slot.7", "FC.Slot.7-1"): ("Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkPorts/FC.Slot.7-1", "Down", "down"),
+        ("FC.Slot.7", "FC.Slot.7-2"): ("Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkPorts/FC.Slot.7-2", "Down", "down"),
+    },
+}
+
+
+@pytest.mark.parametrize("fixture", sorted(_RECORDED_FC_LINKS))
+def test_recorded_fc_ports_keep_their_own_link_state(monkeypatch, fixture):
+    rec, layout = _load(fixture)
+    expected = _RECORDED_FC_LINKS[fixture]
+    for (_aid, _pid), (path, raw, _want) in expected.items():
+        assert rec["get::" + path][1]["LinkStatus"] == raw, ("녹화본 원문이 표와 다르다", fixture, path)
+    r = _gather(monkeypatch, rec, layout)
+    got = {(h["adapter_id"], h["port_id"]): h["link_status"] for h in _netad(r)["fc_hbas"]}
+    assert got == {k: v[2] for k, v in expected.items()}
+    assert [m for m in _netad_notices(r) if "링크 상태" in m] == [], "원문 LinkUp/LinkDown/Down 이면 링크 notice 가 없다"
+
+
 # ── R740: FC 기능 목록을 못 받는 경우 ───────────────────────────────────────────
 
 def _r740_variant(kind):

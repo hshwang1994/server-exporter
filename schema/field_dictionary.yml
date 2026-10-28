@@ -2616,14 +2616,18 @@ fields:
     enum: ["up", "down"]
     priority: nice
     channel: [redfish, os, esxi]
+    # 2026-10-28 (사용자 결정): Redfish up 값을 표준 링크 값(LinkUp · Up · Connected)으로 한정 — Enabled · Active 는 down + 값 미확정 notice.
     help_ko: >-
       FC 포트 링크 상태 (전 채널 canonical, 2026-10-19 사용자 결정). 값은 **항상 up 또는 down** 이다 — null 도 'unknown' 도 없다.
       up = 장비가 링크 활성을 보고한 경우만. down = 그 밖 전부: 명시적 링크 없음(NoLink · LinkDown · offline), 협상 중(Starting · Training),
       관리상 offline · 진단/루프백, 그리고 **장비가 링크 상태를 주지 않거나(키/파일 없음) 값을 up/down 으로 정규화하지 못한 경우**(Unknown · null 값 ·
       unbound · 미인식 문자열)까지 down 이다. 2026-10-18 의 "미제공 → null" 규칙은 폐지했다(사용자 재결정).
-      Redfish: Port/NetworkPort.LinkStatus (LinkUp·Up·Connected → up / 그 밖 → down); 키 자체가 없으면(실측 HPE CSUS 3200 RMC 1.75 — FC Port 에
-      LinkStatus/Status 키 없음) down + notice '링크 상태 미제공, down 으로 기록', 키는 있는데 값이 null·Unknown·미인식이면 down + notice
-      '링크 상태 값 미확정, down 으로 기록'(원문 포함). 짝 없는 기능은 이름으로 찾은 부모 포트 값을 상속하고, 부모도 없으면 down + 미제공 notice.
+      Redfish: 포트 단위 Port/NetworkPort.LinkStatus 의 표준 링크 값만 up 이다 — LinkUp(Port) · Up(구 NetworkPort) · Connected(종전 값 유지) → up /
+      그 밖 → down. 키 자체가 없으면(실측 HPE CSUS 3200 RMC 1.75 — FC Port 에 LinkStatus/Status 키 없음) down + notice '링크 상태 미제공, down 으로 기록',
+      키는 있는데 값이 null·Unknown·미인식이거나 Enabled·Active(표준 Port.LinkStatus 에서 링크 의미가 불명 — 2026-10-28 사용자 결정, 종전 up)이면
+      down + notice '링크 상태 값 미확정, down 으로 기록'(원문 포함). 짝 없는 기능은 이름으로 찾은 부모 포트 값을 상속하고, 부모도 없으면 down + 미제공 notice.
+      카드 · 컨트롤러 상태(Health OK · State Enabled), PCIeDevice 조건(LinkUp 등 — 카드 단위, notice 의 참고 문구로만), Port.LinkState(관리 상태),
+      속도 값은 포트 링크 근거로 쓰지 않는다. 네트워크 링크(network.*.link_status)는 이 규칙을 쓰지 않는다(Enabled·Active 는 네트워크에서 up 그대로).
       Linux fc_host port_state: Online·Marginal → up / 그 밖(Offline·Linkdown·Error·Blocked·Bypassed·Loopback·Diagnostics·Unknown·Deleted·없음·읽기 실패) → down.
       Windows MSFT_InitiatorPort.OperationalStatus: 2 → up / 3~8 → down / 1·없음 → MSFC PortState 2 → up, 그 밖 → down.
       ESXi HostBusAdapter.status: online → up / 그 밖(offline·unbound·unknown·없음) → down.
@@ -2634,10 +2638,14 @@ fields:
       (Starting, Training), administratively offline, diagnostics/loopback, **and when the device exposes no link-state attribute (key/file
       absent) or the value cannot be normalized to up/down** (Unknown, null value, unbound, unrecognized string). The 2026-10-18 rule
       "unexposed → null" is retired (user re-decision).
-      Redfish: Port/NetworkPort.LinkStatus (LinkUp/Up/Connected → up; anything else → down); when the key is absent (HPE CSUS 3200 RMC 1.75
-      exposes no LinkStatus/Status on FC ports) → down + notice 'link state not provided, recorded as down'; when the key exists but the value
-      is null/Unknown/unrecognized → down + notice 'link state value unresolved, recorded as down' (raw value included). An unlinked function
-      inherits its name-matched parent port; no parent → down + not-provided notice.
+      Redfish: only the standard per-port Port/NetworkPort.LinkStatus link values are up — LinkUp (Port), Up (legacy NetworkPort) and
+      Connected (kept from before) → up; anything else → down. When the key is absent (HPE CSUS 3200 RMC 1.75 exposes no LinkStatus/Status
+      on FC ports) → down + notice 'link state not provided, recorded as down'; when the key exists but the value is null/Unknown/unrecognized,
+      or Enabled/Active (link meaning undefined in standard Port.LinkStatus — user decision 2026-10-28, previously up) → down + notice
+      'link state value unresolved, recorded as down' (raw value included). An unlinked function inherits its name-matched parent port;
+      no parent → down + not-provided notice. Card/controller status (Health OK, State Enabled), PCIeDevice conditions (LinkUp etc. — card
+      level, only as a reference phrase in the notice), Port.LinkState (admin state) and speed values are not port-link evidence. Network
+      link fields (network.*.link_status) do not use this rule (Enabled/Active stay up there).
       Linux fc_host port_state: Online/Marginal → up; anything else (Offline/Linkdown/Error/Blocked/Bypassed/Loopback/Diagnostics/Unknown/Deleted/absent/unreadable) → down.
       Windows OperationalStatus: 2 → up; 3-8 → down; 1/absent → MSFC PortState 2 → up, otherwise down.
       ESXi HostBusAdapter.status: online → up; anything else (offline/unbound/unknown/absent) → down.

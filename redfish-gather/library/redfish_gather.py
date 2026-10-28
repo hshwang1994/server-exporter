@@ -4280,19 +4280,31 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
     return ndfs
 
 
+# HBA 링크를 up 으로 인정하는 LinkStatus 값 — 포트 단위 표준 링크 값만 (2026-10-28 사용자 결정).
+#   DMTF Port.LinkStatus 는 LinkUp 만 활성이다(Starting · Training 은 협상 중, LinkDown · NoLink 는 비활성). 구 NetworkPort.LinkStatus 는 Up.
+#   Connected 는 사전이 up 으로 적어 둔 기존 값이라 유지한다(표준 enum 밖 — 2026-10-28 미러 18대 · fixture 출현 0).
+#   Enabled · Active 는 표준 Port.LinkStatus 에서 링크 의미가 불명이라 down + '값 미확정' notice 다. OEM 의 포트별 필드가 실제 Link Up 을
+#   뜻한다는 근거(벤더 문서 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가 확인되면 _extract_oem_* 계열에서 따로 정규화한다
+#   (카드 단위 값은 대상이 아니다). network.ports[].link_status 는 이 집합을 쓰지 않는다(_normalize_link_status 그대로).
+#   source: https://redfish.dmtf.org/schemas/v1/Port.json · https://redfish.dmtf.org/schemas/v1/NetworkPort.json
+_HBA_LINK_UP_VALUES = frozenset(('linkup', 'up', 'connected'))
+
+
 def _hba_link_status(pdata):
     """storage.hbas[].link_status — 'up' / 'down' 둘뿐 (2026-10-19 사용자 결정).
 
     2026-10-18 에는 포트 응답에 `LinkStatus` 키가 없으면(실측 HPE CSUS 3200 RMC 1.75.108 — FC Port 24개 전부) None(JSON null)을 두고
     "확인되지 않은 상태를 down 으로 적지 않는다" 였다. 2026-10-19 사용자 재결정: 값은 항상 들어가야 하고 up · down 둘만 존재한다 —
-    링크 활성이 확인된 경우(LinkUp · Up · Connected 등 → 'up')만 up 이고, 그 밖(키 없음 · 값 null · Unknown · 미인식 벤더 문자열 ·
-    LinkDown · NoLink · Starting · Training)은 전부 down 이다. 키 없음(_hba_link_missing)과 키는 있는데 up/down 으로 정규화되지
+    링크 활성이 확인된 경우만 up 이고, 그 밖(키 없음 · 값 null · Unknown · 미인식 벤더 문자열 · LinkDown · NoLink · Starting · Training)은
+    전부 down 이다. 2026-10-28 사용자 결정: "확인된 경우" 는 표준 링크 값(_HBA_LINK_UP_VALUES — LinkUp · Up · Connected)뿐이다.
+    네트워크 정규화가 up 으로 보는 Enabled · Active 는 HBA 에서 down 이다. 키 없음(_hba_link_missing)과 키는 있는데 HBA 값이 정해지지
     않은 값(_hba_link_unresolved)은 호출부가 카드당 notice 로 남겨 "장비가 안 줘서 down" 과 "장비가 down 이라 해서 down" 을
     diagnosis.details.notices 에서 가를 수 있게 한다. network.ports[].link_status 는 종전 _normalize_link_status 그대로다.
     """
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return 'down'
-    return 'up' if _normalize_link_status(pdata.get('LinkStatus')) == 'up' else 'down'
+    raw = pdata.get('LinkStatus')
+    return 'up' if isinstance(raw, str) and raw.strip().lower() in _HBA_LINK_UP_VALUES else 'down'
 
 
 def _hba_link_missing(pdata):
@@ -4301,11 +4313,16 @@ def _hba_link_missing(pdata):
 
 
 def _hba_link_unresolved(pdata):
-    """`LinkStatus` 키는 있는데 up/down 으로 정규화되지 않은 값(null · Unknown · 미인식 문자열)의 원문. 그런 값이 아니면 None."""
+    """`LinkStatus` 키는 있는데 HBA 값이 표준으로 정해지지 않은 값의 원문. 그런 값이 아니면 None.
+
+    up/down 으로 정규화되지 않은 값(null · Unknown · 미인식 문자열)과, 2026-10-28 부터 네트워크 정규화로는 up 이지만
+    HBA up 값(_HBA_LINK_UP_VALUES)이 아닌 값(Enabled · Active)이다 — 둘 다 값은 down, 사실은 notice `링크 상태 값 미확정`.
+    """
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return None
     raw = pdata.get('LinkStatus')
-    if _normalize_link_status(raw) in ('up', 'down'):
+    norm = _normalize_link_status(raw)
+    if norm == 'down' or (norm == 'up' and _hba_link_status(pdata) == 'up'):
         return None
     return 'null' if raw is None else str(raw).strip()
 
