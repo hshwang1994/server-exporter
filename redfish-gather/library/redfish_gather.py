@@ -6342,39 +6342,81 @@ def _normalize_network_raw(raw_nics):
             'adapters': [], 'ports': [], 'summary': {'groups': []}}
 
 
-def _normalize_cpu_raw(procs):
+# 2026-10-29 (SA-03): CPU 제조사 정규화 표 — normalize_standard.yml 의 cpu.manufacturer · summary.groups[].manufacturer(2026-10-27 FIX 2)와
+#   같은 표다. (소문자 부분 문자열들, 이름) 순서대로 처음 맞는 것, 없으면 원문 strip, 비면 None. 두 표가 갈리지 않게 시험이 대조한다.
+#   CPU 제조사 값의 정규화이지 서버 벤더 분기가 아니다(rule 12).
+_CPU_MFR_CANON = (
+    (('intel',), 'Intel'),
+    (('amd', 'advanced micro devices'), 'AMD'),
+)
+
+
+def _canon_cpu_manufacturer(value):
+    """Processor.Manufacturer → _CPU_MFR_CANON 표의 이름 (2026-10-29, SA-03). 실측 iLO 7 · XCC 3 · RMC 'Intel(R) Corporation' → 'Intel'."""
+    text = str(value).strip() if value is not None else ''
+    low = text.lower()
+    for tokens, name in _CPU_MFR_CANON:
+        if any(t in low for t in tokens):
+            return name
+    return text or None
+
+
+def _cpu_known_cores(proc):
+    """CPU 하나의 코어 수 — TotalCores 가 양의 정수일 때만, 아니면 None(미상). 설치된 CPU 의 0코어는 있을 수 없다 (2026-10-29, SA-04)."""
+    c = _safe_int(proc.get('total_cores'))  # rule 95 R1 #7: 비-숫자 cores str 방어
+    return c if (c is not None and c > 0) else None
+
+
+def _normalize_cpu_raw(procs, raw_sys=None, failed=False):
     """raw gather_processors (list) → canonical cpu section (per-partition).
 
     cycle 2026-05-29: top-level normalize_standard.yml 의 B01 필터 + 합산 + summary 와
     동일 결과를 Python 에서 생성 (multi_node.partitions[].cpu 일관성).
     2026-10-27 (FIX 1 — 사용자 결정): logical_threads 를 내지 않는다 — top-level cpu 와 같은 정책(BMC 스레드 수는 HT 상태를 확정하지 못한다).
+    2026-10-29 (SA-03 · SA-04): top-level 과 같은 규칙 — 부분 합을 전체 합으로 쓰지 않는다. raw_sys 는 **이 partition 자신의** gather_system 결과,
+      failed 는 그 partition 의 gather_processors 오류 여부(목록 미완결). 목록이 온전하고 모든 CPU 의 코어를 알 때만 목록 수 · 코어 합,
+      아니면 검사를 통과한 ProcessorSummary.Count · CoreCount(_rf_cpu_basis 와 같은 검사), 그것도 없으면 None.
+      그룹에 코어 미상 CPU 가 있으면 그 그룹의 total_cores · cores_per_socket 은 None. 제조사는 _CPU_MFR_CANON 표로 정규화.
     """
     procs = procs if isinstance(procs, list) else []
     cpus = [p for p in procs if isinstance(p, dict)
             and (str(p.get('processor_type') or '').strip().upper() in ('CPU', 'CORE', ''))]
-    cores = sum(_safe_int(p.get('total_cores'), 0) for p in cpus)  # rule 95 R1 #7: 비-숫자 cores str 방어
+    known = [_cpu_known_cores(p) for p in cpus]
+    known_sum, unknown = sum(c for c in known if c is not None), sum(1 for c in known if c is None)
+    cs = _safe(raw_sys, 'cpu_summary') if isinstance(raw_sys, dict) else None
+    cnt, cc = _safe_int(_safe(cs, 'count')), _safe_int(_safe(cs, 'core_count'))
+    cnt_ok = cnt is None or cnt >= len(cpus)
+    list_ok = bool(cpus) and not failed
+    cc_ok = cc is not None and cc > 0 and cnt_ok and cc >= known_sum + unknown
     models = [p.get('model') for p in cpus if p.get('model')]
     speeds = [p.get('speed_mhz') for p in cpus if p.get('speed_mhz')]
     archs = [p.get('architecture') for p in cpus if p.get('architecture')]
     isets = [p.get('instruction_set') for p in cpus if p.get('instruction_set')]
-    groups, seen = [], {}
-    for p in cpus:
+    groups, seen, unk = [], {}, set()
+    for p, tc in zip(cpus, known):
         m = p.get('model') or None   # RD-UNK (2026-10-10): 자리표시자 'unknown' 대신 null — 모델을 모르면 모르는 것이다
-        tc = _safe_int(p.get('total_cores'), 0)  # rule 95 R1 #7: grouping 도 동일 방어
         if m in seen:
-            g = groups[seen[m]]
+            i = seen[m]
+            g = groups[i]
             g['sockets'] += 1
-            g['total_cores'] += tc
-            g['cores_per_socket'] = g['total_cores'] // g['sockets']  # Round 2 #1: 혼합 코어 same-model 평균 갱신
+            if tc is None:
+                unk.add(i)
+            if i in unk:
+                g['total_cores'] = g['cores_per_socket'] = None
+            else:
+                g['total_cores'] += tc
+                g['cores_per_socket'] = g['total_cores'] // g['sockets']  # Round 2 #1: 혼합 코어 same-model 평균 갱신
         else:
             seen[m] = len(groups)
-            groups.append({'model': m, 'manufacturer': p.get('manufacturer'),
+            if tc is None:
+                unk.add(seen[m])
+            groups.append({'model': m, 'manufacturer': _canon_cpu_manufacturer(p.get('manufacturer')),
                            'max_speed_mhz': p.get('speed_mhz'),
                            'architecture': p.get('architecture') or p.get('instruction_set'),
                            'sockets': 1, 'cores_per_socket': tc, 'total_cores': tc})
     return {
-        'sockets': (len(cpus) or None),
-        'cores_physical': (cores or None),
+        'sockets': (len(cpus) if list_ok else (cnt if (cnt is not None and cnt_ok) else None)),
+        'cores_physical': (known_sum if (list_ok and not unknown) else (cc if cc_ok else None)),
         'model': (models[0] if models else None),
         'max_speed_mhz': (speeds[0] if speeds else None),
         'architecture': (archs[0] if archs else (isets[0] if isets else None)),
@@ -6388,22 +6430,35 @@ def _normalize_memory_raw(raw_mem, raw_sys=None):
     cycle 2026-05-29: top-level normalize_standard.yml _rf_summary_memory 와 동일 grouping.
     2026-10-03 (C5): total_mib 가 None/0 이면 **이 partition 자신의** System.MemorySummary 로만 fallback
     (raw_sys = 그 partition 의 gather_system 결과). 상위 System 의 MemorySummary 를 partition 에 중복 적용하지 않는다.
+    2026-10-29 (SA-03 · SA-05): top-level 과 같은 규칙 — 그룹 용량은 반올림(half-even, top-level round 'common' 과 같다)이고 0 GB 그룹은 만들지
+      않는다(종전 내림이라 512 MiB 미만 · 1.5 GiB 경계가 어긋났다). total_mib 가 None(DIMM 합 미완결)이면 아는 DIMM 의 합을 쓰지 않는다. MemorySummary 는
+      양수이고, 용량 미상 DIMM 이 있으면 아는 DIMM 합보다 클 때, 그 밖(멤버를 못 읽음 · 합 0)에는 아는 합 이상일 때만 쓴다(_rf_mem_basis 와 같은 검사).
+      아니면 총량 · grand_total_gb 는 None.
     """
     raw_mem = raw_mem if isinstance(raw_mem, dict) else {}
     slots = raw_mem.get('slots') or []
-    total_mib = raw_mem.get('total_mib')
-    if not total_mib and isinstance(raw_sys, dict):
-        _ms_gib = _safe_int(_safe(raw_sys, 'memory_summary', 'total_gib'))
-        if _ms_gib:
-            total_mib = _ms_gib * 1024
+    tm = _safe_int(raw_mem.get('total_mib'))
+    known_mib, unknown = 0, 0
+    for s in slots:
+        if not isinstance(s, dict):
+            continue
+        c = _safe_int(s.get('capacity_mb') if s.get('capacity_mb') is not None else s.get('capacity_mib'))
+        if c is None:
+            unknown += 1
+        else:
+            known_mib += c
+    ms_gib = _safe_int(_safe(raw_sys, 'memory_summary', 'total_gib')) if isinstance(raw_sys, dict) else None
+    ms_ok = (ms_gib is not None and ms_gib > 0
+             and (ms_gib * MIB_PER_GIB > known_mib if unknown else ms_gib * MIB_PER_GIB >= known_mib))
+    trusted_gib = ms_gib if ms_ok else None
     groups, seen, total_gb = [], {}, 0
     for s in slots:
         if not isinstance(s, dict):
             continue
         cap_mb = _safe_int(s.get('capacity_mb') or s.get('capacity_mib'), 0)  # rule 95 R1 #7: '8GB' 등 단위문자열 방어
-        if cap_mb <= 0:
+        cap_gb = int(round(cap_mb / MIB_PER_GIB)) if cap_mb > 0 else 0
+        if cap_gb <= 0:
             continue
-        cap_gb = cap_mb // MIB_PER_GIB
         t, sp = s.get('type'), s.get('speed_mhz')
         mfr, pn = s.get('manufacturer'), s.get('part_number')
         key = '%s|%s|%s|%s|%s' % (cap_gb, t, sp, mfr, pn)
@@ -6417,10 +6472,15 @@ def _normalize_memory_raw(raw_mem, raw_sys=None):
                            'manufacturer': mfr, 'part_number': pn, 'quantity': 1,
                            'group_total_gb': cap_gb})
         total_gb += cap_gb
+    if tm is not None and tm > 0:
+        total_mib, grand = tm, (total_gb if total_gb > 0 else int(round(tm / MIB_PER_GIB)))
+    else:   # 합 0 · 미완결 · 미수집 → 검사를 통과한 MemorySummary 또는 None (0 은 "메모리 0 GB" 라는 거짓 값)
+        total_mib = trusted_gib * MIB_PER_GIB if trusted_gib is not None else None
+        grand = trusted_gib
     return {
         'total_mb': total_mib, 'total_basis': 'physical_installed',
         'installed_mb': total_mib, 'visible_mb': None, 'free_mb': None,
-        'slots': slots, 'summary': {'groups': groups, 'grand_total_gb': total_gb},
+        'slots': slots, 'summary': {'groups': groups, 'grand_total_gb': grand},
     }
 
 
@@ -6469,7 +6529,7 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
             # cycle 2026-05-29: per-partition 전 섹션 canonical 정규화.
             # 구: cpu=raw list / memory=raw dict / storage=raw / network=raw list
             #     → normalize 누락 (top-level 과 shape 불일치 + network 가 list).
-            'cpu':        _normalize_cpu_raw(cpu_data),
+            'cpu':        _normalize_cpu_raw(cpu_data, sys_data, bool(cpu_errs)),   # 2026-10-29 (SA-03): 그 partition 의 요약 · 오류로 판정
             'memory':     _normalize_memory_raw(mem_data, sys_data),
             'storage':    _normalize_storage_raw(sto_data),
             'network':    _normalize_network_raw(net_data),
