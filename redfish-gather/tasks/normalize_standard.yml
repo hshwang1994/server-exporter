@@ -300,6 +300,85 @@
       {{ out }}
   no_log: true
 
+# ── 2026-10-29 (SA-04 · SA-05): cpu · memory 총량의 근거 ──────────────────────────
+# 부분 합을 전체 합으로 적지 않는다. 목록이 온전하고(그 섹션에 오류 없음) 모든 항목의 값을 알 때만 합을 쓰고, 아니면 같은 System 의
+# BMC 요약(ProcessorSummary · MemorySummary)이 아래 검사를 통과할 때 그 값을, 그것도 아니면 null 을 쓴다 — 추정값은 만들지 않는다.
+#   CPU   : TotalCores 가 없거나 0 이하이면 그 CPU 의 코어는 미상이다(설치된 CPU 의 0코어는 있을 수 없다).
+#           CoreCount 는 양의 정수이고 (아는 코어 합 + 코어 미상 CPU 수) 이상이어야 하며, ProcessorSummary.Count 가 있으면 CPU 목록 수 이상이어야 한다.
+#           sockets 는 목록이 온전하면 목록 수, 아니면 목록 수 이상인 ProcessorSummary.Count, 그것도 없으면 null.
+#   Memory: 모듈 memory.total_mib 가 null 이면(C5 용량 미상 · 멤버 조회 실패 · 컬렉션 절단) DIMM 합은 미완결이다.
+#           TotalSystemMemoryGiB 는 양수이고, 용량 미상 DIMM 이 있으면 아는 합보다 커야 하며, 그 밖(멤버를 못 읽음)은 아는 합 이상이어야 한다.
+# 목록이 비어 있을 때(종전 BUG-13 · BUG-14 경로) 쓰던 BMC 요약은 같은 검사로 그대로 쓰인다 — 아는 합이 0 이라 양수 조건만 남는다.
+- name: "redfish | normalize_standard | cpu · memory 총량 근거 (SA-04 · SA-05)"
+  ansible.builtin.set_fact:
+    _rf_cpu_basis: >-
+      {%- set ns = namespace(known=0, unknown=0) -%}
+      {%- for p in (_rf_d_cpus | default([])) -%}
+        {%- set _c = p.total_cores | default(none) -%}
+        {%- set _ci = (_c | int) if (_c is not none and ((_c | string) | trim | length) > 0) else 0 -%}
+        {%- if _ci > 0 -%}{%- set ns.known = ns.known + _ci -%}{%- else -%}{%- set ns.unknown = ns.unknown + 1 -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set _n = (_rf_d_cpus | default([])) | length -%}
+      {%- set _failed = 'processors' in (_rf_raw_collect.failed_sections | default([])) -%}
+      {%- set _cs = _rf_d_system.cpu_summary | default({}, true) -%}
+      {%- set _cnt = _cs.count | default(none) -%}
+      {%- set _cnt = (_cnt | int) if (_cnt is not none and ((_cnt | string) | trim | length) > 0) else none -%}
+      {%- set _cnt_ok = (_cnt is none) or (_cnt >= _n) -%}
+      {%- set _cc = _cs.core_count | default(none) -%}
+      {%- set _cc = (_cc | int) if (_cc is not none and ((_cc | string) | trim | length) > 0) else 0 -%}
+      {%- set _list_ok = (_n > 0) and not _failed -%}
+      {%- set _cores_ok = _list_ok and ns.unknown == 0 -%}
+      {%- set _cc_ok = (_cc > 0) and _cnt_ok and (_cc >= (ns.known + ns.unknown)) -%}
+      {{ {
+        'partial': _failed or (_n > 0 and ns.unknown > 0),
+        'list_failed': _failed,
+        'unknown_cores': ns.unknown,
+        'sockets': (_n if _list_ok else (_cnt if (_cnt is not none and _cnt_ok) else none)),
+        'cores': (ns.known if _cores_ok else (_cc if _cc_ok else none))
+      } }}
+    _rf_mem_basis: >-
+      {%- set ns = namespace(known=0, unknown=0) -%}
+      {%- for sl in (_rf_d_memory.slots | default([])) -%}
+        {%- set _c = sl.capacity_mb | default(none) -%}
+        {%- if _c is none or ((_c | string) | trim | length) == 0 -%}{%- set ns.unknown = ns.unknown + 1 -%}
+        {%- else -%}{%- set ns.known = ns.known + (_c | int) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set _tm = _rf_d_memory.total_mib | default(none) -%}
+      {%- set _g = (_rf_d_system.memory_summary | default({}, true)).total_gib | default(none) -%}
+      {%- set _g = (_g | int) if (_g is not none and ((_g | string) | trim | length) > 0) else 0 -%}
+      {%- set _g_ok = (_g > 0) and (((_g * 1024) > ns.known) if ns.unknown > 0 else ((_g * 1024) >= ns.known)) -%}
+      {%- set _failed = 'memory' in (_rf_raw_collect.failed_sections | default([])) -%}
+      {{ {
+        'complete': _tm is not none,
+        'partial': (_tm is none) and (((_rf_d_memory.slots | default([])) | length) > 0 or _failed),
+        'unknown_capacity': ns.unknown,
+        'summary_gib': (_g if _g_ok else none)
+      } }}
+  no_log: true
+
+# 위 근거로 정한 값이 부분 합 대신 BMC 요약 또는 null 이면 그 사실을 notice 로 남긴다(관측만 — 원인 해석 없음).
+- name: "redfish | normalize_standard | cpu · memory 총량 notice (SA-04 · SA-05)"
+  ansible.builtin.set_fact:
+    _rf_norm_notices: >-
+      {%- set n = (_rf_norm_notices | default([])) | list -%}
+      {%- set cb = _rf_cpu_basis -%}
+      {%- if cb.partial -%}
+        {%- set why = [] -%}
+        {%- if cb.list_failed -%}{%- set _ = why.append('CPU 목록을 다 읽지 못함') -%}{%- endif -%}
+        {%- if cb.unknown_cores > 0 -%}{%- set _ = why.append('코어 수(TotalCores) 미상 CPU ' ~ cb.unknown_cores ~ '개(그 모델 그룹의 total_cores · cores_per_socket = null)') -%}{%- endif -%}
+        {%- set how = ['cores_physical ' ~ (('= ProcessorSummary.CoreCount ' ~ cb.cores) if cb.cores is not none else '= null')] -%}
+        {%- if cb.list_failed -%}{%- set _ = how.append('sockets ' ~ (('= ProcessorSummary.Count ' ~ cb.sockets) if cb.sockets is not none else '= null')) -%}{%- endif -%}
+        {%- set _ = n.append({'section': 'cpu', 'message': ((why | join(' · ')) ~ ' — 부분 합을 쓰지 않음: ' ~ (how | join(', ')))}) -%}
+      {%- endif -%}
+      {%- set mb = _rf_mem_basis -%}
+      {%- if mb.partial -%}
+        {%- set why = 'DIMM 합계를 확정하지 못함' ~ ((' (용량 CapacityMiB 미상 DIMM ' ~ mb.unknown_capacity ~ '개)') if mb.unknown_capacity > 0 else ' (DIMM 목록을 다 읽지 못함)') -%}
+        {%- set how = (('= MemorySummary.TotalSystemMemoryGiB ' ~ mb.summary_gib) if mb.summary_gib is not none else '= null') -%}
+        {%- set _ = n.append({'section': 'memory', 'message': (why ~ ' — 부분 합을 쓰지 않음: total_mb · installed_mb · summary.grand_total_gb ' ~ how)}) -%}
+      {%- endif -%}
+      {{ n }}
+  no_log: true
+
 # ── P3 (cycle 2026-04-28): Group Summary 계산 ────────────────────────────────
 # Memory / Disk / CPU / Network 의 단위용량 × 수량 × 그룹총량 + 전체 총량 형식.
 # Fragment 철학 (rule 22): 각 gather 가 자기 섹션 안의 summary 만 채운다.
@@ -309,21 +388,26 @@
     # cycle-016 Phase M: cpu.summary.groups 강화 — manufacturer / max_speed_mhz / architecture 추가
     # 2026-04-29 fix B01: _rf_d_cpus 사용 (위 단계에서 ProcessorType=='CPU'만 필터링됨).
     _rf_summary_cpu: >-
-      {%- set ns = namespace(groups=[], seen={}) -%}
+      {%- set ns = namespace(groups=[], seen={}, unk={}) -%}
       {%- for p in (_rf_d_cpus | default([])) -%}
         {%- set m = p.model | default(none) -%}  {#- RD-UNK (2026-10-10): 자리표시자 'unknown' 대신 null -#}
-        {#- 2026-10-12: 코어 수를 모르면 null 로 둔다(0 은 "코어 0개" 라는 거짓 값). 합계는 알려진 값만 더하고, 모두 모르면 null -#}
-        {%- set cores = (p.total_cores | int) if ((p.total_cores | default(none)) is not none and ((p.total_cores | string) | trim | length) > 0) else none -%}
+        {#- 2026-10-12: 코어 수를 모르면 null 로 둔다(0 은 "코어 0개" 라는 거짓 값).
+            2026-10-29 (SA-04): TotalCores 가 0 이하여도 미상이다. 그룹에 코어 미상 CPU 가 하나라도 있으면 그 그룹의 total_cores · cores_per_socket 은
+            null 로 고정한다 — 종전에는 아는 코어만 더한 부분 합(과 그 합 ÷ 전체 소켓)을 그룹 값으로 적었다. sockets 는 목록의 CPU 수 그대로 -#}
+        {%- set _c = p.total_cores | default(none) -%}
+        {%- set cores = (_c | int) if (_c is not none and ((_c | string) | trim | length) > 0 and (_c | int) > 0) else none -%}
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
-          {%- set known = ns.groups[idx].total_cores -%}
-          {%- set _new_total = ((known if known is not none else 0) + cores) if (cores is not none) else known -%}
+          {%- if cores is none -%}{%- set _ = ns.unk.update({idx: true}) -%}{%- endif -%}
+          {%- set _new_total = none if ns.unk.get(idx, false) else (ns.groups[idx].total_cores + cores) -%}
           {%- set _new_sockets = ns.groups[idx].sockets + 1 -%}
           {#- 2026-10-19 (B-11): cores_per_socket 은 그룹 평균(total // sockets) — Windows · Python _normalize_cpu_raw 와 같은 뜻. 동질 CPU 는 값 불변 -#}
           {%- set _ = ns.groups[idx].update({'sockets': _new_sockets, 'total_cores': _new_total,
                                               'cores_per_socket': (_new_total // _new_sockets) if _new_total is not none else none}) -%}
         {%- else -%}
-          {%- set _ = ns.seen.update({m: ns.groups | length}) -%}
+          {%- set _gi = ns.groups | length -%}
+          {%- if cores is none -%}{%- set _ = ns.unk.update({_gi: true}) -%}{%- endif -%}
+          {%- set _ = ns.seen.update({m: _gi}) -%}
           {#- 2026-10-27 (FIX 2): groups[].manufacturer 도 top-level cpu.manufacturer 와 같은 표(intel → Intel · amd|advanced micro devices → AMD · 그 밖 원문 · 없으면 null) -#}
           {%- set _mf_raw = p.manufacturer | default(none) -%}
           {%- set _mf_s = (_mf_raw | string | trim) if _mf_raw is not none else '' -%}
@@ -368,12 +452,14 @@
         {%- endif -%}
       {%- endfor -%}
       {#- 2026-10-19 (B-1): DIMM 합이 0 이면 memory.total_mb 와 같은 원천(모듈 total_mib → System.MemorySummary)으로 총량을 적고,
-          그것도 모르면 null — 0 은 "메모리 0 GB" 라는 거짓 값이다(Windows · ESXi 는 이미 null). -#}
+          그것도 모르면 null — 0 은 "메모리 0 GB" 라는 거짓 값이다(Windows · ESXi 는 이미 null).
+          2026-10-29 (SA-05): DIMM 합이 미완결이면(모듈 total_mib null) 아는 DIMM 의 합을 쓰지 않는다 — total_mb 와 같은 원천
+          (_rf_mem_basis.summary_gib: 검사를 통과한 MemorySummary)이거나 null. 그룹은 종전처럼 아는 DIMM 만 담는다. -#}
       {%- set _tm = _rf_d_memory.total_mib | default(none) -%}
       {%- set _ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(none) -%}
       {%- set _fb = ((_tm | int) / 1024) | round(0, 'common') | int if (_tm is not none and (_tm | int) > 0)
                     else ((_ms_gib | int) if (_ms_gib is not none and (_ms_gib | int) > 0) else none) -%}
-      {{ {'groups': ns.groups, 'grand_total_gb': (ns.total if ns.total > 0 else _fb)} }}
+      {{ {'groups': ns.groups, 'grand_total_gb': ((ns.total if ns.total > 0 else _fb) if _rf_mem_basis.complete else _rf_mem_basis.summary_gib)} }}
     # cycle-016 Phase L: storage groups 에 model 추가 (디스크 모델 분류)
     _rf_summary_storage: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
@@ -691,13 +777,11 @@
       cpu:
         # 2026-04-29 fix B01: cpu top-level 도 ProcessorType=='CPU' 만 사용 (GPU 합산 차단).
         # _rf_d_cpus 는 위 Jinja2 for-loop 필터(ProcessorType in CPU/CORE/'')로 GPU/Accelerator 배제한 결과.
-        sockets:         "{{ _rf_d_cpus | length if _rf_d_cpus else (_rf_d_system.cpu_summary | default({})).count | default(none) }}"
-        # BUG-13 fix: per-processor TotalCores/TotalThreads sum 이 0/None 이면
-        # System.ProcessorSummary.CoreCount / LogicalProcessorCount fallback.
-        # 일부 펌웨어/세대에서 per-processor 응답에 TotalThreads 가 누락되는 케이스 방어.
-        cores_physical: >-
-          {%- set s = (_rf_d_cpus | map(attribute='total_cores') | select | list | sum) if _rf_d_cpus else 0 -%}
-          {{ s if s else (_rf_d_system.cpu_summary | default({})).core_count | default(none) }}
+        # 2026-10-29 (SA-04): sockets · cores_physical 은 _rf_cpu_basis 가 정한다 — 목록이 온전하고 모든 CPU 의 코어를 알 때만 목록 수 · 합,
+        #   아니면 검사를 통과한 ProcessorSummary.Count · CoreCount, 그것도 없으면 null. 종전에는 코어를 아는 CPU 만 더한 부분 합을 전체 코어로 적었다.
+        # BUG-13 fix: per-processor TotalCores sum 이 0/None 이면 System.ProcessorSummary.CoreCount fallback (위 근거의 목록이 빈 경로).
+        sockets:         "{{ _rf_cpu_basis.sockets }}"
+        cores_physical:  "{{ _rf_cpu_basis.cores }}"
         # 2026-10-27 (FIX 1 — 사용자 결정, 2차 Mock 02-cpu-001/002/006): Redfish 는 cpu.logical_threads 를 **내지 않는다**.
         #   BMC 값(ProcessorSummary.LogicalProcessorCount · per-CPU TotalThreads)은 HT 비활성 장비에서 코어의 2배(지원 수)로 나오고 펌웨어마다 뜻이
         #   달라(RMC 1.75 코어 수 · 1.77 스레드 수 · CIMC 4.1 코어 수) OS/ESXi 와 같은 값을 보장할 수 없다 — 스레드 수는 OS/ESXi 채널 값만 쓴다
@@ -737,15 +821,16 @@
         # BUG-14 fix: per-DIMM CapacityMiB sum 이 0/None 이면
         # System.MemorySummary.TotalSystemMemoryGiB * 1024 fallback.
         # 일부 펌웨어/Absent 슬롯 다수 환경에서 per-DIMM 합산이 0 이 되는 케이스 방어.
+        # 2026-10-29 (SA-05): MemorySummary 는 _rf_mem_basis 의 검사(양수 · 아는 DIMM 합 이상)를 통과한 값만 쓴다 — 통과 못 하면 null.
         total_mb: >-
-          {%- set s = _rf_d_memory.total_mib | default(0) | int -%}
-          {%- set ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(0) | int -%}
-          {{ s if s else (ms_gib * 1024 if ms_gib else none) }}
+          {%- set s = _rf_d_memory.total_mib | default(none) -%}
+          {%- set sb = _rf_mem_basis.summary_gib -%}
+          {{ (s | int) if (s is not none and (s | int) > 0) else ((sb * 1024) if sb is not none else none) }}
         total_basis:  "physical_installed"
         installed_mb: >-
-          {%- set s = _rf_d_memory.total_mib | default(0) | int -%}
-          {%- set ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(0) | int -%}
-          {{ s if s else (ms_gib * 1024 if ms_gib else none) }}
+          {%- set s = _rf_d_memory.total_mib | default(none) -%}
+          {%- set sb = _rf_mem_basis.summary_gib -%}
+          {{ (s | int) if (s is not none and (s | int) > 0) else ((sb * 1024) if sb is not none else none) }}
         visible_mb:   null
         free_mb:      null
         slots:        "{{ _rf_d_memory.slots | default([]) }}"

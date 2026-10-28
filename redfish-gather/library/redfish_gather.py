@@ -1152,6 +1152,8 @@ def _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl
                 duplicates — 같은 @odata.id 가 다시 나온 수(중복은 지우지 않는다)
     2026-10-10 (C3): 순회 · 요청 순서는 종전 _collection_members 와 같다. 새 근거(비객체 · Members 부재 · 중복)는 Accounts 처럼
     완결성이 쓰기 판단의 근거인 호출부만 쓴다 — 다른 소비자에는 새 정책을 전파하지 않는다.
+    2026-10-29 (SA-01 · SA-05): 개수 · 합계를 확정하는 호출부(다중 노드 개수 · DIMM 합)도 _walk_complete 로 이 근거를 쓴다.
+    목록 · 요청 순서 · errors 는 바꾸지 않는다 — 온전하지 않으면 개수 · 합계만 null 이다.
     """
     state = {'cut': None, 'pages': 1, 'non_object': 0, 'members_absent': 0, 'members_not_list': 0, 'duplicates': 0}
     ids = set()
@@ -3214,7 +3216,10 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
       - GET {system_uri}/Memory                  (Members collection)
       - GET {system_uri}/Memory/{id} × N         (각 DIMM 상세)
 
-    Returns: ({'total_mib': int, 'slots': list}, errors_list)
+    Returns: ({'total_mib': int | None, 'slots': list}, errors_list)
+
+    2026-10-29 (SA-05): total_mib 는 나열된 DIMM 을 모두 읽었고 컬렉션을 끝까지 온전히 읽었을 때만 정수다. 멤버를 못 읽었으면(404 포함 —
+    가리킨 것을 못 읽음) 아는 DIMM 의 합은 부분 합이라 None 으로 둔다(C5 와 같은 처리, 읽은 slot 은 보존).
     """
     path = _p(system_uri) + '/Memory'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
@@ -3224,13 +3229,18 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         return {'total_mib': None, 'slots': []}, errors
 
     slots, total_mib, cap_unknown, empty_slots = [], 0, 0, 0
+    walk, unread, no_uri = {}, 0, 0   # 2026-10-29 (SA-05): 나열됐는데 읽지 못한 멤버 수 — 하나라도 있으면 합계는 부분 합
     for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
-                                      'memory', errors):
+                                      'memory', errors, state_out=walk):
         uri = _safe(member, '@odata.id')
-        if not uri: continue
+        if not uri:
+            unread += 1
+            no_uri += 1
+            continue
         st, mdata, merr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if merr or st != 200:
             errors.append(_err('memory', f'Memory {uri} 실패: {merr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            unread += 1
             continue
         if _safe(mdata, 'Status', 'State') == 'Absent':
             continue
@@ -3299,6 +3309,12 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
                                code=_CODE_NON_BLOCKING_SUBRESOURCE))
         else:
             _notice('memory', f'CapacityMiB 부재 DIMM {cap_unknown}/{len(slots)} — 합계 미산출(slot 은 보존)')
+        total_mib = None
+    # 2026-10-29 (SA-05): 나열된 멤버를 못 읽었거나 컬렉션을 끝까지 읽지 못했으면 합계 미산출 — 실패는 위 errors(멤버 조회 · 절단)가 적는다.
+    #   @odata.id 없는 멤버는 errors 가 없으므로 notice 로 남긴다. normalize 가 MemorySummary 를 검사해 총량을 쓰거나 null 로 둔다.
+    if unread or not walk.get('complete'):
+        if no_uri:
+            _notice('memory', f'@odata.id 없는 Memory 멤버 {no_uri}개 — 읽지 못함, 합계 미산출(slot 은 보존)')
         total_mib = None
     if empty_slots:
         _notice('memory', f'빈 DIMM 슬롯 {empty_slots}개 제외 (Status 없음 · CapacityMiB 0 · 제조사/부품/시리얼 없음)')
