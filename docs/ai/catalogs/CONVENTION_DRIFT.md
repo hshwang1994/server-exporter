@@ -19,6 +19,16 @@
 
 ---
 
+## DRIFT-032 (2026-10-28, open — Lenovo XCC3 adapter 의 RedfishVersion 주석 · metadata ↔ 미러 실측)
+
+- **발견 위치**: `adapters/redfish/lenovo_xcc3.yml` 주석(:18 · :34 "RedfishVersion 1.15.0 (실측 2026-06-15)") · metadata `redfish_version: "1.17.0"` · `docs/ai/catalogs/VENDOR_ADAPTERS.md` Lenovo 표
+- **분류**: external-contract-drift
+- **설명**: 같은 장비(SN J902E57T · IHX414J 1.22)의 1차 미러 ServiceRoot 는 1.17.0, 2차 Mock 4대(IHX438R 2.97)는 1.22.0 이다 — 1.15.0 은 어느 미러에도 없다. 선택 · 점수에 쓰지 않는 값이라 동작 영향 0
+- **영향**: 주석 · 문서만(adapter 선택 · 수집 0)
+- **제안**: 2026-06-15 캡처 원본에서 1.15.0 근거를 확인한 뒤 주석 · metadata 를 펌웨어별로 정리한다. 그 전까지는 2026-10-28 drift 주석(C5 `0e3bcbb3`, `lenovo_xcc3.yml` :35-36)으로 표시
+- **상태**: open
+- **관련**: rule 96 R1 · R4, `docs/ai/catalogs/FAILURE_PATTERNS.md` 2026-10-28, NEXT_ACTIONS 2026-10-28
+
 ## DRIFT-031 (2026-10-27, resolved — Redfish 계약 · 사전 · 문서가 구현과 어긋난 묶음(2차 Mock 분석 C6) + `cpu.logical_threads` 정책 변경)
 
 - **발견 위치**: `schema/field_dictionary.yml`(`cpu.manufacturer` redfish 선언 · 미발행; `storage.controllers[].driver` redfish 선언 · 미발행; `cpu.sockets/model/logical_threads` 미등재;

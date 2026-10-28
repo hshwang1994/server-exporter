@@ -1,12 +1,29 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Redfish 2차 Mock 독립 검증 결함 정정 (2026-10-28) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/REVIEW_FIX_HANDOFF.md`(9절) · 브랜치 `fix/redfish-mock2-review-20261028`(분기 `f92ebe6a`, main 미병합). 제품 동작 변경 3곳(R1 NIC 링크 보충 · R2 HBA up 값 · R3 전원 Off 문구).
+
+- [ ] **[HIGH / 사용자 — 새 독립 세션] 재검증** — 새 브랜치 최종 SHA 에서 `REVIEW_FIX_HANDOFF.md` 4절 명령(Tier 0/1/2 · 대조 · 재집계)을 다시 돌린다. 이 세션은 자기 결과를 PASS 로 확정하지 않았다.
+- [ ] **[HIGH / 운영 담당자] 공식 runner ci_gate (NOT_RUN)** — `clovirone-server-gather-ci` 는 `*/main` 수동 빌드라 새 브랜치를 그대로 못 돌린다. Runner 셸에서 새 브랜치 clone 뒤 `. scripts/activate_ansible_venv.sh && bash scripts/ai/ci_gate.sh`, 또는 브랜치 지정 시험 Job 사본. 확인: venv `include-system-site-packages = false` · Gate PATH 에 pwsh 없음 · `core.autocrlf` · `core.fileMode` · `RESULT: PASS` · JUnit 보관. 그 전까지 Tier 0 은 "Linux 공식 등가 PASS, 공식 runner NOT_RUN" 이다.
+- [ ] **[HIGH / 사용자 승인] `main` 병합(squash, rule 93 R2 4요소) → `prodgen promote` + canary** — 재검증 PASS · 공식 runner PASS 뒤. 호출자 공지 추가: SR650 V4 `network.interfaces[].link_status` unknown → up/down · `is_primary` · `summary.groups[].link_up_count` · `primary_speed_mbps`(R1), HBA `LinkStatus` 값 `Enabled`/`Active` → down + notice(R2, 미러 · fixture 실측 0).
+- [ ] **[MED / 사용자 승인 — 보호 경로] 03-network-002 잔여 2 NIC** — sr650_v4_02 `NIC6` · _04 `NIC4` 는 `unknown`(본딩 영구 주소 — 포트 `AssociatedMACAddresses` 둘째 값 · NDF `PermanentMACAddress` · `PhysicalNetworkPortAssignment` 로만 이어진다). 재개 조건: 모듈이 그 값을 내보내는 변경 승인 + golden 원장(G-26 이후) + 18 미러 조인 대조(`01-f01-nic-link-fill.md` 5절).
+- [ ] **[MED / 실장비 + 사용자 승인] 05-thermal-003 (b) Sensor 보충** — `DataSourceUri` → Sensor GET 으로 health · state · upper_critical. 재개 조건: Sensor 에 `Status` · `Thresholds` 값이 있는 실장비 캡처 + 요청 예산 승인(CSUS 7대 +377 GET, 미러 Sensor 값 0).
+- [ ] **[LOW / 조건부] OEM 포트별 링크 정규화** — 표준 `LinkStatus` 가 없거나 미확정일 때, 포트별 OEM 필드가 Link Up 을 뜻한다는 근거(벤더 공식 문서 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가 확인되면 `_extract_oem_*` 계열 + origin 주석으로 별도 정규화(사용자 결정 Q1). 카드 수준 값(CSUS H3Alert 등)은 대상이 아니다(`02-hba-link-policy.md` 5절).
+- [ ] **[LOW / 사용자 결정] DL380 iLO NIC 16개 포트 속도 보충** — 자체 link `up` · speed null 인 NIC(dl380_gen12_01 4 · _02 2 · _04 8 · 1차 DL380 2)에 같은 MAC 포트 `current_link_speed_mbps` 25000 을 채울지. 기능 개선이라 이번엔 하지 않았다(`01-f01-nic-link-fill.md` 2절).
+- [ ] **[LOW / 별도 승인] G3 WSL interop PowerShell 탐침 81건** — WSL 기본 PATH 에서 `tests/unit/test_windows_*` 5파일이 interop `powershell.exe` 를 쓸 수 있는 PowerShell 로 보고 Linux 경로를 넘겨 실패(수정 전 `b8985826` 도 같음). `_usable_powershell()` 이 interop 바이너리를 거르게 하는 안은 skip 동작 변경이라 승인 대상(공식 runner 에는 PowerShell 이 없다).
+- [ ] **[LOW / 후속] 루트 `tests/conftest.py` seam 가드 보고 줄의 인코딩** — UTF-8 모드가 아닌 cp949 콘솔에서는 보고 줄이 `\uXXXX` 로 escape 되어 나온다(메시지에 cp949 로 못 쓰는 '—' U+2014 포함). 가드 시험은 하위 실행을 UTF-8 로 고정해 통과(C4)했고 메시지 자체는 그대로다.
+- [ ] **[LOW / 후속] 독립 검증 부록 A 의 범위 밖 항목** — XCC3 잠재 경계(`bmc_model` 공백 + 펌웨어 AFBT/TAOT/USX), 06-bmc-010 시험 강도(문자열 존재 시험 — 렌더 · 재생 없음), 사람용 문서의 범위 이전 `docs/ai` · `tests/evidence` 참조(03-fields 기존 8건 등).
+- [ ] **[LOW / 문서] `lenovo_xcc3.yml` RedfishVersion 주석 · metadata 정리(DRIFT-032)** — 2026-06-15 캡처 근거를 확인한 뒤 펌웨어별(IHX414J 1.22 → 1.17.0 · IHX438R 2.97 → 1.22.0)로 적는다.
+- [ ] **[LOW / 정리] 이 세션 임시물** — 추출본 `C:\github\ClovirONE\mock2-fix-20261028\`, WSL `/root/se_mirrors_fix_20261028`, WSL `~/se-fix-20261028` · `~/venv-se-ci-20261028`, scratchpad 의 Windows clone.
+
 ## Redfish 2차 Mock 전수 분석 (2026-10-26) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/ISSUES.md`(§7 사용자 결정) · `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md`(작업 묶음 WP1~WP11). 분석 산출물은 브랜치 `docs/redfish-mock2-audit-20261026`(main 미병합), Mock 은 main `7c22ca4a`. 제품 코드 변경 0.
 
-- [ ] **[HIGH / 사용자 — 새 Fable 세션] 독립 검증** — 브랜치 `fix/redfish-mock2-20261027` 최종 SHA 에서 Tier 0/1/2 재실행 + 73건 처분표·golden 원장 대조(`tests/evidence/2026-10-27-redfish-mock2-impl/INDEPENDENT_REVIEW_HANDOFF.md`). 결과는 `INDEPENDENT_REVIEW_RESULT.md`.
-- [ ] **[HIGH / 사용자 승인] `main` 병합(squash 기본, rule 93 R2 4요소) → `python -m scripts.ai.prodgen promote` production 승격 + canary** — 독립 검증 PASS 뒤. 호출자 공지: Redfish `data.cpu.logical_threads` 키 소멸(FIX 1, 유일한 비-Additive).
-- [ ] **[MED / 사용자 결정] 03-storage-001 (b) 전원 Off 호스트 controllers 보강(PCIeFunctions)** — 구현 Round 의 유일한 HOLD. dl380_gen12_03 의 storage/firmware 칸(MR416i-o category other)이 ISSUE 로 남는 원인.
+- [x] **[DONE 2026-10-28 — FAIL 10(LOW) · Tier 0 미통과 → 정정 브랜치 `fix/redfish-mock2-review-20261028`, 위 2026-10-28 절의 재검증으로 이어짐] 독립 검증** — 브랜치 `fix/redfish-mock2-20261027` 최종 SHA 에서 Tier 0/1/2 재실행 + 73건 처분표·golden 원장 대조(`tests/evidence/2026-10-27-redfish-mock2-impl/INDEPENDENT_REVIEW_HANDOFF.md`). 결과는 `INDEPENDENT_REVIEW_RESULT.md`.
+- [ ] **[HIGH / 사용자 승인] `main` 병합(squash 기본, rule 93 R2 4요소) → `python -m scripts.ai.prodgen promote` production 승격 + canary** — 독립 검증 PASS 뒤(2026-10-28: 위 절의 재검증 · 공식 runner PASS 뒤로 옮김). 호출자 공지: Redfish `data.cpu.logical_threads` 키 소멸(FIX 1, 유일한 비-Additive).
+- [ ] **[MED / 사용자 결정] 03-storage-001 (b) 전원 Off 호스트 controllers 보강(PCIeFunctions)** — 구현 Round 의 HOLD(2026-10-28 정정: HOLD 3건 중 하나 — 05-thermal-003 (b) · 03-network-002 잔여 2 NIC 추가, 위 절). dl380_gen12_03 의 storage/firmware 칸(MR416i-o category other)이 ISSUE 로 남는 원인.
 - [ ] **[LOW / 실장비] MOCK_LIMITATION 2건 실장비 확인** — CSUS FC 포트 단위 링크(03-storage-004, A안 notice 로만 기재) · Lenovo XCC3 복구 경로 401 → Family 세대(06-bmc-001). RMC `@Redfish.WriteableProperties` repair 거동(06-bmc-002)도 실장비에서만 확인된다.
 - [ ] **[LOW / 문서] `schema/output_examples/redfish_hpe_csus_3200.jsonc` 를 실측 구조(1 파티션 · 1 RMC · 3 섀시)로 재작성** — 주석 예시라 OBSERVATION 으로 둠(FIX 5 범위 밖).
 - [x] **[DONE 2026-10-22 캡처 · 2026-10-26 보관] 용인 11대 전수 미러** — 아래 절의 HIGH 항목 완료. `tests/reference/redfish/mock2/`(zip 11, 치환 없음 — 사용자 결정).

@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-28 — 독립 검증 결함 정정 브랜치 재측정 (이 세션 자기 측정 · 독립 재검증 전)
+
+> 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(REVIEW_FIX_HANDOFF 5 · 7절 · tier1-A/B · tier2-A · parity-A · oracle-A · cell_check · recount · tier0). 브랜치 `fix/redfish-mock2-review-20261028`. 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7(playbook) · Ubuntu-24.04(HTTPS 미러 재생) — 구현 · 독립 검증과 같은 구성.
+
+| 구분 | 결과 |
+|---|---|
+| `pytest tests/unit tests/e2e tests/regression`(Windows 작업 트리, 한 프로세스, 제품 코드 = C6 `499ed7c5`) | 6388 passed · 45 skipped · 5 xfailed · 실패 0 (1607 s, `pytest/unit_e2e_regression.log`) |
+| `pytest tests/integration -m "not live"`(같은 조건) | 502 passed · 6 skipped · 1 deselected · 실패 0 (`pytest/integration.log`) |
+| 정적 · 계약 | `validate_field_dictionary.py` PASS(실패 0) · `output_schema_drift_check.py` 정합(sections 11 · 사전 262) · `verify_vendor_boundary.py` 통과 · `verify_harness_consistency.py` 통과 · `verify_no_plaintext_secret.py --base f92ebe6a` 평문 0(C7 `3490f210` 시점 변경 399건 — vault literal 전수 검사는 비밀번호 파일을 쓰지 않아 건너뜀) |
+| Tier 1 A · B(실제 playbook + HTTPS 미러, 18 label) | 18/18 rc 0 · success · errors 0 · A = B 차이 0(허용 목록 없음) · 구현 측 `tier1-final` 대비 설명된 차이 34 · 미설명 0 · 요청 차이 0 · 독립 검증 `out/tier1-after` 대비 같음 |
+| Tier 2(모듈 재생, 18 label) | 18/18 success · golden 15 label GOLDEN_KEYS 차이 0 · 구현 측 `tier2-final` 대비 차이 0 |
+| 개수 정합(디스크 · FC 포트) | 18/18 PASS — 구현 측 `inventory-parity.md` 와 같은 수 |
+| 판별기 대조(독립 검증 `oracle_compare.py` 사본) | 불일치 69 — 구현 측 최종 · 독립 검증 `cmp_after.json` 과 내용이 같음(새 불일치 0) |
+| 132칸 · 처분 재집계 | 120/2/2/8 불변 · 근거 13칸 정정 / 73 = FIXED 43 · DOC 19 · OBS 11, 병기 HOLD 3 |
+| `tests/integration/test_request_budget.py` | 30 passed |
+| Tier 0 ci_gate(Linux 공식 등가 · Windows 새 clone) · 묶음별 FAIL → PASS | 아래 C9 기록 |
+
 ## 2026-10-27 — Redfish 2차 Mock 구현 Round WP2~WP12 + FIX 5 — 최종 측정 (구현 세션 자기 측정 · 독립 검증 전)
 
 > 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/IMPLEMENTATION_SUMMARY.md` 3절 · `tier0/*.log` · `tier1-final/` · `tier2-final/` · `coverage-132-after.md` · `inventory-parity.md`. 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7 / WSL Ubuntu-24.04 HTTPS 미러.
@@ -13,7 +30,7 @@
 | Tier 1 최종(실제 playbook + HTTPS 미러, 18 label) | 18/18 rc 0 · success · errors 0 · `tier1-after-WP11` 대비 봉투·요청 차이 0 · `tier1-before` 대비 차이는 WP 별 allowlist 로 전부 설명(미설명 0) |
 | Tier 2 최종(`tier2_replay.py`, 18 label) | 18/18 success · golden 보유 15 label GOLDEN_KEYS 차이 0 |
 | 개수 정합(디스크·FC 포트, 18 label) · INV-5 | 18/18 PASS · UNEXPLAINED 0 · INV-5 위반 0 |
-| 132칸 재판정 | PASS 120 · ISSUE 2(dl380_gen12_03 storage/firmware — HOLD 원인) · MOCK_LIMITATION 2(csus3200_01/03 storage) · N/A 8 |
+| 132칸 재판정 | PASS 120 · ISSUE 2(dl380_gen12_03 storage/firmware — HOLD 원인) · MOCK_LIMITATION 2(csus3200_01/03 storage) · N/A 8 (2026-10-28 재대조: 수 불변, 근거 문장 13칸 정정 — 2026-10-28 절) |
 | 게이트 | `validate_field_dictionary.py` PASS(262) · schema drift 정합 · vendor boundary 통과(`b31d131d` 표기 보강 뒤) · harness consistency 통과 · 평문 비밀 0 |
 
 ## 2026-10-27 — Redfish 2차 Mock 구현 Round WP0~WP1 — 기준선 재측정 · 테스트 격리 뒤 재실행 (제품 코드 변경 0)

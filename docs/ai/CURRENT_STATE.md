@@ -1,5 +1,17 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-28 — 2차 Mock 구현 독립 검증 결함 F-01~F-10 정정 · HBA 링크 up 값 한정 — **재검증 대기** (main 미병합 · production 미승격)
+
+> 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(REVIEW_FIX_HANDOFF · 01-f01-nic-link-fill · 02-hba-link-policy · recount · cell_check · linkstatus_values · mirrors · tier1-A/B · tier2-A · parity-A · oracle-A · tier0) · 브랜치 `fix/redfish-mock2-review-20261028`(분기 `f92ebe6a` — 독립 검증을 받은 구현 브랜치의 HEAD, 그 브랜치에는 커밋을 더하지 않음) · 독립 검증 보고서 `C:\github\ClovirONE\se-indep-20261027\INDEPENDENT_REVIEW_RESULT.md`(저장소 밖, 읽기 전용).
+
+- **계기**: Opus 독립 검증이 `f92ebe6a` 에 FAIL 10건(F-01~F-10, 전부 LOW)과 Tier 0 CI gate 미통과(Windows 15 · WSL 87 — 제품 결함 0)로 "완료를 선언하지 않는다" 고 판정했다. 사용자가 정정 계획을 승인했다(2026-10-28 — 결정 Q1 HBA `Enabled`/`Active` → down · Q2 전원 Off 문구에 네트워크 · 추가 지시 A1 잔여 NIC 추측 금지 · A2 양쪽 원격 SHA 확인).
+- **제품 변경(Redfish 채널만)**: R1 `redfish-gather/tasks/normalize_standard.yml` — NIC 자체 링크가 없으면 같은 MAC 의 포트 전부가 한 값(up/down)일 때만 그 값으로 보충(종전의 "speed 도 null" 조건 제거 · MAC → 포트 목록) → SR650 V4 4대 20건(up 14 · down 6) · `is_primary` 4 · summary. R2 `redfish_gather.py` — HBA up 값 = `LinkUp` · `Up` · `Connected` 만, `Enabled` · `Active` → down + '값 미확정' notice(18 미러 출력 변화 0). R3 전원 Off notice 에 '네트워크'. OS/ESXi · `common/tasks` · callback · Jenkinsfile · vault · baseline · golden 변경 0, 새 HTTP 요청 0, envelope · `schema_version` 불변.
+- **문서·사전**: 사전은 help 문장만(F-04 `correlation.bmc_ip`/`host_ip` · `bmc.ip` ③ · F-08 전력 용량 원천 · 온도/팬 이름 · 링크 보충 규칙 · HBA 미확정 값 — 키 · 타입 · channel · priority 불변, 262 항목), `docs/contract/03-fields.md`(F-04 · F-07 · F-08 · F-09 · DIMM 예시 · 음수 범위), decision-log 2026-10-28, `lenovo_xcc3.yml` RedfishVersion drift 주석(DRIFT-032). 처분표 · 132칸 · 구현 측 서술은 in-place 정정 + "2026-10-28 정정" 표.
+- **시험·하네스**: CI gate 환경 의존 시험 보강(G1 seam 하위 실행 HOME · cp949 · G2 prodgen 실행 비트 · G4 전역 `MSYS_NO_PATHCONV` · G5 eol 속성 — skip 추가 0 · 시험 삭제 0, G3 WSL interop PowerShell 81건은 후속), PROJECT_MAP 지문을 quotepath · 콘솔 인코딩과 무관하게(F-10 — 갱신은 마지막 커밋).
+- **검증(이 세션 자기 측정)**: Tier 1 A · B 18/18 success · A = B 차이 0 · 구현 측 최종 대비 설명된 차이 34 · 미설명 0 · 요청 차이 0; Tier 2 18/18 · golden 15 차이 0; 개수 정합 18/18; 판별기 불일치 69(구현 측 · 독립 검증과 같은 내용); 처분 73 = FIXED 43 · DOC 19 · OBS 11, 병기 HOLD 1 → 3; 132칸 120/2/2/8(근거 13칸 정정). pytest · Tier 0 수치는 TEST_HISTORY 2026-10-28.
+- **남은 것**: F-01 은 부분 해결 — sr650_v4_02 `NIC6` · _04 `NIC4`(본딩 영구 주소 — 원문 포트 근거는 있으나 모듈이 `AssociatedMACAddresses[0]` 만 내보냄) `unknown` HOLD. 05-thermal-003 (b) Sensor 보충 HOLD. 공식 runner ci_gate NOT_RUN. 실장비 검증 0.
+- **판정**: 재검증 대기 — 새 독립 세션이 `REVIEW_FIX_HANDOFF.md` 로 다시 돌린다. main 병합 · production 승격은 하지 않았다(사용자 지시). 호출자 영향: SR650 V4 `network.interfaces[].link_status` · `is_primary` · `summary` 값(shape 변경 0).
+
 ## 일자: 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2) · WP0~WP12 + FIX 5 구현 완료 — **독립 검증 전** (main 미병합 · production 미승격)
 
 > 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/`(IMPLEMENTATION_SUMMARY · INDEPENDENT_REVIEW_HANDOFF · ISSUE_DISPOSITION · coverage-132-after · inventory-parity · golden-changes G-01~G-25 · 00~11 · tier0 · tier1-before/after-WPn/final · tier2-before/final) · 브랜치 `fix/redfish-mock2-20261027`(분기 `b8985826`, 제품 코드 마지막 커밋 `b31d131d`). 실행 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7(playbook) + WSL Ubuntu-24.04(HTTPS 미러 재생 서버).
@@ -9,8 +21,8 @@
 - **스키마·계약**: `schema/field_dictionary.yml` 208 → 262 항목(power/thermal 하위 · cpu.sockets/model/logical_threads(os,esxi) · multi_node.composition · interfaces[].mtu 등), `docs/contract/03-fields.md` 전면 정정(§3 · §5 · 6.1~6.9 · §9 실측 구조), EXTERNAL_CONTRACTS 2026-10-27 절, ADR 6건 append(원문 보존), DRIFT-031, baseline 4종 `logical_threads` 삭제 + **CSUS baseline 실측 교체(FIX 5 — csus3200_01 Tier 1 봉투, 합성 baseline 0 개)**.
 - **테스트·도구**: `tests/redfish-probe/mirror_replay/`(FIX 8) · 2차 fixture 11세트 · 루트 conftest seam 가드(04-test-001) · 개수 정합 판별기 + 회귀 · 단위 테스트 신규 약 +370(5118 → 5226) · golden 변경 25건 전부 원장(FIX 9).
 - **검증(구현 세션 자기 측정)**: unit 5226 · integration 497 · e2e+regression 1098 · WSL 엔진 23 · syntax 3채널; Tier 1 최종 18/18 success(WP11 대비 차이 0, `tier1-before` 대비 차이는 WP 별 allowlist 로 전부 설명 · 미설명 0); Tier 2 18/18 golden 15 차이 0; 개수 정합 18 PASS · UNEXPLAINED 0; INV-5 0; 132칸 재판정 PASS 120 · ISSUE 2 · MOCK_LIMITATION 2 · N/A 8.
-- **처분**: 73건 = FIXED 43 · DOC_CORRECTED 19 · OBSERVATION_ONLY 11(병기 MOCK_LIMITATION 2 · VALIDATED_EXISTING 1 · **HOLD 1 = 03-storage-001 (b) controllers 보강 — 사용자 결정**).
-- **판정**: 구현 세션 측정은 전부 PASS 이나 **독립 검증 전**이다 — 새 Fable 세션이 `INDEPENDENT_REVIEW_HANDOFF.md` 로 Tier 0/1/2 를 직접 재실행한다. `main` 병합(squash 기본) · `production` 승격은 독립 검증 PASS + 사용자 승인 뒤 별도 세션. 호출자 공지 필요: Redfish `data.cpu.logical_threads` 키 소멸.
+- **처분**: 73건 = FIXED 43 · DOC_CORRECTED 19 · OBSERVATION_ONLY 11(병기 MOCK_LIMITATION 2 · VALIDATED_EXISTING 1 · **HOLD 1 = 03-storage-001 (b) controllers 보강 — 사용자 결정**). → 2026-10-28 정정: 병기 HOLD 3(05-thermal-003 (b) · 03-network-002 잔여 2 NIC 추가 — 위 2026-10-28 절).
+- **판정**: (2026-10-28 독립 검증 결과 FAIL 10(LOW) · Tier 0 미통과 — 정정은 위 2026-10-28 절) 구현 세션 측정은 전부 PASS 이나 **독립 검증 전**이다 — 새 Fable 세션이 `INDEPENDENT_REVIEW_HANDOFF.md` 로 Tier 0/1/2 를 직접 재실행한다. `main` 병합(squash 기본) · `production` 승격은 독립 검증 PASS + 사용자 승인 뒤 별도 세션. 호출자 공지 필요: Redfish `data.cpu.logical_threads` 키 소멸.
 
 ## 일자: 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round (분석 단계 · 제품 코드 변경 0) — ANALYSIS_DONE
 

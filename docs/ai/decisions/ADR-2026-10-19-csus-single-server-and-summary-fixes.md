@@ -79,3 +79,9 @@
 - **결정 4(power.summary null)**: 유지 + 보강 — Absent PSU 의 `power_capacity_w` · `firmware_version "0.00"` 도 null(WP3), 입력 0 W/0 V 는 notice 로 관측만(WP6).
 - **결정 6(FC 카드 제외 adapter_count)** · 7 · 8: 유지. `multi_node.composition.resource_blocks[].processor_count/memory_count` 는 원천 배열이 없으면 null(FIX 6, 종전 0).
 - **결정 1(`data.multi_node` 유지)**: 유지. `partitions[].cpu` 도 top-level 과 같이 `logical_threads` 를 내지 않는다(02-cpu-005 의 `turbo_max_mhz` 모양 차이는 관찰로 남김).
+
+## 2026-10-28 정정 기록 (독립 검증 F-05 — 원문 · 2026-10-27 절 미수정)
+
+- **2026-10-27 절 결정 3 항목의 괄호 "(HT 비활성이면 코어 수)" 는 실측과 다르다**: RMC 1.77.30(2차 3대)의 `ProcessorSummary.LogicalProcessorCount` 는 HT 설정과 무관하게 ΣTotalThreads 다 —
+  csus3200_02 는 BIOS `HThread Disabled` 인데 224 = ΣTotalThreads = 2 × ΣTotalCores(112). 1.75.108(1차 4대)은 코어 수. 결론(FIX 1 — Redfish 는 `cpu.logical_threads` 를 내지 않는다)은 그대로다.
+  근거: `tests/evidence/2026-10-28-redfish-mock2-review-fix/REVIEW_FIX_HANDOFF.md` 1절 · 독립 검증 보고서 F-05.

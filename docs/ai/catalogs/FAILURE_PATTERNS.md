@@ -1207,3 +1207,44 @@
 - 수정: 백슬래시가 든 문자열은 `chr(92)` 조합 또는 Write 도구로 쓰고 heredoc 에는 넣지 않는다; 다단계 패치는 `&&` 체인 + 결과 assert; 패치 뒤 `git diff` 로 문장을 다시 읽는다.
 - 재발 방지: WP 마무리 절차에 evidence·docs 제어문자 스캔을 넣는다; 문서 문장은 실제 봉투 값(`grep`/python 조회)으로 확인한 뒤 적는다(rule 25 R7-B — 추정을 사실로 쓰지 않음).
 - 관련 rule: rule 25 R7-A/R7-B · rule 70 R3(실제 결과만 기록)
+
+## 2026-10-28 — 분석 제안의 조건 문장을 그대로 코드로 옮겨 실측 형태(NIC 속도 있음)에서 보충이 일어나지 않았는데 FIXED 로 처분했다 (F-01)
+
+- 카테고리: scope-miss (조건을 실측 형태 전수에 대조하지 않음 · 합성 시험이 같은 가정을 공유) · 처분 과대 표기
+- 발견 위치: Opus 독립 검증(2026-10-28) F-01 — `redfish-gather/tasks/normalize_standard.yml` NIC 링크 보충 조건 `link == 'unknown' and speed is none` · `tests/unit/test_redfish_xcc3_shape.py`(speed null NIC 만) · `tests/evidence/2026-10-27-redfish-mock2-impl/05-xcc3-shape.md` §4
+- 증상: SR650 V4 4대의 호스트 NIC 는 `LinkStatus` 키가 없고 `SpeedMbps`(25600 · 0)가 있어 조건이 거짓 → 같은 MAC 포트가 LinkUp/LinkDown 인데도 20건 전부 `unknown` 이었고, 03-network-002 는 FIXED 로 처분됐다. MAC → 포트 dict 는 같은 MAC 의 둘째 포트가 앞 포트를 덮었다
+- 원인: (1) 분석 제안 문장("link unknown 이고 speed 없음")을 조건으로 그대로 옮겼다. (2) 합성 시험 · evidence 가 같은 가정을 공유해 미발동 이유를 "값이 이미 있음" 으로 적었다. (3) 132칸 판정 기준(interfaces 수 · FC 혼입)이 링크 값을 보지 않아 칸 통계에 드러나지 않았다
+- 영향: SR650 V4 4대 link 20건 · is_primary 4 · summary(호출자 값만 — shape 0)
+- 수정: `db606f1c` — MAC → 포트 목록, NIC link unknown 이면 같은 MAC 포트 link 가 하나의 값일 때만 보충(속도 조건 제거), NIC 값은 덮지 않음. 잔여 2 NIC(본딩 영구 주소)는 HOLD
+- 재발 방지: 보충 · 폴백 조건은 실제 미러 전 label 의 "원천 필드 존재 조합" 표를 먼저 만들고 조합마다 기대 결과를 시험으로 고정한다. FIXED 는 대상 label 봉투 값의 before/after 변화를 확인한 뒤에만 쓴다
+- 관련 rule: rule 25 R7-B · rule 95 R1 #10 · rule 24 R2
+
+## 2026-10-28 — 원 이슈 범위(저장/네트워크) 일부를 구현 문구가 빠뜨렸는데 그 문구를 132칸 판정 근거로 썼다 (F-03)
+
+- 카테고리: scope-miss (omission) · 근거 재확인 누락
+- 발견 위치: 독립 검증 F-03 — `redfish_gather.py` 전원 Off notice "저장/메모리/전원/온도" · `coverage-132-after.md` dl380_gen12_03 network 칸
+- 증상: notice 가 네트워크를 말하지 않는데 network 칸을 그 notice 로 ISSUE → PASS 올렸다(network 값은 before = after)
+- 원인: 구현 문구를 원 이슈 · 분석 제안 문장과 대조하지 않았고, 칸 근거를 실제 봉투 문구로 다시 읽지 않았다
+- 수정: `ac368a4b`(문구에 '네트워크' — 사용자 결정 Q2) · 칸 근거를 새 Tier 1 봉투 문구로 교체(C7 `3490f210`)
+- 재발 방지: 칸 · 처분 근거로 인용하는 문장은 봉투에서 꺼낸 원문을 그대로 붙인다
+- 관련 rule: rule 70 R3 · rule 25 R7-B
+
+## 2026-10-28 — PROJECT_MAP 지문을 tests/ 파일이 index 에 들어가기 전에 갱신했고, 지문이 core.quotepath · 콘솔 인코딩에 따라 달랐다 (F-10)
+
+- 카테고리: convention-drift (갱신 순서) · tooling-encoding
+- 발견 위치: `f92ebe6a` 의 `--update` ↔ `dfba108a`(5초 간격) · `scripts/ai/check_project_map_drift.py`
+- 증상: 최종 커밋에서 `check_project_map_drift.py` rc 2(tests 지문 불일치). 한글 경로 3개 때문에 기본 quotepath 와 false 의 지문이 달랐고(`df88dc5e2966` ↔ `15a1eba78bfe`), cp949 콘솔 + false 는 rc 1
+- 원인: 지문이 `git ls-files -s`(index) 기준인데 마지막 tests/ 커밋 전에 갱신했다. `text=True` 디코딩이 quotepath · 콘솔 인코딩에 기대고 있었다
+- 수정: `499ed7c5` — `-c core.quotepath=off ls-files -s -z` 를 bytes 로 받아 UTF-8 로 해석, `--update` 때 index 밖 파일 경고 + 시험. 갱신은 브랜치 마지막 커밋(C10)
+- 재발 방지: 지문 갱신은 브랜치의 마지막 커밋에서만 하고, 뒤이어 `--check` rc 0 을 확인한다
+- 관련 rule: rule 70 R2
+
+## 2026-10-28 — adapter 주석의 RedfishVersion 이 어느 미러에도 없는 값이었고, 계획서 수치 일부가 재현되지 않았다 (XCC3 · 계획 문구)
+
+- 카테고리: external-contract-drift · ai-hallucination(검증하지 않은 수치 인용)
+- 발견 위치: `adapters/redfish/lenovo_xcc3.yml` 주석 "RedfishVersion 1.15.0 (실측 2026-06-15)" ↔ 1차 미러 1.17.0 · 2차 4대 1.22.0 / 계획서(2026-10-28)의 RedfishVersion 문장 · fixture `LinkStatus` 분포 · dl380_gen12_03 ports 0 · F-09 종전 component 값
+- 증상: 계획서는 "mock2 미러 1.17.0" 이라 적었으나 1.17.0 은 1차 미러였고 2차는 1.22.0. fixture 분포 "LinkUp 244 …" 는 재현되지 않았다(실제 123 …, 결론은 같음). dl380_gen12_03 ports 는 0 이 아니라 4, F-09 종전 component 는 `BMC-IHX4-10` 이 아니라 `UEFI-IHX4-10`
+- 원인: 조사 단계 수치를 도구 출력이 아니라 요약 문장으로 옮겼다(중복 집계 · 1차/2차 미러 혼동)
+- 수정: 실행 중 원문 · 도구로 다시 확인해 저장소 문서에는 실측값만 넣었다(C5 `0e3bcbb3` drift 주석 · DRIFT-032 · `REVIEW_FIX_HANDOFF.md` 8절 계획 문구 정정 표)
+- 재발 방지: 계획서 · 문서의 수치는 재현 명령(도구 + 입력 경로)과 함께 적고, 집계는 `@odata.id` 기준 중복 제거 도구로만 낸다
+- 관련 rule: rule 25 R7-B · rule 96 R4 · rule 70 R3

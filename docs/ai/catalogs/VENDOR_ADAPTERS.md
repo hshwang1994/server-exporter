@@ -69,7 +69,7 @@
 
 | Adapter | adapter_id | priority | Vendor / Generation | lab |
 |---|---|---|---|---|
-| `lenovo_xcc3.yml` | redfish_lenovo_xcc3 | **120** | XCC3 (ThinkSystem V4) — SR650 V4 실 미러 fw IHX414J 1.22 / Redfish 1.15.0; 재선택은 `bmc_model_patterns`(Manager.Model "XClarity Controller 3", 2026-10-27 01-adapter-001 — 종전 `firmware_patterns` XCC3 토큰 실격으로 lenovo_bmc 강등) | **실 미러 캡처 2026-06-15 (replay 2 fix) · 2026-10-27 용인 4대 Tier 1 재선택 PASS** |
+| `lenovo_xcc3.yml` | redfish_lenovo_xcc3 | **120** | XCC3 (ThinkSystem V4) — SR650 V4 실 미러 fw IHX414J 1.22 / Redfish 1.17.0(1차 미러 ServiceRoot) · 2차 4대 IHX438R 2.97 / 1.22.0 (2026-10-28 정정 — 종전 1.15.0 은 미러에 없음, DRIFT-032); 재선택은 `bmc_model_patterns`(Manager.Model "XClarity Controller 3", 2026-10-27 01-adapter-001 — 종전 `firmware_patterns` XCC3 토큰 실격으로 lenovo_bmc 강등) | **실 미러 캡처 2026-06-15 (replay 2 fix) · 2026-10-27 용인 4대 Tier 1 재선택 PASS** |
 | `lenovo_xcc.yml` | redfish_lenovo_xcc | 100 | XCC + XCC2 (firmware_patterns 분기) | 부재 |
 | `lenovo_imm2.yml` | redfish_lenovo_imm2 | 50 | IMM2 (구 IMM2, IBM 인수 전) | 부재 |
 | `lenovo_bmc.yml` | redfish_lenovo_bmc | 10 | generic Lenovo fallback (IBM legacy BMC) | 부재 |
