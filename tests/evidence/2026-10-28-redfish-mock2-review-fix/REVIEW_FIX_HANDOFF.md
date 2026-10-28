@@ -36,8 +36,9 @@
 | C4 | `c73db2ce` | test: CI gate 환경 의존 시험 이식성 보강 |
 | C5 | `0e3bcbb3` | docs: 사전·계약 문서 출처와 예시 정정 |
 | C6 | `499ed7c5` | harness: PROJECT_MAP 지문을 quotepath 무관하게 |
-| C7 | (이 문서가 들어간 커밋) | docs: 처분표·132칸 정정과 재검증 증거 추가 |
-| C8~C10 | `git log` | docs/ai 갱신 · Tier 0 기록 · PROJECT_MAP 지문 |
+| C7 | `3490f210` | docs: 처분표·132칸 정정과 재검증 증거 추가 |
+| C8 | `d552ae06` | harness: 재검증 결과와 후속 작업 문서 갱신 — Tier 0 를 돌린 커밋 |
+| C9 · C10 | `git log` | Tier 0 기록(이 문서 7절 갱신) · PROJECT_MAP 지문 — 기록과 지문만 바꾼다 |
 
 제품 동작이 바뀐 곳은 셋뿐이다: `redfish-gather/tasks/normalize_standard.yml`(F-01), `redfish-gather/library/redfish_gather.py` 의 HBA 판정 2함수 + 상수(HBA 정책) · 전원 Off notice 문구 1줄(F-03).
 변경 0: `_normalize_link_status` · CSUS A안 코드 · 요청 경로(새 HTTP 요청 0) · adapters(`lenovo_xcc3.yml` 주석 외) · vault · baseline · golden · Jenkinsfile · callback · `common/tasks/normalize/**` · os-gather · esxi-gather · envelope 13 필드 · `schema_version`.
@@ -48,7 +49,7 @@
 |---|---|---|
 | 구현 브랜치 | 로컬 · origin 모두 `f92ebe6ad338693c7d993434ca7190129a4b7639` | `git rev-parse fix/redfish-mock2-20261027 origin/fix/redfish-mock2-20261027` |
 | main | `e8b5ae9b2f0e4075d1e9f65d6e47475e3bd7b17c`(시작과 같음) | `git rev-parse main origin/main` |
-| 독립 검증 폴더 | 시작 목록과 차이 0(보고서 + `out/` + `tools/` 1,930 파일) | `python -I -B tools/hash_tree.py C:/github/ClovirONE/se-indep-20261027 <out>` 를 `pristine/se-indep-manifest-start.txt`(sha256 `06d8d13336cad854ae62e6dea43abef99b8e402882c48902bb1df291f48d060a`)와 비교. 끝 목록은 Tier 0 기록 커밋에 둔다 |
+| 독립 검증 폴더 | 시작 목록과 차이 0(보고서 + `out/` + `tools/` 1,930 파일) | `python -I -B tools/hash_tree.py C:/github/ClovirONE/se-indep-20261027 <out>` 를 `pristine/se-indep-manifest-start.txt`(sha256 `06d8d13336cad854ae62e6dea43abef99b8e402882c48902bb1df291f48d060a`)와 비교. 끝 목록 `pristine/se-indep-manifest-end.txt`(Tier 0 뒤, 2026-10-28)는 시작 목록과 바이트가 같다(1,930 파일, 같은 sha256) |
 | 구현 측 Tier 산출물 | 차이 0 | `git diff f92ebe6a -- 'tests/evidence/2026-10-27-redfish-mock2-impl/tier*'` |
 | 감사 원문 | 차이 0 | `git diff f92ebe6a -- tests/evidence/2026-10-26-redfish-mock2-audit` |
 | 구현 측 서술 · 처분 문서 | in-place 정정 + 각 파일 끝 "2026-10-28 정정" 표 | `git diff f92ebe6a -- tests/evidence/2026-10-27-redfish-mock2-impl/*.md` |
@@ -89,6 +90,7 @@ python -I -X utf8 -B $D/tools/recount.py tests/evidence/2026-10-27-redfish-mock2
 # 4.6 HBA 값 분포 · CSUS 카드 조건
 python -I -X utf8 -B $D/tools/linkstatus_values.py --fixtures tests/fixtures <18 label=미러> --out <md>
 python -I -X utf8 -B $D/tools/csus_card_conditions.py csus3200_01=$E/csus3200_01 ... --out <md>   # CSUS 7 label
+# 4.8 Tier 0 — tier0/tier0.md 4절 (tools/tier0_wsl.sh · tier0_win.sh · tier0_mk_venv.sh · tier0_summary.py, 한 번에 하나씩)
 ```
 
 ### 4.7 독립 검증 보고서 §11 재현 명령의 새 기대값
@@ -126,21 +128,30 @@ python -I -X utf8 -B $D/tools/csus_card_conditions.py csus3200_01=$E/csus3200_01
 
 sha256 은 저장소 blob(LF) 기준이다 — `core.autocrlf=true` checkout 에서는 `git show HEAD:<경로> | sha256sum` 으로 계산한다.
 
+- 2026-10-28 정정(C9): C7 판본의 이 표는 11행의 값을 Windows 작업 트리 파일(CRLF — Windows Python 이 쓴 파일)로 계산해 blob 기준과 달랐다. 아래 값은 C7 blob 에서 다시 계산했다(내용은 같고 줄 끝만 다르다). `tier2-A/_summary.*.json` 2행과 묶음 3행은 원래 LF 파일이라 그대로다.
+- 묶음 3행은 아래 명령의 출력이다(`r` = `tier1-A` · `tier1-B` · `tier2-A`, 어느 checkout 에서나 같다).
+
+```bash
+D=tests/evidence/2026-10-28-redfish-mock2-review-fix
+git ls-files -- "$D/$r" | grep -E '/gather_output\.json$|\.module\.json$' | LC_ALL=C sort \
+  | while read -r p; do printf '%s  ./%s\n' "$(git show "HEAD:$p" | sha256sum | cut -c1-64)" "${p#"$D/$r/"}"; done | sha256sum
+```
+
 | sha256 | 파일 (`tests/evidence/2026-10-28-redfish-mock2-review-fix/` 기준) |
 |---|---|
-| `8b809b4bd434326c8b71bfd4c41e03d41d1ddcfa48ded2278216cdfadf8018e7` | `tier1-A/_summary.json` |
-| `05693d589fee918cda2fb0def2bb0a5723287f5e413dd9a3e0b5f2bc11e0a7c4` | `tier1-B/_summary.json` |
-| `de895402cab12f0e1a5b00af117799d33b367dcd6ea2bdfce4de502abab0c04b` | `tier1-A/_explained_vs_final.json`(= `_explained_vs_indep.json`) |
-| `6ba93762f0f7442288ebe9438fa3afe48de84ed4b021390cc0575ca62a7ca52c` | `tier1-B/_explained_vs_A.json` |
-| `fddd63741bb1710cf348dd8b9f9aecb3a50eaeb820fa108d712e2a84f0b848b0` | `tier1-A/_invariants.md` |
+| `aca967d5c323967d8ade82836b3931d01a5969851c21a32e9688ddccf4b55fad` | `tier1-A/_summary.json` |
+| `354c2f23abaa21cf5e4c1e2113ba9df295604abb4da299713b9078086300c4b1` | `tier1-B/_summary.json` |
+| `fb9a61db277f24f27112aa45ba08c5a5049673a64d462631dd9accb232908542` | `tier1-A/_explained_vs_final.json`(= `_explained_vs_indep.json`) |
+| `6652976faca4289ed93ec45069e949b5e5fe61fb7c09b2e5316ea1e2ee2d4154` | `tier1-B/_explained_vs_A.json` |
+| `07a6b5a691bb264b3d9c982b94463723ecd32208740c2bed59b8058187a3e221` | `tier1-A/_invariants.md` |
 | `db4a194812d1979e507282ffa3247247dcbc6e4df3d0ea2d035e01aa8e5cce18` | `tier2-A/_summary.adapter.json` |
 | `a54cf5d7a42f4b98f8e4376026f870e66ed45357e716e2d5c3f2c5a369de33da` | `tier2-A/_summary.plain.json` |
-| `6ba4505b645955318a545558c8046eb246d5000243504275307ee17f09439b5b` | `tier2-A/_vs_golden.md` |
-| `91dd78eb409a5f0275599f68ed870b826afda69c276eee62c3f6fcc1c9073c93` | `parity-A/_parity.md` |
-| `ee7ac8d6167d4e1f568ceb9b558646b27aa0eb183717e8de5f8ffd7495fb1460` | `oracle-A/oracle_compare.json` |
-| `3e78e771c42933cd1db48486532f612e0be416acd876413590b49c19b104de99` | `cell_check.json` |
-| `62e0c400277c99572502ce14862391842b0e5b8753a94511209e99d836e1bb62` | `recount.md` |
-| `5b7f177210f15ca6f11fa9661d596036ad72de6fb889dfb04c9f36a2bb35e245` | `linkstatus_values.md` |
+| `bd11c1599a1b33753b88f2f8c578b5ceea6cccefd3db346732375f0c3110680d` | `tier2-A/_vs_golden.md` |
+| `06683d5dced6e6587cf0ad968c72de07addda96afae1347e043ee9f833b1c006` | `parity-A/_parity.md` |
+| `ccf65a7200c49d6ec23087377d698769c44b9853846e020fc59c7e19e80538e1` | `oracle-A/oracle_compare.json` |
+| `53a49f9231d0aa8e2f30aa470136bf21e13d7bd3d598a8ed40a049bf0d550486` | `cell_check.json` |
+| `f7c307e073ac4b6740bb8439d24f12294dee7e647d505570de92e0b12671195d` | `recount.md` |
+| `d9cb4f1c267be6587d670cc7156c0ccc7fa25467555136361f6f5792fb722482` | `linkstatus_values.md` |
 | `68d848a82dbdd24f7641b6f0ba21eebfa20a9cc40ab28dcb50eee647f3561a1e` | `tier1-A` 의 `*/gather_output.json` 18개(정렬 `sha256sum` 목록의 sha256) |
 | `9f2bd03078e1f5ffe4a32e1ceae865e6bd1df4bdaf0cbcb021e87b61893a0c4d` | `tier1-B` 같은 방법(meta 시각이 달라 A 와 파일 해시는 다르다 — 내용 차이는 0) |
 | `4cbb8051af7a53baf48ae6dd7da5394b22ea77758a7f5922cd630fc9c67ff70e` | `tier2-A` 의 `*.module.json` 18개 같은 방법 |
@@ -149,7 +160,17 @@ sha256 은 저장소 blob(LF) 기준이다 — `core.autocrlf=true` checkout 에
 
 ## 7. Tier 0 (CI gate)
 
-C9 에서 기록한다(`tier0/` · 이 절 갱신).
+C8 `d552ae06` 에서 돌렸다. 정본은 `tier0/tier0.md`(조건 · skip 사유 · 재현 명령 · sha256)다. **공식 runner(`Jenkinsfile_ci`)는 NOT_RUN** 이라 "Linux 공식 등가 PASS, 공식 runner 실행 대기" 로 보고한다.
+
+| 실행 | 결과 |
+|---|---|
+| Linux 공식 등가(WSL ext4 새 clone · 격리 venv · `env -i` · pwsh 없음 · `Jenkinsfile_ci` Gate 명령) | `RESULT: PASS` rc 0 — pytest 6250 passed · 183 skipped · 5 xfailed / integration 525 passed · syntax-check 3 채널 · corpus 20/20 |
+| Windows 새 clone(`core.autocrlf=true` · 전역 `MSYS_NO_PATHCONV=1`) | `RESULT: PARTIAL` rc 2 — 실패 0, 건너뜀은 syntax-check 1(ansible 없음 — 설계상). pytest 6388 passed · 45 skipped · 5 xfailed / integration 502 passed |
+| 묶음별 재현(수정 전 `f92ebe6a` → 수정 후) | G1 2 failed → 2 passed · G2 4 failed → 19 passed · G4 · G5 15 failed → 67 passed · G3 81 failed = 81 failed(실패 ID 같음 — 후속) |
+
+- 독립 검증이 보고한 실패 102건(Windows 15 · WSL 87)과 묶음별 수가 같다.
+- Windows gate 한 번은 다른 실행(Linux gate, 이어서 WSL 재현)과 겹쳐 돌다 메모리 부족으로 중단돼 판정에서 뺐다(`tier0/windows-clone-aborted-oom/README.md`). 이후 사용자 결정에 따라 한 번에 하나씩 다시 돌렸다.
+- 계획서 7.3절의 Windows 기대값 "rc 0" 은 ci_gate 설계(ansible 없으면 PARTIAL)와 달라 실측대로 적었다.
 
 ## 8. 계획서(2026-10-28) 문구 정정 — 실행 중 발견
 

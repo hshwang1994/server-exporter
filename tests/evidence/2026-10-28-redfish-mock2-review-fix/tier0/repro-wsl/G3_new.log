@@ -1,0 +1,1468 @@
+[repro] cwd=/home/hshwang/se-fix-20261028 head=d552ae06 python=/usr/bin/python3 pytest=pytest 9.0.3 powershell.exe=/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe fileMode=true
+.FFFFFFFFFFFFFFFFFFFF...............FFFFFFFF..F...FFF.....FFF.F......... [ 18%]
+........................................................................ [ 36%]
+...............................FFFFFFFFF.FF....FFFFFFFF.F.FFF........... [ 55%]
+FFFFFFF..F................FFF.F.FFF.FF...FFFFF.......................... [ 73%]
+........................................................................ [ 92%]
+...............................                                          [100%]
+=================================== FAILURES ===================================
+______ test_dns_drops_ipv6_site_local_placeholders_and_keeps_real_servers ______
+
+    @needs_powershell
+    def test_dns_drops_ipv6_site_local_placeholders_and_keeps_real_servers():
+        fx = copy.deepcopy(PS.NET_TEAM)
+        fx["dns"] = [{"InterfaceAlias": "Ethernet0", "ServerAddresses": ["10.0.0.53", "fec0:0:0:ffff::1", "fec0:0:0:ffff::2",
+                                                                          "fec0:0:0:ffff::3", "2001:4860:4860::8888"]},
+                     {"InterfaceAlias": "Team1", "ServerAddresses": ["fec0:0:0:ffff::1"]}]
+        frag, _ctx, doc, _shell = _section("network", fx)
+>       assert doc["meta"]["data"]["dns"] == ["10.0.0.53", "2001:4860:4860::8888"]
+E       AssertionError: assert [] == ['10.0.0.53',...0:4860::8888']
+E         
+E         Right contains 2 more items, first extra item: '10.0.0.53'
+E         Use -v to get more diff
+
+tests/unit/test_windows_audit_2026_10_10.py:97: AssertionError
+_____ test_ipv6_gateway_is_attributed_to_the_ipv6_default_route_interface ______
+
+    @needs_powershell
+    def test_ipv6_gateway_is_attributed_to_the_ipv6_default_route_interface():
+        fx = copy.deepcopy(PS.NET_TEAM)
+        # IPv4 기본 경로 = Ethernet0(idx 4), IPv6 기본 경로 = Team1(idx 11) — 서로 다른 NIC
+        fx["routes"] = [{"DestinationPrefix": "0.0.0.0/0", "NextHop": "10.0.0.1", "RouteMetric": 0, "InterfaceIndex": 4},
+                        {"DestinationPrefix": "::/0", "NextHop": "fe80::1", "RouteMetric": 256, "InterfaceIndex": 11}]
+        fx["addresses"] = [PS._ip("10.0.0.15", 4, "Ethernet0", "IPv4", 24), PS._ip("2001:db8::15", 4, "Ethernet0", "IPv6", 64),
+                           PS._ip("172.16.5.10", 11, "Team1", "IPv4", 22), PS._ip("2001:db8:1::10", 11, "Team1", "IPv6", 64)]
+        frag, _ctx, doc, _shell = _section("network", fx)
+>       assert doc["meta"]["data"]["gw"] == "10.0.0.1" and doc["meta"]["data"]["gw6"] == "fe80::1"
+E       AssertionError: assert (None == '10.0.0.1')
+
+tests/unit/test_windows_audit_2026_10_10.py:115: AssertionError
+_______ test_without_ipv6_default_route_no_ipv6_address_claims_a_gateway _______
+
+    @needs_powershell
+    def test_without_ipv6_default_route_no_ipv6_address_claims_a_gateway():
+        fx = copy.deepcopy(PS.NET_TEAM)
+        fx["routes"] = [{"DestinationPrefix": "0.0.0.0/0", "NextHop": "10.0.0.1", "RouteMetric": 0, "InterfaceIndex": 4}]
+        fx["addresses"] = [PS._ip("10.0.0.15", 4, "Ethernet0", "IPv4", 24), PS._ip("2001:db8::15", 4, "Ethernet0", "IPv6", 64)]
+        frag, _ctx, _doc, _shell = _section("network", fx)
+>       assert _addr(frag, "Ethernet0", "ipv4")["gateway"] == "10.0.0.1"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/test_windows_audit_2026_10_10.py:130: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+frag = {'_data_fragment': {'network': {'adapters': [], 'bonds': [], 'bridges': [], 'default_gateways': [], ...}}, '_errors_fr...로그를 확인하세요.', 'section': 'network'}], '_sections_collected_fragment': [], '_sections_failed_fragment': ['network'], ...}
+iface = 'Ethernet0', family = 'ipv4'
+
+    def _addr(frag, iface, family):
+>       i = next(x for x in frag["_data_fragment"]["network"]["interfaces"] if x["name"] == iface)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+tests/unit/test_windows_audit_2026_10_10.py:102: StopIteration
+_______________ test_driver_map_covers_disconnected_adapters_too _______________
+
+    @needs_powershell
+    def test_driver_map_covers_disconnected_adapters_too():
+        frag, _ctx, doc, _shell = _section("network", copy.deepcopy(PS.NET_TEAM))
+        names = [r["name"] for r in doc["driver_map"]["rows"]]
+>       assert names == ["Ethernet0", "Ethernet1", "Ethernet2", "Ethernet3", "Team1"], names   # Ethernet3 = Disconnected, Teredo = hidden
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: [None]
+E       assert [None] == ['Ethernet0',...et3', 'Team1']
+E         
+E         At index 0 diff: None != 'Ethernet0'
+E         Right contains 4 more items, first extra item: 'Ethernet1'
+E         Use -v to get more diff
+
+tests/unit/test_windows_audit_2026_10_10.py:138: AssertionError
+_ test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[2-False-baremetal] __
+
+vbs_status = 2, vbs_fail = False, expected = 'baremetal'
+
+    @needs_powershell
+    @pytest.mark.parametrize("vbs_status,vbs_fail,expected", [
+        (2, False, "baremetal"),     # VBS Running → 물리 Windows (하이퍼바이저는 VBS 의 것)
+        (0, False, "virtual"),       # VBS 꺼짐 → 종전 규칙
+        (1, False, "virtual"),       # Enabled but not running → 근거 부족, 종전 규칙
+        (None, False, "virtual"),    # 클래스 없음(Win32_DeviceGuard 미지원 OS)
+        (None, True, "virtual"),     # 조회 실패 → 판정에 쓰지 않는다
+    ])
+    def test_hosting_type_uses_vbs_only_to_rescue_physical_hosts(vbs_status, vbs_fail, expected):
+        frag, ctx, doc, _shell = _section("system", _sys_fixture(vbs_status, vbs_fail=vbs_fail), PS._SYS_FACTS)
+>       assert doc["hosting"]["ok"] and doc["hosting"]["data"]["HypervisorPresent"] == "True"
+E       AssertionError: assert (True and '' == 'True'
+E         
+E         - True)
+
+tests/unit/test_windows_audit_2026_10_10.py:172: AssertionError
+__ test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[0-False-virtual] ___
+
+vbs_status = 0, vbs_fail = False, expected = 'virtual'
+
+    @needs_powershell
+    @pytest.mark.parametrize("vbs_status,vbs_fail,expected", [
+        (2, False, "baremetal"),     # VBS Running → 물리 Windows (하이퍼바이저는 VBS 의 것)
+        (0, False, "virtual"),       # VBS 꺼짐 → 종전 규칙
+        (1, False, "virtual"),       # Enabled but not running → 근거 부족, 종전 규칙
+        (None, False, "virtual"),    # 클래스 없음(Win32_DeviceGuard 미지원 OS)
+        (None, True, "virtual"),     # 조회 실패 → 판정에 쓰지 않는다
+    ])
+    def test_hosting_type_uses_vbs_only_to_rescue_physical_hosts(vbs_status, vbs_fail, expected):
+        frag, ctx, doc, _shell = _section("system", _sys_fixture(vbs_status, vbs_fail=vbs_fail), PS._SYS_FACTS)
+>       assert doc["hosting"]["ok"] and doc["hosting"]["data"]["HypervisorPresent"] == "True"
+E       AssertionError: assert (True and '' == 'True'
+E         
+E         - True)
+
+tests/unit/test_windows_audit_2026_10_10.py:172: AssertionError
+__ test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[1-False-virtual] ___
+
+vbs_status = 1, vbs_fail = False, expected = 'virtual'
+
+    @needs_powershell
+    @pytest.mark.parametrize("vbs_status,vbs_fail,expected", [
+        (2, False, "baremetal"),     # VBS Running → 물리 Windows (하이퍼바이저는 VBS 의 것)
+        (0, False, "virtual"),       # VBS 꺼짐 → 종전 규칙
+        (1, False, "virtual"),       # Enabled but not running → 근거 부족, 종전 규칙
+        (None, False, "virtual"),    # 클래스 없음(Win32_DeviceGuard 미지원 OS)
+        (None, True, "virtual"),     # 조회 실패 → 판정에 쓰지 않는다
+    ])
+    def test_hosting_type_uses_vbs_only_to_rescue_physical_hosts(vbs_status, vbs_fail, expected):
+        frag, ctx, doc, _shell = _section("system", _sys_fixture(vbs_status, vbs_fail=vbs_fail), PS._SYS_FACTS)
+>       assert doc["hosting"]["ok"] and doc["hosting"]["data"]["HypervisorPresent"] == "True"
+E       AssertionError: assert (True and '' == 'True'
+E         
+E         - True)
+
+tests/unit/test_windows_audit_2026_10_10.py:172: AssertionError
+_ test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[None-False-virtual] _
+
+vbs_status = None, vbs_fail = False, expected = 'virtual'
+
+    @needs_powershell
+    @pytest.mark.parametrize("vbs_status,vbs_fail,expected", [
+        (2, False, "baremetal"),     # VBS Running → 물리 Windows (하이퍼바이저는 VBS 의 것)
+        (0, False, "virtual"),       # VBS 꺼짐 → 종전 규칙
+        (1, False, "virtual"),       # Enabled but not running → 근거 부족, 종전 규칙
+        (None, False, "virtual"),    # 클래스 없음(Win32_DeviceGuard 미지원 OS)
+        (None, True, "virtual"),     # 조회 실패 → 판정에 쓰지 않는다
+    ])
+    def test_hosting_type_uses_vbs_only_to_rescue_physical_hosts(vbs_status, vbs_fail, expected):
+        frag, ctx, doc, _shell = _section("system", _sys_fixture(vbs_status, vbs_fail=vbs_fail), PS._SYS_FACTS)
+>       assert doc["hosting"]["ok"] and doc["hosting"]["data"]["HypervisorPresent"] == "True"
+E       AssertionError: assert (True and '' == 'True'
+E         
+E         - True)
+
+tests/unit/test_windows_audit_2026_10_10.py:172: AssertionError
+_ test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[None-True-virtual] __
+
+vbs_status = None, vbs_fail = True, expected = 'virtual'
+
+    @needs_powershell
+    @pytest.mark.parametrize("vbs_status,vbs_fail,expected", [
+        (2, False, "baremetal"),     # VBS Running → 물리 Windows (하이퍼바이저는 VBS 의 것)
+        (0, False, "virtual"),       # VBS 꺼짐 → 종전 규칙
+        (1, False, "virtual"),       # Enabled but not running → 근거 부족, 종전 규칙
+        (None, False, "virtual"),    # 클래스 없음(Win32_DeviceGuard 미지원 OS)
+        (None, True, "virtual"),     # 조회 실패 → 판정에 쓰지 않는다
+    ])
+    def test_hosting_type_uses_vbs_only_to_rescue_physical_hosts(vbs_status, vbs_fail, expected):
+        frag, ctx, doc, _shell = _section("system", _sys_fixture(vbs_status, vbs_fail=vbs_fail), PS._SYS_FACTS)
+>       assert doc["hosting"]["ok"] and doc["hosting"]["data"]["HypervisorPresent"] == "True"
+E       AssertionError: assert (True and '' == 'True'
+E         
+E         - True)
+
+tests/unit/test_windows_audit_2026_10_10.py:172: AssertionError
+______________ test_hyperv_host_stays_baremetal_regardless_of_vbs ______________
+
+    @needs_powershell
+    def test_hyperv_host_stays_baremetal_regardless_of_vbs():
+        frag, _ctx, _doc, _shell = _section("system", _sys_fixture(0, vmms="Running"), PS._SYS_FACTS)
+>       assert _hosting_type(frag) == "baremetal"
+E       AssertionError: assert 'unknown' == 'baremetal'
+E         
+E         - baremetal
+E         + unknown
+
+tests/unit/test_windows_audit_2026_10_10.py:180: AssertionError
+_________ test_firewall_profiles_are_read_from_the_active_policy_store _________
+
+    @needs_powershell
+    def test_firewall_profiles_are_read_from_the_active_policy_store():
+        frag, _ctx, doc, shell = _section("runtime", copy.deepcopy(PS.RT_NORMAL))
+        calls = shell.results[MERGED_TASK["runtime"]]["calls"]
+        assert calls.count("Get-NetFirewallProfile -PolicyStore ActiveStore") == 1 and "Get-NetFirewallProfile" not in calls
+>       assert doc["firewall"]["ok"] and len(doc["firewall"]["rows"]) == 3
+E       AssertionError: assert (True and 1 == 3)
+E        +  where 1 = len([{'default_inbound': '', 'default_outbound': '', 'enabled': False, 'profile': None}])
+
+tests/unit/test_windows_audit_2026_10_10.py:191: AssertionError
+___________________ test_hardware_all_calls_ok_has_no_errors ___________________
+
+    @needs_powershell
+    def test_hardware_all_calls_ok_has_no_errors():
+        frag, _ctx, doc = _single("hardware", {"cim": copy.deepcopy(_HW_CIM)})
+>       assert doc["cim_errors"] == [] and doc["bios_version"] == "2.19.1" and doc["vendor"] == "Dell Inc."
+E       AssertionError: assert ([] == []
+E         
+E         Use -v to get more diff and None == '2.19.1')
+
+tests/unit/test_windows_audit_2026_10_10.py:210: AssertionError
+_ test_hardware_one_failed_cim_call_keeps_the_section_and_records_one_error[soft_fail] _
+
+mode = 'soft_fail'
+
+    @needs_powershell
+    @pytest.mark.parametrize("mode", ["soft_fail", "fail"])   # 비종료 오류(실제 CIM 공급자 방식) · 종료 오류
+    def test_hardware_one_failed_cim_call_keeps_the_section_and_records_one_error(mode):
+        cim = copy.deepcopy(_HW_CIM)
+        del cim["Win32_BIOS"]
+        frag, _ctx, doc = _single("hardware", {"cim": cim, mode: {"Win32_BIOS": "Win32_BIOS: Access denied (fixture)"}})
+>       assert doc["vendor"] == "Dell Inc." and doc["model"] == "PowerEdge R740" and doc["chassis_type"] == "Rack Mount Chassis"
+E       AssertionError: assert (None == 'Dell Inc.')
+
+tests/unit/test_windows_audit_2026_10_10.py:220: AssertionError
+_ test_hardware_one_failed_cim_call_keeps_the_section_and_records_one_error[fail] _
+
+mode = 'fail'
+
+    @needs_powershell
+    @pytest.mark.parametrize("mode", ["soft_fail", "fail"])   # 비종료 오류(실제 CIM 공급자 방식) · 종료 오류
+    def test_hardware_one_failed_cim_call_keeps_the_section_and_records_one_error(mode):
+        cim = copy.deepcopy(_HW_CIM)
+        del cim["Win32_BIOS"]
+        frag, _ctx, doc = _single("hardware", {"cim": cim, mode: {"Win32_BIOS": "Win32_BIOS: Access denied (fixture)"}})
+>       assert doc["vendor"] == "Dell Inc." and doc["model"] == "PowerEdge R740" and doc["chassis_type"] == "Rack Mount Chassis"
+E       AssertionError: assert (None == 'Dell Inc.')
+
+tests/unit/test_windows_audit_2026_10_10.py:220: AssertionError
+___ test_hardware_every_cim_call_failed_is_the_existing_section_failure_only ___
+
+    @needs_powershell
+    def test_hardware_every_cim_call_failed_is_the_existing_section_failure_only():
+        fails = {k: f"{k}: RPC server unavailable (fixture)" for k in _HW_CIM}
+        frag, _ctx, doc = _single("hardware", {"cim": {}, "soft_fail": fails})
+>       assert len(doc["cim_errors"]) == 4
+E       assert 0 == 4
+E        +  where 0 = len([])
+
+tests/unit/test_windows_audit_2026_10_10.py:237: AssertionError
+_____________________ test_cpu_complete_counts_are_summed ______________________
+
+    @needs_powershell
+    def test_cpu_complete_counts_are_summed():
+        frag, _ctx, doc = _single("cpu", {"cim": {"Win32_Processor": [_proc("CPU1"), _proc("CPU2")]}})
+>       assert (doc["sockets"], doc["cores"], doc["logical"], doc["counts_incomplete"]) == (2, 48, 96, False)
+E       assert (0, None, None, False) == (2, 48, 96, False)
+E         
+E         At index 0 diff: 0 != 2
+E         Use -v to get more diff
+
+tests/unit/test_windows_audit_2026_10_10.py:258: AssertionError
+_____ test_cpu_missing_count_on_one_socket_gives_null_total_and_one_error ______
+
+    @needs_powershell
+    def test_cpu_missing_count_on_one_socket_gives_null_total_and_one_error():
+        frag, _ctx, doc = _single("cpu", {"cim": {"Win32_Processor": [_proc("CPU1"), _proc("CPU2", cores=None, logical=None)]}})
+>       assert doc["sockets"] == 2 and doc["cores"] is None and doc["logical"] is None and doc["counts_incomplete"] is True
+E       assert (0 == 2)
+
+tests/unit/test_windows_audit_2026_10_10.py:266: AssertionError
+__________________ test_cpu_only_logical_missing_keeps_cores ___________________
+
+    @needs_powershell
+    def test_cpu_only_logical_missing_keeps_cores():
+        frag, _ctx, doc = _single("cpu", {"cim": {"Win32_Processor": [_proc("CPU1"), _proc("CPU2", logical=None)]}})
+>       assert doc["cores"] == 48 and doc["logical"] is None and doc["counts_incomplete"] is True
+E       assert (None == 48)
+
+tests/unit/test_windows_audit_2026_10_10.py:280: AssertionError
+________ test_disk_total_prefers_physical_disk_size_over_geometry_size _________
+
+    @needs_powershell
+    def test_disk_total_prefers_physical_disk_size_over_geometry_size():
+        fx = copy.deepcopy(PS.STOR_SINGLE)
+        fx["pdisks"][0]["Size"] = 1000204886016                       # MSFT_PhysicalDisk.Size (실제)
+        fx["cim"]["Win32_DiskDrive"][0]["Size"] = 1000202273280        # Win32_DiskDrive.Size (기하값 — 작다)
+        frag, _ctx, doc, _shell = _section("storage", fx)
+>       assert doc["disks"]["rows"][0]["total"] == 1000204886016
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/unit/test_windows_audit_2026_10_10.py:296: IndexError
+_ test_disk_total_falls_back_to_win32_diskdrive_when_physical_disk_has_no_size _
+
+    @needs_powershell
+    def test_disk_total_falls_back_to_win32_diskdrive_when_physical_disk_has_no_size():
+        fx = copy.deepcopy(PS.STOR_SINGLE)
+        fx["cim"]["Win32_DiskDrive"][0]["Size"] = 1000202273280
+        frag, _ctx, doc, _shell = _section("storage", fx)
+        assert "Size" not in fx["pdisks"][0]
+>       assert doc["disks"]["rows"][0]["total"] == 1000202273280
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/unit/test_windows_audit_2026_10_10.py:306: IndexError
+_________________ test_single_element_collections_stay_arrays __________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+
+    def test_single_element_collections_stay_arrays(runs):
+        mem = json.loads(_doc(runs, "memory", "single")["stdout_lines"][0])
+>       assert isinstance(mem["slots"]["rows"], list) and len(mem["slots"]["rows"]) == 1
+E       assert (True and 0 == 1)
+E        +  where True = isinstance([], list)
+E        +  and   0 = len([])
+
+tests/unit/test_windows_call_consolidation_powershell.py:492: AssertionError
+______________ test_null_and_missing_values_survive_as_json_null _______________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+
+    def test_null_and_missing_values_survive_as_json_null(runs):
+        mem = json.loads(_doc(runs, "memory", "normal")["stdout_lines"][0])
+>       vm = next(r for r in mem["slots"]["rows"] if r["slot"] == "RAM slot #0")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+tests/unit/test_windows_call_consolidation_powershell.py:509: StopIteration
+__________________ test_component_failure_is_isolated[memory] __________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'memory'
+
+    @pytest.mark.parametrize("section", list(FAILURES))
+    def test_component_failure_is_isolated(runs, section):
+        res = _doc(runs, section, "fail")
+        assert res["rc"] == 0, "구성요소 실패가 스크립트 전체를 멈췄다"
+        doc = json.loads([ln for ln in res["stdout_lines"] if ln.strip()][0])
+        expected = FAILURES[section]
+        for key, item in doc.items():
+            if key in expected:
+>               assert item["ok"] is False and expected[key] in item["error"], (key, item)
+E               AssertionError: ('read_physical_memory', {'data': None, 'error': None, 'ok': True, 'rows': []})
+E               assert (True is False)
+
+tests/unit/test_windows_call_consolidation_powershell.py:527: AssertionError
+__________________ test_component_failure_is_isolated[system] __________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'system'
+
+    @pytest.mark.parametrize("section", list(FAILURES))
+    def test_component_failure_is_isolated(runs, section):
+        res = _doc(runs, section, "fail")
+        assert res["rc"] == 0, "구성요소 실패가 스크립트 전체를 멈췄다"
+        doc = json.loads([ln for ln in res["stdout_lines"] if ln.strip()][0])
+        expected = FAILURES[section]
+        for key, item in doc.items():
+            if key in expected:
+>               assert item["ok"] is False and expected[key] in item["error"], (key, item)
+E               AssertionError: ('read_operating_system', {'data': None, 'error': None, 'ok': True, 'rows': []})
+E               assert (True is False)
+
+tests/unit/test_windows_call_consolidation_powershell.py:527: AssertionError
+_________________ test_component_failure_is_isolated[network] __________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'network'
+
+    @pytest.mark.parametrize("section", list(FAILURES))
+    def test_component_failure_is_isolated(runs, section):
+        res = _doc(runs, section, "fail")
+        assert res["rc"] == 0, "구성요소 실패가 스크립트 전체를 멈췄다"
+        doc = json.loads([ln for ln in res["stdout_lines"] if ln.strip()][0])
+        expected = FAILURES[section]
+        for key, item in doc.items():
+            if key in expected:
+>               assert item["ok"] is False and expected[key] in item["error"], (key, item)
+E               AssertionError: ('interfaces', {'data': None, 'error': None, 'ok': True, 'rows': []})
+E               assert (True is False)
+
+tests/unit/test_windows_call_consolidation_powershell.py:527: AssertionError
+_________________ test_component_failure_is_isolated[runtime] __________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'runtime'
+
+    @pytest.mark.parametrize("section", list(FAILURES))
+    def test_component_failure_is_isolated(runs, section):
+        res = _doc(runs, section, "fail")
+        assert res["rc"] == 0, "구성요소 실패가 스크립트 전체를 멈췄다"
+        doc = json.loads([ln for ln in res["stdout_lines"] if ln.strip()][0])
+        expected = FAILURES[section]
+        for key, item in doc.items():
+            if key in expected:
+>               assert item["ok"] is False and expected[key] in item["error"], (key, item)
+E               AssertionError: ('firewall', {'data': None, 'error': None, 'ok': True, 'rows': [{'default_inbound': '', 'default_outbound': '', 'enabled': False, 'profile': None}]})
+E               assert (True is False)
+
+tests/unit/test_windows_call_consolidation_powershell.py:527: AssertionError
+_________________ test_component_failure_is_isolated[storage] __________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'storage'
+
+    @pytest.mark.parametrize("section", list(FAILURES))
+    def test_component_failure_is_isolated(runs, section):
+        res = _doc(runs, section, "fail")
+        assert res["rc"] == 0, "구성요소 실패가 스크립트 전체를 멈췄다"
+        doc = json.loads([ln for ln in res["stdout_lines"] if ln.strip()][0])
+        expected = FAILURES[section]
+        for key, item in doc.items():
+            if key in expected:
+>               assert item["ok"] is False and expected[key] in item["error"], (key, item)
+E               AssertionError: ('read_disk_drives', {'data': None, 'error': None, 'ok': True, 'rows': []})
+E               assert (True is False)
+
+tests/unit/test_windows_call_consolidation_powershell.py:527: AssertionError
+_____________ test_failed_component_does_not_empty_its_neighbours ______________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+
+    def test_failed_component_does_not_empty_its_neighbours(runs):
+        net = json.loads(_doc(runs, "network", "fail")["stdout_lines"][0])
+        assert net["interfaces"]["rows"] == []
+>       assert net["meta"]["data"]["gw"] == "10.0.0.1" and net["driver_map"]["rows"] and net["adapters"]["rows"]
+E       AssertionError: assert (None == '10.0.0.1')
+
+tests/unit/test_windows_call_consolidation_powershell.py:535: AssertionError
+_____ test_old_and_new_powershell_render_identical_fragments[memory-fail] ______
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'memory', name = 'fail'
+
+    @pytest.mark.parametrize("section,name", list(SCENARIOS))
+    def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
+        """통합 직전 per-call 스크립트와 같은 fragment — 그 뒤 의도적으로 바꾼 값(위 INTENDED_*, 결함 ID · 날짜 명시)만 기대값에 반영한다."""
+        old = runs[(section, name, "old")]
+        if old is None:
+            pytest.skip(f"통합 직전 파일({PRE_P4_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = runs[(section, name, "new")]
+        for key in FRAGMENT_KEYS:
+            expected = old["frag"][key]
+            if key == "_errors_fragment":
+                expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
+                expected = INTENDED_REPLACED_ERRORS_PS.get((section, name), expected)
+            fix = INTENDED_FRAGMENT_PS.get((section, name), {}).get(key)
+            if fix is not None:
+                expected = fix(expected)
+>           assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
+E           AssertionError: memory/fail: _errors_fragment 가 종전과 다르다
+E           assert [{'detail': '...n': 'memory'}] == [{'detail': '...n': 'memory'}]
+E             
+E             At index 0 diff: {'section': 'memory', 'message': '메모리 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'source=Win32_PhysicalMemory; cause=no_output; fallback=os_visible; rc=0'} != {'section': 'memory', 'message': '메모리 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'source=Win32_PhysicalMemory; cause=read_failed; fallback=os_visible; slots=0; error=Win32_PhysicalMemory provider failure (fixture)'}
+E             Use -v to get more diff
+
+tests/unit/test_windows_call_consolidation_powershell.py:672: AssertionError
+_ test_old_and_new_powershell_render_identical_fragments[network-two_nics_one_team] _
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'network', name = 'two_nics_one_team'
+
+    @pytest.mark.parametrize("section,name", list(SCENARIOS))
+    def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
+        """통합 직전 per-call 스크립트와 같은 fragment — 그 뒤 의도적으로 바꾼 값(위 INTENDED_*, 결함 ID · 날짜 명시)만 기대값에 반영한다."""
+        old = runs[(section, name, "old")]
+        if old is None:
+            pytest.skip(f"통합 직전 파일({PRE_P4_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = runs[(section, name, "new")]
+        for key in FRAGMENT_KEYS:
+            expected = old["frag"][key]
+            if key == "_errors_fragment":
+                expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
+                expected = INTENDED_REPLACED_ERRORS_PS.get((section, name), expected)
+            fix = INTENDED_FRAGMENT_PS.get((section, name), {}).get(key)
+            if fix is not None:
+                expected = fix(expected)
+>           assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
+E           AssertionError: network/two_nics_one_team: _data_fragment 가 종전과 다르다
+E           assert {'network': {...ys': [], ...}} == {'network': {...ys': [], ...}}
+E             
+E             Differing items:
+E             {'network': {'adapters': [], 'bonds': [], 'bridges': [], 'default_gateways': [], ...}} != {'network': {'adapters': [], 'bonds': [], 'bridges': [], 'default_gateways': [], ...}}
+E             Use -v to get more diff
+
+tests/unit/test_windows_call_consolidation_powershell.py:672: AssertionError
+___ test_old_and_new_powershell_render_identical_fragments[network-no_team] ____
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'network', name = 'no_team'
+
+    @pytest.mark.parametrize("section,name", list(SCENARIOS))
+    def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
+        """통합 직전 per-call 스크립트와 같은 fragment — 그 뒤 의도적으로 바꾼 값(위 INTENDED_*, 결함 ID · 날짜 명시)만 기대값에 반영한다."""
+        old = runs[(section, name, "old")]
+        if old is None:
+            pytest.skip(f"통합 직전 파일({PRE_P4_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = runs[(section, name, "new")]
+        for key in FRAGMENT_KEYS:
+            expected = old["frag"][key]
+            if key == "_errors_fragment":
+                expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
+                expected = INTENDED_REPLACED_ERRORS_PS.get((section, name), expected)
+            fix = INTENDED_FRAGMENT_PS.get((section, name), {}).get(key)
+            if fix is not None:
+                expected = fix(expected)
+>           assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
+E           AssertionError: network/no_team: _data_fragment 가 종전과 다르다
+E           assert {'network': {...ys': [], ...}} == {'network': {...ys': [], ...}}
+E             
+E             Differing items:
+E             {'network': {'adapters': [], 'bonds': [], 'bridges': [], 'default_gateways': [], ...}} != {'network': {'adapters': [], 'bonds': [], 'bridges': [], 'default_gateways': [], ...}}
+E             Use -v to get more diff
+
+tests/unit/test_windows_call_consolidation_powershell.py:672: AssertionError
+_____ test_old_and_new_powershell_render_identical_fragments[network-fail] _____
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'network', name = 'fail'
+
+    @pytest.mark.parametrize("section,name", list(SCENARIOS))
+    def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
+        """통합 직전 per-call 스크립트와 같은 fragment — 그 뒤 의도적으로 바꾼 값(위 INTENDED_*, 결함 ID · 날짜 명시)만 기대값에 반영한다."""
+        old = runs[(section, name, "old")]
+        if old is None:
+            pytest.skip(f"통합 직전 파일({PRE_P4_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = runs[(section, name, "new")]
+        for key in FRAGMENT_KEYS:
+            expected = old["frag"][key]
+            if key == "_errors_fragment":
+                expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
+                expected = INTENDED_REPLACED_ERRORS_PS.get((section, name), expected)
+            fix = INTENDED_FRAGMENT_PS.get((section, name), {}).get(key)
+            if fix is not None:
+                expected = fix(expected)
+>           assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
+E           AssertionError: network/fail: _data_fragment 가 종전과 다르다
+E           assert {'network': {...ys': [], ...}} == {'network': {...ys': [], ...}}
+E             
+E             Differing items:
+E             {'network': {'adapters': [], 'bonds': [], 'bridges': [], 'default_gateways': [], ...}} != {'network': {'adapters': [], 'bonds': [], 'bridges': [], 'default_gateways': [], ...}}
+E             Use -v to get more diff
+
+tests/unit/test_windows_call_consolidation_powershell.py:672: AssertionError
+_____ test_old_and_new_powershell_render_identical_fragments[storage-fail] _____
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+section = 'storage', name = 'fail'
+
+    @pytest.mark.parametrize("section,name", list(SCENARIOS))
+    def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
+        """통합 직전 per-call 스크립트와 같은 fragment — 그 뒤 의도적으로 바꾼 값(위 INTENDED_*, 결함 ID · 날짜 명시)만 기대값에 반영한다."""
+        old = runs[(section, name, "old")]
+        if old is None:
+            pytest.skip(f"통합 직전 파일({PRE_P4_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = runs[(section, name, "new")]
+        for key in FRAGMENT_KEYS:
+            expected = old["frag"][key]
+            if key == "_errors_fragment":
+                expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
+                expected = INTENDED_REPLACED_ERRORS_PS.get((section, name), expected)
+            fix = INTENDED_FRAGMENT_PS.get((section, name), {}).get(key)
+            if fix is not None:
+                expected = fix(expected)
+>           assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
+E           AssertionError: storage/fail: _errors_fragment 가 종전과 다르다
+E           assert [{'detail': '...': 'storage'}] == [{'detail': '...': 'storage'}]
+E             
+E             Right contains one more item: {'detail': 'source=Win32_DiskDrive,Get-PhysicalDisk; cause=component_failed; parts=read_disk_drives; disks=0', 'message': '스토리지 정보 중 물리 디스크 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.', 'section': 'storage'}
+E             Use -v to get more diff
+
+tests/unit/test_windows_call_consolidation_powershell.py:672: AssertionError
+_____________________ test_old_scripts_really_ran_per_call _____________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+
+    def test_old_scripts_really_ran_per_call(runs):
+        """비교가 헛돌지 않게: 종전 체인은 호출을 따로따로 했고, 실패 시나리오에서 종전 rc 가 1 이었다."""
+        old = runs[("network", "two_nics_one_team", "old")]
+        if old is None:
+            pytest.skip("git 이력 없음")
+        assert len([t for t in iter_tasks(yaml.safe_load(old_text("network")))
+                    if "ansible.windows.win_shell" in t]) == len(old["shell"].results) == 5
+        fw = runs[("runtime", "fail", "old")]["shell"].results["windows | runtime | firewall profiles"]
+>       assert fw["rc"] == 1 and fw["stdout"].strip() == ""                     # 마지막 문장의 종료 오류 → rc 1
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert (0 == 1)
+
+tests/unit/test_windows_call_consolidation_powershell.py:696: AssertionError
+_____________________ test_snapshot_reads_each_source_once _____________________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+
+    def test_snapshot_reads_each_source_once(runs):
+        calls = _calls(runs[("network", "two_nics_one_team", "new")], MERGED_TASK["network"])
+        assert calls.count("Get-NetRoute") == 1
+        assert calls.count("Get-NetIPAddress") == 1
+        assert calls.count("Get-DnsClientServerAddress") == 1
+        assert calls.count("Get-NetAdapter") == 1 and calls.count("Get-NetAdapter -Physical") == 1
+        assert not [c for c in calls if "-InterfaceIndex" in c], calls
+        old = runs[("network", "two_nics_one_team", "old")]
+        if old is not None:
+            old_calls = [c for r in old["shell"].results.values() for c in r["calls"]]
+            assert old_calls.count("Get-NetRoute") == 3                       # meta 2 + interfaces 1
+>           assert old_calls.count("Get-NetAdapter -InterfaceIndex") == 5     # 걸러지지 않은 주소마다
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: assert 0 == 5
+E            +  where 0 = <built-in method count of list object at 0x7927cf1463c0>('Get-NetAdapter -InterfaceIndex')
+E            +    where <built-in method count of list object at 0x7927cf1463c0> = ['Get-NetRoute', 'Get-NetRoute', 'Get-DnsClientServerAddress', 'Get-NetRoute', 'Get-NetIPAddress', 'Get-NetAdapter', ...].count
+
+tests/unit/test_windows_call_consolidation_powershell.py:720: AssertionError
+_________ test_storage_120_inputs_through_powershell_match_live_output _________
+
+runs = {('memory', 'fail', 'new'): {'ctx': {'_data_fragment': {'memory': {'free_mb': None, 'installed_mb': None, 'slots': [],...iled_fragment': [], ...}, 'shell': <test_windows_call_consolidation_powershell.PsShell object at 0x7927cfaa00b0>}, ...}
+
+    def test_storage_120_inputs_through_powershell_match_live_output(runs):
+        frag = runs[("storage", "host_120", "new")]["frag"]
+        got = frag["_data_fragment"]["storage"]
+        ev = _evidence()["storage"]
+        for key in ("physical_disks", "summary", "filesystems", "hbas", "infiniband"):
+>           assert got[key] == ev[key], f"storage.{key}"
+E           AssertionError: storage.physical_disks
+E           assert [] == [{'device': '...': True, ...}]
+E             
+E             Right contains 2 more items, first extra item: {'device': '\\\\.\\PHYSICALDRIVE1', 'health': 'OK', 'id': '\\\\.\\PHYSICALDRIVE1', 'is_os_disk': False, ...}
+E             Use -v to get more diff
+
+tests/unit/test_windows_call_consolidation_powershell.py:740: AssertionError
+________________ test_users_script_reports_its_failures[normal] ________________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'normal'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       AssertionError: assert [None] == ['Administrat... 'svc_backup']
+E         
+E         At index 0 diff: None != 'Administrator'
+E         Right contains one more item: 'svc_backup'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+_____________ test_users_script_reports_its_failures[list_partial] _____________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'list_partial'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       AssertionError: assert [None] == ['Administrator']
+E         
+E         At index 0 diff: None != 'Administrator'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+____________ test_users_script_reports_its_failures[list_immediate] ____________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'list_immediate'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       assert [None] == []
+E         
+E         Left contains one more item: None
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+_____________ test_users_script_reports_its_failures[member_error] _____________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'member_error'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       AssertionError: assert [None] == ['svc_backup']
+E         
+E         At index 0 diff: None != 'svc_backup'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+__________ test_users_script_reports_its_failures[member_terminating] __________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'member_terminating'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       AssertionError: assert [None] == ['Administrat... 'svc_backup']
+E         
+E         At index 0 diff: None != 'Administrator'
+E         Right contains one more item: 'svc_backup'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+___________ test_users_script_reports_its_failures[group_list_error] ___________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'group_list_error'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       AssertionError: assert [None] == ['svc_backup']
+E         
+E         At index 0 diff: None != 'svc_backup'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+_____________ test_users_script_reports_its_failures[win32_normal] _____________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'win32_normal'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       AssertionError: assert [None] == ['svc_backup']
+E         
+E         At index 0 diff: None != 'svc_backup'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+______________ test_users_script_reports_its_failures[win32_fail] ______________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'win32_fail'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+        assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+>       assert [u["name"] for u in r["frag"]["_data_fragment"]["users"]] == names
+E       assert [None] == []
+E         
+E         Left contains one more item: None
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:405: AssertionError
+___________ test_users_script_reports_its_failures[command_missing] ____________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'command_missing'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_script_reports_its_failures(user_runs, name):
+        _, _, names, sections, messages, rc_new, _ = USER_CASES[name]
+        r = user_runs[(name, "new")]
+>       assert r["run"]["rc"] == rc_new, r["run"]["stderr"][-600:]
+E       AssertionError: __x000A_</S><S S="Error">��ġ ��:3 ����:39_x000D__x000A_</S><S S="Error">+ $script:__fx = $env:SE_TEST_FIXTURE | ConvertFrom-Json_x000D__x000A_</S><S S="Error">+                                       ~~~~~~~~~~~~~~~~_x000D__x000A_</S><S S="Error">    + CategoryInfo          : InvalidData: (:) [ConvertFrom-Json], ParameterBindingValidationException_x000D__x000A_</S><S S="Error">    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.ConvertFrom _x000D__x000A_</S><S S="Error">   JsonCommand_x000D__x000A_</S><S S="Error"> _x000D__x000A_</S></Objs>
+E       assert 0 == 1
+
+tests/unit/test_windows_hidden_failures.py:404: AssertionError
+________ test_users_data_is_unchanged_from_the_old_script[list_partial] ________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'list_partial'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_data_is_unchanged_from_the_old_script(user_runs, name):
+        """사용자 · 그룹 데이터는 종전과 같다. 종전 스크립트는 어떤 실패도 기록하지 않았다(목록 실패는 종료 코드 1 뿐)."""
+        old = user_runs[(name, "old")]
+        if old is None:
+            pytest.skip(f"종전 파일({PRE_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = user_runs[(name, "new")]
+        assert new["frag"]["_data_fragment"] == old["frag"]["_data_fragment"]
+>       assert old["run"]["rc"] == USER_CASES[name][6], old["run"]["stderr"][-600:]
+E       AssertionError: __x000A_</S><S S="Error">��ġ ��:3 ����:39_x000D__x000A_</S><S S="Error">+ $script:__fx = $env:SE_TEST_FIXTURE | ConvertFrom-Json_x000D__x000A_</S><S S="Error">+                                       ~~~~~~~~~~~~~~~~_x000D__x000A_</S><S S="Error">    + CategoryInfo          : InvalidData: (:) [ConvertFrom-Json], ParameterBindingValidationException_x000D__x000A_</S><S S="Error">    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.ConvertFrom _x000D__x000A_</S><S S="Error">   JsonCommand_x000D__x000A_</S><S S="Error"> _x000D__x000A_</S></Objs>
+E       assert 0 == 1
+
+tests/unit/test_windows_hidden_failures.py:419: AssertionError
+_______ test_users_data_is_unchanged_from_the_old_script[list_immediate] _______
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'list_immediate'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_data_is_unchanged_from_the_old_script(user_runs, name):
+        """사용자 · 그룹 데이터는 종전과 같다. 종전 스크립트는 어떤 실패도 기록하지 않았다(목록 실패는 종료 코드 1 뿐)."""
+        old = user_runs[(name, "old")]
+        if old is None:
+            pytest.skip(f"종전 파일({PRE_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = user_runs[(name, "new")]
+        assert new["frag"]["_data_fragment"] == old["frag"]["_data_fragment"]
+>       assert old["run"]["rc"] == USER_CASES[name][6], old["run"]["stderr"][-600:]
+E       AssertionError: __x000A_</S><S S="Error">��ġ ��:3 ����:39_x000D__x000A_</S><S S="Error">+ $script:__fx = $env:SE_TEST_FIXTURE | ConvertFrom-Json_x000D__x000A_</S><S S="Error">+                                       ~~~~~~~~~~~~~~~~_x000D__x000A_</S><S S="Error">    + CategoryInfo          : InvalidData: (:) [ConvertFrom-Json], ParameterBindingValidationException_x000D__x000A_</S><S S="Error">    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.ConvertFrom _x000D__x000A_</S><S S="Error">   JsonCommand_x000D__x000A_</S><S S="Error"> _x000D__x000A_</S></Objs>
+E       assert 0 == 1
+
+tests/unit/test_windows_hidden_failures.py:419: AssertionError
+_________ test_users_data_is_unchanged_from_the_old_script[win32_fail] _________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'win32_fail'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_data_is_unchanged_from_the_old_script(user_runs, name):
+        """사용자 · 그룹 데이터는 종전과 같다. 종전 스크립트는 어떤 실패도 기록하지 않았다(목록 실패는 종료 코드 1 뿐)."""
+        old = user_runs[(name, "old")]
+        if old is None:
+            pytest.skip(f"종전 파일({PRE_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = user_runs[(name, "new")]
+        assert new["frag"]["_data_fragment"] == old["frag"]["_data_fragment"]
+>       assert old["run"]["rc"] == USER_CASES[name][6], old["run"]["stderr"][-600:]
+E       AssertionError: __x000A_</S><S S="Error">��ġ ��:3 ����:39_x000D__x000A_</S><S S="Error">+ $script:__fx = $env:SE_TEST_FIXTURE | ConvertFrom-Json_x000D__x000A_</S><S S="Error">+                                       ~~~~~~~~~~~~~~~~_x000D__x000A_</S><S S="Error">    + CategoryInfo          : InvalidData: (:) [ConvertFrom-Json], ParameterBindingValidationException_x000D__x000A_</S><S S="Error">    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.ConvertFrom _x000D__x000A_</S><S S="Error">   JsonCommand_x000D__x000A_</S><S S="Error"> _x000D__x000A_</S></Objs>
+E       assert 0 == 1
+
+tests/unit/test_windows_hidden_failures.py:419: AssertionError
+______ test_users_data_is_unchanged_from_the_old_script[command_missing] _______
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'command_missing'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name", list(USER_CASES))
+    def test_users_data_is_unchanged_from_the_old_script(user_runs, name):
+        """사용자 · 그룹 데이터는 종전과 같다. 종전 스크립트는 어떤 실패도 기록하지 않았다(목록 실패는 종료 코드 1 뿐)."""
+        old = user_runs[(name, "old")]
+        if old is None:
+            pytest.skip(f"종전 파일({PRE_SHA[:8]}) 을 git 으로 읽을 수 없다")
+        new = user_runs[(name, "new")]
+        assert new["frag"]["_data_fragment"] == old["frag"]["_data_fragment"]
+>       assert old["run"]["rc"] == USER_CASES[name][6], old["run"]["stderr"][-600:]
+E       AssertionError: __x000A_</S><S S="Error">��ġ ��:3 ����:39_x000D__x000A_</S><S S="Error">+ $script:__fx = $env:SE_TEST_FIXTURE | ConvertFrom-Json_x000D__x000A_</S><S S="Error">+                                       ~~~~~~~~~~~~~~~~_x000D__x000A_</S><S S="Error">    + CategoryInfo          : InvalidData: (:) [ConvertFrom-Json], ParameterBindingValidationException_x000D__x000A_</S><S S="Error">    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.ConvertFrom _x000D__x000A_</S><S S="Error">   JsonCommand_x000D__x000A_</S><S S="Error"> _x000D__x000A_</S></Objs>
+E       assert 0 == 1
+
+tests/unit/test_windows_hidden_failures.py:419: AssertionError
+______________ test_old_script_hid_list_failures_as_not_supported ______________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+
+    @needs_powershell
+    def test_old_script_hid_list_failures_as_not_supported(user_runs):
+        """종전: 목록을 한 명도 못 읽으면 '미지원', 일부만 읽으면 '성공' — 둘 다 기록 없음 (이번 수정의 이유)."""
+        if user_runs[("list_immediate", "old")] is None:
+            pytest.skip("git 이력 없음")
+>       assert _sections(user_runs[("list_immediate", "old")]["ctx"]) == ([], [], ["users"])
+E       AssertionError: assert (['users'], [], []) == ([], [], ['users'])
+E         
+E         At index 0 diff: ['users'] != []
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:428: AssertionError
+________________ test_users_list_failure_detail_names_the_query ________________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+
+    @needs_powershell
+    def test_users_list_failure_detail_names_the_query(user_runs):
+>       assert [e["detail"] for e in user_runs[("list_immediate", "new")]["frag"]["_errors_fragment"]] == [
+            "cause=command_failed; listed=0; error=Get-LocalUser: Access is denied. (fixture)"]
+E       AssertionError: assert [] == ['cause=comma...d. (fixture)']
+E         
+E         Right contains one more item: 'cause=command_failed; listed=0; error=Get-LocalUser: Access is denied. (fixture)'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:435: AssertionError
+_ test_users_group_failure_detail_names_the_failed_groups[member_error-Administrators] _
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'member_error', groups = 'Administrators'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name,groups", [("member_error", "Administrators"), ("member_terminating", "Users"),
+                                             ("group_list_error", "Get-LocalGroup")])
+    def test_users_group_failure_detail_names_the_failed_groups(user_runs, name, groups):
+        """실패한 그룹 이름은 사용자마다 반복 조회돼도 한 번만 남는다(그룹 목록 자체가 실패하면 Get-LocalGroup)."""
+>       assert [e["detail"] for e in user_runs[(name, "new")]["frag"]["_errors_fragment"]] == [
+            f"source=Get-LocalGroup,Get-LocalGroupMember; cause=command_failed; groups={groups}; "
+            "effect=builtin_admin_may_be_omitted"]
+E       AssertionError: assert [] == ['source=Get-...y_be_omitted']
+E         
+E         Right contains one more item: 'source=Get-LocalGroup,Get-LocalGroupMember; cause=command_failed; groups=Administrators; effect=builtin_admin_may_be_omitted'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:448: AssertionError
+_ test_users_group_failure_detail_names_the_failed_groups[member_terminating-Users] _
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'member_terminating', groups = 'Users'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name,groups", [("member_error", "Administrators"), ("member_terminating", "Users"),
+                                             ("group_list_error", "Get-LocalGroup")])
+    def test_users_group_failure_detail_names_the_failed_groups(user_runs, name, groups):
+        """실패한 그룹 이름은 사용자마다 반복 조회돼도 한 번만 남는다(그룹 목록 자체가 실패하면 Get-LocalGroup)."""
+>       assert [e["detail"] for e in user_runs[(name, "new")]["frag"]["_errors_fragment"]] == [
+            f"source=Get-LocalGroup,Get-LocalGroupMember; cause=command_failed; groups={groups}; "
+            "effect=builtin_admin_may_be_omitted"]
+E       AssertionError: assert [] == ['source=Get-...y_be_omitted']
+E         
+E         Right contains one more item: 'source=Get-LocalGroup,Get-LocalGroupMember; cause=command_failed; groups=Users; effect=builtin_admin_may_be_omitted'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:448: AssertionError
+_ test_users_group_failure_detail_names_the_failed_groups[group_list_error-Get-LocalGroup] _
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+name = 'group_list_error', groups = 'Get-LocalGroup'
+
+    @needs_powershell
+    @pytest.mark.parametrize("name,groups", [("member_error", "Administrators"), ("member_terminating", "Users"),
+                                             ("group_list_error", "Get-LocalGroup")])
+    def test_users_group_failure_detail_names_the_failed_groups(user_runs, name, groups):
+        """실패한 그룹 이름은 사용자마다 반복 조회돼도 한 번만 남는다(그룹 목록 자체가 실패하면 Get-LocalGroup)."""
+>       assert [e["detail"] for e in user_runs[(name, "new")]["frag"]["_errors_fragment"]] == [
+            f"source=Get-LocalGroup,Get-LocalGroupMember; cause=command_failed; groups={groups}; "
+            "effect=builtin_admin_may_be_omitted"]
+E       AssertionError: assert [] == ['source=Get-...y_be_omitted']
+E         
+E         Right contains one more item: 'source=Get-LocalGroup,Get-LocalGroupMember; cause=command_failed; groups=Get-LocalGroup; effect=builtin_admin_may_be_omitted'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:448: AssertionError
+_______________ test_group_queries_really_failed_in_the_fixture ________________
+
+user_runs = {('command_missing', 'new'): {'ctx': {'_data_fragment': {'users': [{'groups': [], 'home': None, 'last_access_time': No...S></Objs>', 'stdout': '{"name":null,"uid":null,"groups":"","home":null,"is_system":false,"last":null}\r\n', ...}}, ...}
+
+    @needs_powershell
+    def test_group_queries_really_failed_in_the_fixture(user_runs):
+        """비교가 헛돌지 않게: 그룹 실패 시나리오에서 가짜 cmdlet 이 실제로 불렸다."""
+        calls = user_runs[("member_terminating", "new")]["run"]["calls"]
+>       assert "Get-LocalGroupMember Users" in calls and "Get-LocalGroup" in calls
+E       AssertionError: assert ('Get-LocalGroupMember Users' in ['Get-LocalUser', 'Get-LocalGroup'])
+
+tests/unit/test_windows_hidden_failures.py:457: AssertionError
+_ test_system_script_records_computer_system_failure[Win32_ComputerSystem-True] _
+
+fail = 'Win32_ComputerSystem', expect_error = True
+
+    @needs_powershell
+    @pytest.mark.parametrize("fail,expect_error", [(None, False), ("Win32_ComputerSystem", True)])
+    def test_system_script_records_computer_system_failure(fail, expect_error):
+        fixture = copy.deepcopy(PS.SYS_NORMAL)
+        if fail:
+            fixture["fail"] = {fail: f"{fail}: RPC server is unavailable (fixture)"}
+        frag, ctx = run_chain(new_text("system"), dict(PS._SYS_FACTS), PS.PsShell("system", fixture))
+        assert frag["_sections_collected_fragment"] == ["system"]
+        errs = [e for e in frag["_errors_fragment"] if e["message"] == SYS_PARTS]
+        if not expect_error:
+            assert ctx["_w_sys_parts_failed"] == [] and errs == []
+            return
+>       assert "read_computer_system" in ctx["_w_sys_parts_failed"]
+E       AssertionError: assert 'read_computer_system' in []
+
+tests/unit/test_windows_hidden_failures.py:473: AssertionError
+_ test_system_records_non_terminating_cim_failures[Win32_ComputerSystem-read_computer_system] _
+
+cls = 'Win32_ComputerSystem', part = 'read_computer_system'
+
+    @needs_powershell
+    @pytest.mark.parametrize("cls,part", [("Win32_ComputerSystem", "read_computer_system"),
+                                          ("Win32_OperatingSystem", "read_operating_system")])
+    def test_system_records_non_terminating_cim_failures(cls, part):
+        fixture = copy.deepcopy(PS.SYS_NORMAL)
+        fixture["soft_fail"] = {cls: f"{cls}: Invalid class (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("system"), dict(PS._SYS_FACTS), SoftCimShell("system", fixture))
+>       assert ctx["_w_sys_parts_failed"] == [part]
+E       AssertionError: assert [] == ['read_computer_system']
+E         
+E         Right contains one more item: 'read_computer_system'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:524: AssertionError
+_ test_system_records_non_terminating_cim_failures[Win32_OperatingSystem-read_operating_system] _
+
+cls = 'Win32_OperatingSystem', part = 'read_operating_system'
+
+    @needs_powershell
+    @pytest.mark.parametrize("cls,part", [("Win32_ComputerSystem", "read_computer_system"),
+                                          ("Win32_OperatingSystem", "read_operating_system")])
+    def test_system_records_non_terminating_cim_failures(cls, part):
+        fixture = copy.deepcopy(PS.SYS_NORMAL)
+        fixture["soft_fail"] = {cls: f"{cls}: Invalid class (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("system"), dict(PS._SYS_FACTS), SoftCimShell("system", fixture))
+>       assert ctx["_w_sys_parts_failed"] == [part]
+E       AssertionError: assert [] == ['read_operating_system']
+E         
+E         Right contains one more item: 'read_operating_system'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:524: AssertionError
+____________ test_storage_records_non_terminating_disk_read_failure ____________
+
+    @needs_powershell
+    def test_storage_records_non_terminating_disk_read_failure():
+        fixture = copy.deepcopy(PS.STOR_120)
+        fixture["soft_fail"] = {"Win32_DiskDrive": "Win32_DiskDrive: Provider load failure (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("storage"), {}, SoftCimShell("storage", fixture))
+>       assert ctx["_w_stor_parts_failed"] == ["read_disk_drives"]
+E       AssertionError: assert [] == ['read_disk_drives']
+E         
+E         Right contains one more item: 'read_disk_drives'
+E         Use -v to get more diff
+
+tests/unit/test_windows_hidden_failures.py:535: AssertionError
+_ test_hyperv_service_query_distinguishes_absent_state_and_failure[services1-None-True-False] _
+
+services = {'vmms': {'Status': 'Running'}}, fail = None, role = 'True'
+hosting_failed = False
+
+    @needs_powershell
+    @pytest.mark.parametrize("services,fail,role,hosting_failed", [
+        ({}, None, "False", False),                                       # 서비스 없음(실제 NoServiceFoundForGivenName · ObjectNotFound)
+        ({"vmms": {"Status": "Running"}}, None, "True", False),
+        ({"vmms": {"Status": "Stopped"}}, None, "Installed", False),      # 역할은 설치돼 있다 — 멈춘 서비스를 "없음" 으로 보지 않는다
+        ({}, "Cannot open Service Control Manager on computer '.' (fixture)", "Unknown", True),
+    ])
+    def test_hyperv_service_query_distinguishes_absent_state_and_failure(services, fail, role, hosting_failed):
+        fixture = copy.deepcopy(PS.SYS_DOMAIN_HV)
+        fixture["services"] = services
+        if fail:
+            fixture.setdefault("fail", {})["Get-Service"] = fail
+        frag, ctx = run_chain(new_text("system"), dict(PS._SYS_FACTS), PS.PsShell("system", fixture))
+>       assert ctx["_w_hosting"]["HyperVRole"] == role
+E       AssertionError: assert 'False' == 'True'
+E         
+E         - True
+E         + False
+
+tests/unit/test_windows_hidden_failures.py:624: AssertionError
+_ test_hyperv_service_query_distinguishes_absent_state_and_failure[services2-None-Installed-False] _
+
+services = {'vmms': {'Status': 'Stopped'}}, fail = None, role = 'Installed'
+hosting_failed = False
+
+    @needs_powershell
+    @pytest.mark.parametrize("services,fail,role,hosting_failed", [
+        ({}, None, "False", False),                                       # 서비스 없음(실제 NoServiceFoundForGivenName · ObjectNotFound)
+        ({"vmms": {"Status": "Running"}}, None, "True", False),
+        ({"vmms": {"Status": "Stopped"}}, None, "Installed", False),      # 역할은 설치돼 있다 — 멈춘 서비스를 "없음" 으로 보지 않는다
+        ({}, "Cannot open Service Control Manager on computer '.' (fixture)", "Unknown", True),
+    ])
+    def test_hyperv_service_query_distinguishes_absent_state_and_failure(services, fail, role, hosting_failed):
+        fixture = copy.deepcopy(PS.SYS_DOMAIN_HV)
+        fixture["services"] = services
+        if fail:
+            fixture.setdefault("fail", {})["Get-Service"] = fail
+        frag, ctx = run_chain(new_text("system"), dict(PS._SYS_FACTS), PS.PsShell("system", fixture))
+>       assert ctx["_w_hosting"]["HyperVRole"] == role
+E       AssertionError: assert 'False' == 'Installed'
+E         
+E         - Installed
+E         + False
+
+tests/unit/test_windows_hidden_failures.py:624: AssertionError
+_ test_hyperv_service_query_distinguishes_absent_state_and_failure[services3-Cannot open Service Control Manager on computer '.' (fixture)-Unknown-True] _
+
+services = {}
+fail = "Cannot open Service Control Manager on computer '.' (fixture)"
+role = 'Unknown', hosting_failed = True
+
+    @needs_powershell
+    @pytest.mark.parametrize("services,fail,role,hosting_failed", [
+        ({}, None, "False", False),                                       # 서비스 없음(실제 NoServiceFoundForGivenName · ObjectNotFound)
+        ({"vmms": {"Status": "Running"}}, None, "True", False),
+        ({"vmms": {"Status": "Stopped"}}, None, "Installed", False),      # 역할은 설치돼 있다 — 멈춘 서비스를 "없음" 으로 보지 않는다
+        ({}, "Cannot open Service Control Manager on computer '.' (fixture)", "Unknown", True),
+    ])
+    def test_hyperv_service_query_distinguishes_absent_state_and_failure(services, fail, role, hosting_failed):
+        fixture = copy.deepcopy(PS.SYS_DOMAIN_HV)
+        fixture["services"] = services
+        if fail:
+            fixture.setdefault("fail", {})["Get-Service"] = fail
+        frag, ctx = run_chain(new_text("system"), dict(PS._SYS_FACTS), PS.PsShell("system", fixture))
+>       assert ctx["_w_hosting"]["HyperVRole"] == role
+E       AssertionError: assert 'False' == 'Unknown'
+E         
+E         - Unknown
+E         + False
+
+tests/unit/test_windows_hidden_failures.py:624: AssertionError
+_ test_network_non_terminating_query_failures_are_recorded[Get-NetAdapter-read_adapters] _
+
+soft = 'Get-NetAdapter', part = 'read_adapters'
+
+    @needs_powershell
+    @pytest.mark.parametrize("soft,part", [("Get-NetAdapter", "read_adapters"), ("Get-DnsClientServerAddress", "read_dns"),
+                                           ("Get-NetIPAddress", "interfaces"), ("Get-NetRoute", "read_routes")])
+    def test_network_non_terminating_query_failures_are_recorded(soft, part):
+        fixture = copy.deepcopy(PS.NET_TEAM)
+        fixture["soft_fail"] = {soft: f"{soft}: provider failure (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("network"), {}, PS.PsShell("network", fixture))
+>       assert part in ctx["_w_net_parts_failed"]
+E       AssertionError: assert 'read_adapters' in []
+
+tests/unit/test_windows_hidden_failures.py:639: AssertionError
+_ test_network_non_terminating_query_failures_are_recorded[Get-DnsClientServerAddress-read_dns] _
+
+soft = 'Get-DnsClientServerAddress', part = 'read_dns'
+
+    @needs_powershell
+    @pytest.mark.parametrize("soft,part", [("Get-NetAdapter", "read_adapters"), ("Get-DnsClientServerAddress", "read_dns"),
+                                           ("Get-NetIPAddress", "interfaces"), ("Get-NetRoute", "read_routes")])
+    def test_network_non_terminating_query_failures_are_recorded(soft, part):
+        fixture = copy.deepcopy(PS.NET_TEAM)
+        fixture["soft_fail"] = {soft: f"{soft}: provider failure (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("network"), {}, PS.PsShell("network", fixture))
+>       assert part in ctx["_w_net_parts_failed"]
+E       AssertionError: assert 'read_dns' in []
+
+tests/unit/test_windows_hidden_failures.py:639: AssertionError
+_ test_network_non_terminating_query_failures_are_recorded[Get-NetIPAddress-interfaces] _
+
+soft = 'Get-NetIPAddress', part = 'interfaces'
+
+    @needs_powershell
+    @pytest.mark.parametrize("soft,part", [("Get-NetAdapter", "read_adapters"), ("Get-DnsClientServerAddress", "read_dns"),
+                                           ("Get-NetIPAddress", "interfaces"), ("Get-NetRoute", "read_routes")])
+    def test_network_non_terminating_query_failures_are_recorded(soft, part):
+        fixture = copy.deepcopy(PS.NET_TEAM)
+        fixture["soft_fail"] = {soft: f"{soft}: provider failure (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("network"), {}, PS.PsShell("network", fixture))
+>       assert part in ctx["_w_net_parts_failed"]
+E       AssertionError: assert 'interfaces' in []
+
+tests/unit/test_windows_hidden_failures.py:639: AssertionError
+_ test_network_non_terminating_query_failures_are_recorded[Get-NetRoute-read_routes] _
+
+soft = 'Get-NetRoute', part = 'read_routes'
+
+    @needs_powershell
+    @pytest.mark.parametrize("soft,part", [("Get-NetAdapter", "read_adapters"), ("Get-DnsClientServerAddress", "read_dns"),
+                                           ("Get-NetIPAddress", "interfaces"), ("Get-NetRoute", "read_routes")])
+    def test_network_non_terminating_query_failures_are_recorded(soft, part):
+        fixture = copy.deepcopy(PS.NET_TEAM)
+        fixture["soft_fail"] = {soft: f"{soft}: provider failure (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("network"), {}, PS.PsShell("network", fixture))
+>       assert part in ctx["_w_net_parts_failed"]
+E       AssertionError: assert 'read_routes' in []
+
+tests/unit/test_windows_hidden_failures.py:639: AssertionError
+_______ test_storage_volume_query_failure_is_told_apart_from_no_volumes ________
+
+    @needs_powershell
+    def test_storage_volume_query_failure_is_told_apart_from_no_volumes():
+        fixture = copy.deepcopy(PS.STOR_120)
+        fixture["soft_fail"] = {"Get-Volume": "Get-Volume: provider failure (fixture, non-terminating)"}
+        frag, ctx = run_chain(new_text("storage"), {}, PS.PsShell("storage", fixture))
+>       assert ctx["_w_stor_volumes_failed"] in (True, "True")
+E       AssertionError: assert False in (True, 'True')
+
+tests/unit/test_windows_hidden_failures.py:659: AssertionError
+_____________________ test_ib_medium_adapter_is_collected ______________________
+
+    @needs_powershell
+    def test_ib_medium_adapter_is_collected():
+        """시나리오 12 — 물리 매체 Infiniband(11) 어댑터는 수집, 이더넷 NIC 는 아니다. 출력은 Jinja 체인까지 잇는다."""
+        doc, calls = _run_ib([INTEL_NIC, IB_HCA, ROCE_NIC])
+        rows = _ib_rows(doc)
+>       assert [r["name"] for r in rows] == ["Ethernet 5"]
+E       AssertionError: assert [] == ['Ethernet 5']
+E         
+E         Right contains one more item: 'Ethernet 5'
+E         Use -v to get more diff
+
+tests/unit/test_windows_infiniband_detection.py:216: AssertionError
+________________ test_ib_medium_display_string_alone_is_enough _________________
+
+    @needs_powershell
+    def test_ib_medium_display_string_alone_is_enough():
+        """NdisPhysicalMedium 이 비어도 PhysicalMediaType 표시값 'Infiniband'(대소문자 무시)면 수집."""
+        a = dict(IB_HCA, NdisPhysicalMedium=None, PhysicalMediaType="InfiniBand")
+        doc, _ = _run_ib([a])
+>       assert [r["name"] for r in _ib_rows(doc)] == ["Ethernet 5"]
+E       AssertionError: assert [] == ['Ethernet 5']
+E         
+E         Right contains one more item: 'Ethernet 5'
+E         Use -v to get more diff
+
+tests/unit/test_windows_infiniband_detection.py:229: AssertionError
+_______________ test_rdma_technology_infiniband_is_second_signal _______________
+
+    @needs_powershell
+    def test_rdma_technology_infiniband_is_second_signal():
+        """WinOF-2 known issue 1702662 재현: 물리 매체가 802.3 으로 보고되는 IPoIB NIC 도 RdmaTechnology=InfiniBand 면 수집 (합성 입력)."""
+        ipoib_as_8023 = _adapter("Ethernet 9", "Mellanox ConnectX-5 Adapter (IPoIB)", medium=14, media_type="802.3")
+        doc, calls = _run_ib([ipoib_as_8023, ROCE_NIC],
+                             rdma=[{"Name": "Ethernet 9", "Enabled": True, "RdmaAdapterInfo": {"RdmaTechnology": "InfiniBand"}},
+                                   {"Name": "Ethernet 7", "Enabled": True, "RdmaAdapterInfo": {"RdmaTechnology": "RoCEv2"}}])
+        rows = _ib_rows(doc)
+>       assert [(r["name"], r["evidence"]) for r in rows] == [("Ethernet 9", "rdma_technology")]
+E       AssertionError: assert [] == [('Ethernet 9..._technology')]
+E         
+E         Right contains one more item: ('Ethernet 9', 'rdma_technology')
+E         Use -v to get more diff
+
+tests/unit/test_windows_infiniband_detection.py:240: AssertionError
+____________ test_lbfo_multiplexor_is_excluded_even_with_ib_medium _____________
+
+    @needs_powershell
+    def test_lbfo_multiplexor_is_excluded_even_with_ib_medium():
+        """시나리오 14 — 팀 멀티플렉서(2026-06-22 오탐 장치)는 어떤 신호가 있어도 제외."""
+        doc, _ = _run_ib([TEAM_MUX, TEAM_MUX_IB_MEDIUM, IB_HCA],
+                         rdma=[{"Name": "LabTeam2", "Enabled": True, "RdmaAdapterInfo": {"RdmaTechnology": "InfiniBand"}}])
+>       assert [r["name"] for r in _ib_rows(doc)] == ["Ethernet 5"]
+E       AssertionError: assert [] == ['Ethernet 5']
+E         
+E         Right contains one more item: 'Ethernet 5'
+E         Use -v to get more diff
+
+tests/unit/test_windows_infiniband_detection.py:258: AssertionError
+_______________ test_disconnected_ib_adapter_is_included_as_down _______________
+
+    @needs_powershell
+    def test_disconnected_ib_adapter_is_included_as_down():
+        """시나리오 7(Windows) — 링크 끊긴 IB 어댑터도 항목이며 down, 속도는 null."""
+        doc, _ = _run_ib([IB_HCA_DOWN])
+>       e = run_storage([disk(0, protocol="SAS")], ib=doc)["storage"]["infiniband"][0]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/unit/test_windows_infiniband_detection.py:274: IndexError
+__________________ test_decimal_link_speed_through_powershell __________________
+
+    @needs_powershell
+    def test_decimal_link_speed_through_powershell():
+        """시나리오 10(Windows) — 2.5 Gbps 는 2.5 (종전 regex 가 25 로 읽던 값)."""
+        doc, _ = _run_ib([dict(IB_HCA, LinkSpeed="2.5 Gbps", ReceiveLinkSpeed=2500000000, TransmitLinkSpeed=2500000000)])
+>       e = run_storage([disk(0, protocol="SAS")], ib=doc)["storage"]["infiniband"][0]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/unit/test_windows_infiniband_detection.py:282: IndexError
+_____________________ test_disabled_ib_adapter_is_unknown ______________________
+
+    @needs_powershell
+    def test_disabled_ib_adapter_is_unknown():
+        doc, _ = _run_ib([dict(IB_HCA, Status="Disabled")])
+>       e = run_storage([disk(0, protocol="SAS")], ib=doc)["storage"]["infiniband"][0]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/unit/test_windows_infiniband_detection.py:289: IndexError
+_____________________ test_hidden_ib_adapter_is_still_seen _____________________
+
+    @needs_powershell
+    def test_hidden_ib_adapter_is_still_seen():
+        doc, _ = _run_ib([dict(IB_HCA, Hidden=True)])
+>       assert [r["name"] for r in _ib_rows(doc)] == ["Ethernet 5"]
+E       AssertionError: assert [] == ['Ethernet 5']
+E         
+E         Right contains one more item: 'Ethernet 5'
+E         Use -v to get more diff
+
+tests/unit/test_windows_infiniband_detection.py:305: AssertionError
+______________________ test_same_input_twice_is_identical ______________________
+
+    @needs_powershell
+    def test_same_input_twice_is_identical():
+        """시나리오 26(Windows)."""
+        a, _ = _run_ib([IB_HCA, IB_HCA_DOWN, ROCE_NIC])
+        b, _ = _run_ib([IB_HCA, IB_HCA_DOWN, ROCE_NIC])
+>       assert a == b and [r["name"] for r in _ib_rows(a)] == ["Ethernet 5", "Ethernet 6"]
+E       AssertionError: assert ({'ib': []} == {'ib': []}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Use -v to get more diff and [] == ['Ethernet 5', 'Ethernet 6']
+E         
+E         Right contains 2 more items, first extra item: 'Ethernet 5'
+E         Use -v to get more diff)
+
+tests/unit/test_windows_infiniband_detection.py:313: AssertionError
+______ test_physical_adapter_provider_error_is_recorded_and_rows_are_kept ______
+
+    @needs_powershell
+    def test_physical_adapter_provider_error_is_recorded_and_rows_are_kept():
+        base, _ = run_chain(new_text("network"), {}, PS.PsShell("network", copy.deepcopy(PS.NET_TEAM)))
+        fixture = copy.deepcopy(PS.NET_TEAM)
+        fixture["soft_fail"] = {"Get-NetAdapter -Physical": "physical adapter provider failed (fixture)"}
+        frag, ctx = run_chain(new_text("network"), {}, PS.PsShell("network", fixture))
+>       assert len(frag["_data_fragment"]["network"]["adapters"]) == len(base["_data_fragment"]["network"]["adapters"]) > 0
+E       assert 0 > 0
+E        +  where 0 = len([])
+
+tests/unit/test_windows_nonterminating_c8.py:60: AssertionError
+___________ test_physical_adapter_object_not_found_is_not_a_failure ____________
+
+    @needs_powershell
+    def test_physical_adapter_object_not_found_is_not_a_failure():
+        fixture = copy.deepcopy(PS.NET_TEAM)
+        shell = PS.PsShell("network", fixture)
+        shell.prelude += r'''
+    function Get-NetAdapter {
+    [CmdletBinding()] param([Parameter(Position=0)][string[]]$Name, [uint32[]]$InterfaceIndex, [switch]$Physical, [switch]$IncludeHidden)
+    $r = @(@($script:__fx.adapters) | Where-Object { $IncludeHidden -or -not $_.Hidden })
+    if ($Physical) { $r = @($r | Where-Object { $_.ConnectorPresent }); Write-Error -Message 'no hidden adapter (fixture)' -Category ObjectNotFound }
+    $r
+    }
+    '''
+        frag, ctx = run_chain(new_text("network"), {}, shell)
+>       assert ctx["_w_net_parts_failed"] == [] and frag["_errors_fragment"] == []
+E       AssertionError: assert ([] == []
+E         
+E         Use -v to get more diff and [{'detail': '...': 'network'}] == []
+E         
+E         Left contains one more item: {'detail': 'source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=0', 'message': '네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'section': 'network'}
+E         Use -v to get more diff)
+
+tests/unit/test_windows_nonterminating_c8.py:84: AssertionError
+_______________________ test_full_dimm_read_is_unchanged _______________________
+
+    @needs_powershell
+    def test_full_dimm_read_is_unchanged():
+        frag, _ = run_chain(new_text("memory"), dict(FACTS), PS.PsShell("memory", copy.deepcopy(PS.MEM_NORMAL)))
+        mem = frag["_data_fragment"]["memory"]
+        slots = [s for s in PS.MEM_NORMAL["cim"]["Win32_PhysicalMemory"]]
+>       assert len(mem["slots"]) == len(slots)
+E       AssertionError: assert 0 == 3
+E        +  where 0 = len([])
+E        +  and   3 = len([{'Capacity': 34359738368, 'ConfiguredClockSpeed': 2933, 'DeviceLocator': 'DIMM_A1', 'Manufacturer': 'Samsung', ...}, ...: 8589934592, 'ConfiguredClockSpeed': None, 'DeviceLocator': 'RAM slot #0', 'Manufacturer': 'VMware Virtual RAM', ...}])
+
+tests/unit/test_windows_nonterminating_c8.py:111: AssertionError
+_ test_partial_dimm_rows_with_provider_error_keep_slots_but_not_the_partial_total _
+
+    @needs_powershell
+    def test_partial_dimm_rows_with_provider_error_keep_slots_but_not_the_partial_total():
+        frag, ctx = run_chain(new_text("memory"), dict(FACTS), _partial_shell())
+        mem = frag["_data_fragment"]["memory"]
+        assert ctx["_w_mem_read_failed"] is True
+        assert len(mem["slots"]) == 1, "받은 DIMM 행은 보존한다"
+        assert mem["total_mb"] == 65536 and mem["total_basis"] == "os_visible" and mem["installed_mb"] is None
+>       assert len(mem["summary"]["groups"]) == 1 and mem["summary"]["grand_total_gb"] is None, "일부 슬롯 합을 전체 합계로 쓰지 않는다"
+E       AssertionError: 일부 슬롯 합을 전체 합계로 쓰지 않는다
+E       assert (0 == 1)
+E        +  where 0 = len([])
+
+tests/unit/test_windows_nonterminating_c8.py:124: AssertionError
+___________ test_full_dimm_read_failure_keeps_the_existing_fallback ____________
+
+    @needs_powershell
+    def test_full_dimm_read_failure_keeps_the_existing_fallback():
+        frag, _ = run_chain(new_text("memory"), dict(FACTS), PS.PsShell("memory", copy.deepcopy(PS.MEM_FAIL)))
+        mem = frag["_data_fragment"]["memory"]
+        assert mem["slots"] == [], "빈 행을 만들지 않는다"
+        assert mem["total_mb"] == 65536 and mem["total_basis"] == "os_visible" and mem["installed_mb"] is None
+        assert mem["summary"]["grand_total_gb"] == 64, "슬롯이 없을 때의 종전 fallback(가시량 기준)"
+        errs = frag["_errors_fragment"]
+>       assert len(errs) == 1 and "cause=read_failed" in errs[0]["detail"] and "slots=0" in errs[0]["detail"]
+E       AssertionError: assert (1 == 1 and 'cause=read_failed' in 'source=Win32_PhysicalMemory; cause=no_output; fallback=os_visible; rc=0')
+E        +  where 1 = len([{'detail': 'source=Win32_PhysicalMemory; cause=no_output; fallback=os_visible; rc=0', 'message': '메모리 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.', 'section': 'memory'}])
+
+tests/unit/test_windows_nonterminating_c8.py:142: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_dns_drops_ipv6_site_local_placeholders_and_keeps_real_servers
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_ipv6_gateway_is_attributed_to_the_ipv6_default_route_interface
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_without_ipv6_default_route_no_ipv6_address_claims_a_gateway
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_driver_map_covers_disconnected_adapters_too
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[2-False-baremetal]
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[0-False-virtual]
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[1-False-virtual]
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[None-False-virtual]
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hosting_type_uses_vbs_only_to_rescue_physical_hosts[None-True-virtual]
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hyperv_host_stays_baremetal_regardless_of_vbs
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_firewall_profiles_are_read_from_the_active_policy_store
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hardware_all_calls_ok_has_no_errors
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hardware_one_failed_cim_call_keeps_the_section_and_records_one_error[soft_fail]
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hardware_one_failed_cim_call_keeps_the_section_and_records_one_error[fail]
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_hardware_every_cim_call_failed_is_the_existing_section_failure_only
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_cpu_complete_counts_are_summed
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_cpu_missing_count_on_one_socket_gives_null_total_and_one_error
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_cpu_only_logical_missing_keeps_cores
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_disk_total_prefers_physical_disk_size_over_geometry_size
+FAILED tests/unit/test_windows_audit_2026_10_10.py::test_disk_total_falls_back_to_win32_diskdrive_when_physical_disk_has_no_size
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_single_element_collections_stay_arrays
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_null_and_missing_values_survive_as_json_null
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_component_failure_is_isolated[memory]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_component_failure_is_isolated[system]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_component_failure_is_isolated[network]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_component_failure_is_isolated[runtime]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_component_failure_is_isolated[storage]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_failed_component_does_not_empty_its_neighbours
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_old_and_new_powershell_render_identical_fragments[memory-fail]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_old_and_new_powershell_render_identical_fragments[network-two_nics_one_team]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_old_and_new_powershell_render_identical_fragments[network-no_team]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_old_and_new_powershell_render_identical_fragments[network-fail]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_old_and_new_powershell_render_identical_fragments[storage-fail]
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_old_scripts_really_ran_per_call
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_snapshot_reads_each_source_once
+FAILED tests/unit/test_windows_call_consolidation_powershell.py::test_storage_120_inputs_through_powershell_match_live_output
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[normal]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[list_partial]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[list_immediate]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[member_error]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[member_terminating]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[group_list_error]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[win32_normal]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[win32_fail]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_script_reports_its_failures[command_missing]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_data_is_unchanged_from_the_old_script[list_partial]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_data_is_unchanged_from_the_old_script[list_immediate]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_data_is_unchanged_from_the_old_script[win32_fail]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_data_is_unchanged_from_the_old_script[command_missing]
+FAILED tests/unit/test_windows_hidden_failures.py::test_old_script_hid_list_failures_as_not_supported
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_list_failure_detail_names_the_query
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_group_failure_detail_names_the_failed_groups[member_error-Administrators]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_group_failure_detail_names_the_failed_groups[member_terminating-Users]
+FAILED tests/unit/test_windows_hidden_failures.py::test_users_group_failure_detail_names_the_failed_groups[group_list_error-Get-LocalGroup]
+FAILED tests/unit/test_windows_hidden_failures.py::test_group_queries_really_failed_in_the_fixture
+FAILED tests/unit/test_windows_hidden_failures.py::test_system_script_records_computer_system_failure[Win32_ComputerSystem-True]
+FAILED tests/unit/test_windows_hidden_failures.py::test_system_records_non_terminating_cim_failures[Win32_ComputerSystem-read_computer_system]
+FAILED tests/unit/test_windows_hidden_failures.py::test_system_records_non_terminating_cim_failures[Win32_OperatingSystem-read_operating_system]
+FAILED tests/unit/test_windows_hidden_failures.py::test_storage_records_non_terminating_disk_read_failure
+FAILED tests/unit/test_windows_hidden_failures.py::test_hyperv_service_query_distinguishes_absent_state_and_failure[services1-None-True-False]
+FAILED tests/unit/test_windows_hidden_failures.py::test_hyperv_service_query_distinguishes_absent_state_and_failure[services2-None-Installed-False]
+FAILED tests/unit/test_windows_hidden_failures.py::test_hyperv_service_query_distinguishes_absent_state_and_failure[services3-Cannot open Service Control Manager on computer '.' (fixture)-Unknown-True]
+FAILED tests/unit/test_windows_hidden_failures.py::test_network_non_terminating_query_failures_are_recorded[Get-NetAdapter-read_adapters]
+FAILED tests/unit/test_windows_hidden_failures.py::test_network_non_terminating_query_failures_are_recorded[Get-DnsClientServerAddress-read_dns]
+FAILED tests/unit/test_windows_hidden_failures.py::test_network_non_terminating_query_failures_are_recorded[Get-NetIPAddress-interfaces]
+FAILED tests/unit/test_windows_hidden_failures.py::test_network_non_terminating_query_failures_are_recorded[Get-NetRoute-read_routes]
+FAILED tests/unit/test_windows_hidden_failures.py::test_storage_volume_query_failure_is_told_apart_from_no_volumes
+FAILED tests/unit/test_windows_infiniband_detection.py::test_ib_medium_adapter_is_collected
+FAILED tests/unit/test_windows_infiniband_detection.py::test_ib_medium_display_string_alone_is_enough
+FAILED tests/unit/test_windows_infiniband_detection.py::test_rdma_technology_infiniband_is_second_signal
+FAILED tests/unit/test_windows_infiniband_detection.py::test_lbfo_multiplexor_is_excluded_even_with_ib_medium
+FAILED tests/unit/test_windows_infiniband_detection.py::test_disconnected_ib_adapter_is_included_as_down
+FAILED tests/unit/test_windows_infiniband_detection.py::test_decimal_link_speed_through_powershell
+FAILED tests/unit/test_windows_infiniband_detection.py::test_disabled_ib_adapter_is_unknown
+FAILED tests/unit/test_windows_infiniband_detection.py::test_hidden_ib_adapter_is_still_seen
+FAILED tests/unit/test_windows_infiniband_detection.py::test_same_input_twice_is_identical
+FAILED tests/unit/test_windows_nonterminating_c8.py::test_physical_adapter_provider_error_is_recorded_and_rows_are_kept
+FAILED tests/unit/test_windows_nonterminating_c8.py::test_physical_adapter_object_not_found_is_not_a_failure
+FAILED tests/unit/test_windows_nonterminating_c8.py::test_full_dimm_read_is_unchanged
+FAILED tests/unit/test_windows_nonterminating_c8.py::test_partial_dimm_rows_with_provider_error_keep_slots_but_not_the_partial_total
+FAILED tests/unit/test_windows_nonterminating_c8.py::test_full_dimm_read_failure_keeps_the_existing_fallback
+81 failed, 310 passed in 95.86s (0:01:35)
+rc=1

@@ -15,7 +15,7 @@
 | 판별기 대조(독립 검증 `oracle_compare.py` 사본) | 불일치 69 — 구현 측 최종 · 독립 검증 `cmp_after.json` 과 내용이 같음(새 불일치 0) |
 | 132칸 · 처분 재집계 | 120/2/2/8 불변 · 근거 13칸 정정 / 73 = FIXED 43 · DOC 19 · OBS 11, 병기 HOLD 3 |
 | `tests/integration/test_request_budget.py` | 30 passed |
-| Tier 0 ci_gate(Linux 공식 등가 · Windows 새 clone) · 묶음별 FAIL → PASS | 아래 C9 기록 |
+| Tier 0 ci_gate(HEAD = C8 `d552ae06`) · 묶음별 FAIL → PASS | Linux 공식 등가(WSL ext4 새 clone · 격리 venv · `env -i` · pwsh 없음 · `Jenkinsfile_ci` Gate 명령) `RESULT: PASS` rc 0 — pytest 6250 passed · 183 skipped · 5 xfailed / integration 525 passed · syntax-check 3 채널 · corpus 20/20. Windows 새 clone(`core.autocrlf=true` · 전역 `MSYS_NO_PATHCONV=1`) `RESULT: PARTIAL` rc 2 — 실패 0, syntax-check 건너뜀(ansible 없음 — 설계상) · pytest 6388 passed / integration 502 passed. 묶음별(수정 전 `f92ebe6a` → 수정 후): G1 2 failed → 2 passed · G2 4 failed → 19 passed · G4 · G5 15 failed → 67 passed · G3 81 failed = 81 failed(실패 ID 같음 — 후속). **공식 runner NOT_RUN**. 동시 실행한 Windows gate 1회는 메모리 부족 중단 — 판정 제외(`tier0/tier0.md`) |
 
 ## 2026-10-27 — Redfish 2차 Mock 구현 Round WP2~WP12 + FIX 5 — 최종 측정 (구현 세션 자기 측정 · 독립 검증 전)
 

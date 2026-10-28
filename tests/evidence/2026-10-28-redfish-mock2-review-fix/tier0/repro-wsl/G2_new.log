@@ -1,0 +1,4 @@
+[repro] cwd=/home/hshwang/se-fix-20261028 head=d552ae06 python=/usr/bin/python3 pytest=pytest 9.0.3 powershell.exe=/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe fileMode=true
+...................                                                      [100%]
+19 passed in 143.73s (0:02:23)
+rc=0

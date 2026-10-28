@@ -1,0 +1,189 @@
+[repro] head=f92ebe6a autocrlf=true MSYS_NO_PATHCONV=1
+tests/fixtures/prodgen/sample.cfg CR=0
+tests/scripts/finalize_corpus_check.py CR=0
+tests/reference/redfish/mock2/SHA256SUMS CR=0
+FFFFFFFF..F.F......................................................      [100%]
+================================== FAILURES ===================================
+_____________________ test_script_behaviour[branch_main] ______________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'branch_main'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: branch_main: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+____________________ test_script_behaviour[branch_feature] ____________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'branch_feature'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: branch_feature: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_________________________ test_script_behaviour[tag] __________________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'tag'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: tag: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+______________________ test_script_behaviour[refs_heads] ______________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'refs_heads'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: refs_heads: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_____________________ test_script_behaviour[full_sha_tip] _____________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'full_sha_tip'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: full_sha_tip: rc=1 out= err=[addon] unavailable: 사용법: addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_________ test_script_behaviour[full_sha_unadvertised_uses_fallback] __________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'full_sha_unadvertised_uses_fallback'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: full_sha_unadvertised_uses_fallback: rc=1 out= err=[addon] unavailable: 사용법: addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_________________ test_script_behaviour[stale_files_removed] __________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'stale_files_removed'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: stale_files_removed: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+__________________ test_script_behaviour[short_sha_rejected] __________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'short_sha_rejected'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: short_sha_rejected: rc=1 out= err=[addon] unavailable: 사용법: addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+__________________ test_script_behaviour[missing_ref_fails] ___________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'missing_ref_fails'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: missing_ref_fails: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+______________ test_script_behaviour[ssl_verify_true_same_flow] _______________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwo...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory"), ...}
+case = 'ssl_verify_true_same_flow'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: ssl_verify_true_same_flow: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.mzwoxHbQcm/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[branch_main]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[branch_feature]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[tag] - Assert...
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[refs_heads]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[full_sha_tip]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[full_sha_unadvertised_uses_fallback]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[stale_files_removed]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[short_sha_rejected]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[missing_ref_fails]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[ssl_verify_true_same_flow]
+10 failed, 57 passed in 19.88s
+rc=1

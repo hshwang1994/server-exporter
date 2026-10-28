@@ -15,7 +15,7 @@
 - [ ] **[LOW / 후속] 루트 `tests/conftest.py` seam 가드 보고 줄의 인코딩** — UTF-8 모드가 아닌 cp949 콘솔에서는 보고 줄이 `\uXXXX` 로 escape 되어 나온다(메시지에 cp949 로 못 쓰는 '—' U+2014 포함). 가드 시험은 하위 실행을 UTF-8 로 고정해 통과(C4)했고 메시지 자체는 그대로다.
 - [ ] **[LOW / 후속] 독립 검증 부록 A 의 범위 밖 항목** — XCC3 잠재 경계(`bmc_model` 공백 + 펌웨어 AFBT/TAOT/USX), 06-bmc-010 시험 강도(문자열 존재 시험 — 렌더 · 재생 없음), 사람용 문서의 범위 이전 `docs/ai` · `tests/evidence` 참조(03-fields 기존 8건 등).
 - [ ] **[LOW / 문서] `lenovo_xcc3.yml` RedfishVersion 주석 · metadata 정리(DRIFT-032)** — 2026-06-15 캡처 근거를 확인한 뒤 펌웨어별(IHX414J 1.22 → 1.17.0 · IHX438R 2.97 → 1.22.0)로 적는다.
-- [ ] **[LOW / 정리] 이 세션 임시물** — 추출본 `C:\github\ClovirONE\mock2-fix-20261028\`, WSL `/root/se_mirrors_fix_20261028`, WSL `~/se-fix-20261028` · `~/venv-se-ci-20261028`, scratchpad 의 Windows clone.
+- [ ] **[LOW / 정리] 이 세션 임시물** — 추출본 `C:\github\ClovirONE\mock2-fix-20261028\`, WSL `/root/se_mirrors_fix_20261028`, WSL `~/se-fix-20261028` · `~/se-fix-20261028-base`(그 clone 의 worktree) · `~/venv-se-ci-20261028`, Windows clone `C:\github\ClovirONE\se-fix-20261028-win\`(new · base).
 
 ## Redfish 2차 Mock 전수 분석 (2026-10-26) — 남은 항목
 

@@ -1,0 +1,13 @@
+tests/unit/test_windows_audit_2026_10_10.py
+tests/unit/test_windows_call_consolidation_powershell.py
+tests/unit/test_windows_call_consolidation_render.py
+tests/unit/test_windows_call_consolidation_static.py
+tests/unit/test_windows_cpu_summary_collapse_r17.py
+tests/unit/test_windows_firewall_state_r19.py
+tests/unit/test_windows_hidden_failures.py
+tests/unit/test_windows_infiniband_detection.py
+tests/unit/test_windows_memory_speed_powershell.py
+tests/unit/test_windows_nonterminating_c8.py
+tests/unit/test_windows_runtime_ports_str_r18.py
+tests/unit/test_windows_storage_enum_render.py
+tests/unit/test_windows_storage_powershell_static.py

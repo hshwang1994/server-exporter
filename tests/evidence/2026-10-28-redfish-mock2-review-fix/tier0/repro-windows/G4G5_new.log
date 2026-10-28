@@ -1,0 +1,7 @@
+[repro] head=d552ae06 autocrlf=true MSYS_NO_PATHCONV=1
+tests/fixtures/prodgen/sample.cfg CR=0
+tests/scripts/finalize_corpus_check.py CR=0
+tests/reference/redfish/mock2/SHA256SUMS CR=0
+...................................................................      [100%]
+67 passed in 41.05s
+rc=0

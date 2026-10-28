@@ -1248,3 +1248,34 @@
 - 수정: 실행 중 원문 · 도구로 다시 확인해 저장소 문서에는 실측값만 넣었다(C5 `0e3bcbb3` drift 주석 · DRIFT-032 · `REVIEW_FIX_HANDOFF.md` 8절 계획 문구 정정 표)
 - 재발 방지: 계획서 · 문서의 수치는 재현 명령(도구 + 입력 경로)과 함께 적고, 집계는 `@odata.id` 기준 중복 제거 도구로만 낸다
 - 관련 rule: rule 25 R7-B · rule 96 R4 · rule 70 R3
+
+## 2026-10-28 — Tier 0 재검증 · 증거 기록 중 실행 실수 5건: 무거운 실행 겹침 · 260자 넘는 clone 경로 · checkout 줄 끝 · 해시 기준 · 확인 없이 실행한 문서 명령 (실행 환경 · 증거 무결성)
+
+- 카테고리: execution-environment · evidence-integrity (실행 계획 · 도구 사용 실수 — 제품 결함 아님)
+- 발견 위치: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(`tier0/windows-clone-aborted-oom/` · `tier0/repro-windows/*_mixed_checkout.log` · `*_run1.log` · `REVIEW_FIX_HANDOFF.md` 6절)
+- 증상:
+  - (1) Windows 전체 gate 를 WSL gate 와 겹쳐 돌렸고, WSL gate 가 끝나자 WSL 재현을 또 겹쳐 시작했다. 23초 뒤 시스템 메모리가 부족해져 Claude Code 가 두 백그라운드 작업을 멈췄다(여유 약 3.9 GB / 32 GB). 바깥 셸만 멈춰 남은 하위 프로세스는 AI 가 직접 멈췄다
+  - 멈춘 지점까지 Windows gate 는 하위 프로세스(git · bash · PowerShell)를 쓰는 시험 12파일에서 F 20 · E 31 을 냈다. 메모리 압박 탓으로 **추정**한다 — 실패 메시지가 담긴 JUnit 이 쓰이기 전에 멈췄다. 같은 조건으로 그중 4파일을 따로 돌리면 43건 모두 통과했고, 순차 재실행은 실패 0 이었다(중단 실행은 판정 제외)
+  - (2) clone 을 scratchpad 아래에 두어 경로가 260자를 넘었고 checkout 이 실패했다(`Filename too long`)
+  - (3) 수정 전 base clone 이 브랜치 HEAD 를 먼저 풀고 `f92ebe6a` 로 옮겼다. blob 이 같은 파일은 줄 끝이 LF 로 남아 G5 가 재현되지 않았다(10 failed — G4 만)
+  - (4) C7 핸드오프 6절 sha256 표 11행을 Windows Python 이 쓴 작업 트리 파일(CRLF)로 계산하고, 머리말에는 "저장소 blob(LF) 기준" 이라고 적었다. 문서가 적은 방법(`git show HEAD:<경로> | sha256sum`)으로 다시 계산하면 맞지 않았다
+  - (5) (4)를 고치며 문서의 bash 명령을 awk 로 뽑아 바로 실행했는데, 범위를 잘못 잡아 4절 명령 묶음 앞부분이 돌았다. 실행된 `wsl … prep_mirrors.sh` 는 경로 변환 탓에 "No such file" 로 끝났고, Tier 1 명령은 문법 오류로 실행되지 않았다 — 변화 0(WSL `/root` 확인)
+- 원인:
+  - 실행 계획에 동시 실행 메모리 예산이 없었다. 재발이다 — 2026-10-15 에도 전체 pytest 를 WSL gate 와 동시에 돌리다 같은 이유로 중단됐다(TEST_HISTORY "2026-10-15 — Redfish HBA 누락 보완" 절)
+  - Windows 경로 길이 한계를 미리 계산하지 않았다
+  - `checkout` 이 바뀌지 않은 blob 을 다시 쓰지 않는다는 점을 놓쳤다
+  - `core.autocrlf=true` 에서는 작업 트리 파일과 blob 의 줄 끝이 다를 수 있는데 해시 계산에 반영하지 않았고, 적은 방법으로 다시 계산해 보지 않았다
+  - 문서에서 뽑은 명령을 출력해 확인하지 않고 실행했다
+- 수정:
+  - 사용자 결정(순차 재실행)에 따라 한 번에 하나씩 다시 돌렸다. 결과는 독립 검증 수(Windows 15 · WSL 87)와 같게 재현됐다
+  - clone 을 `C:/github/ClovirONE/se-fix-20261028-win/` 로 옮겼다
+  - base clone 을 `--no-checkout` 뒤 기준 커밋 checkout 으로 바꿨다(`tools/tier0_win.sh`)
+  - 6절 표를 C7 blob 기준으로 다시 계산해 고치고, 묶음 해시는 어느 checkout 에서나 같은 명령으로 적었다(C9). `tier0/tier0.md` 의 해시 대상은 LF 파일이라 처음부터 blob 과 같다
+- 재발 방지:
+  - 전체 gate · 전체 pytest 가 도는 동안에는 다른 pytest · gate 실행(WSL 포함)을 시작하지 않는다. 짧은 재현도 마찬가지다 — 이번 중단은 몇 분짜리 재현을 겹친 지 23초 만에 왔다
+  - Windows clone 경로는 (추적 파일 최장 경로 + 루트 길이) < 260 을 먼저 확인한다
+  - 수정 전 · 후 비교용 checkout 은 `--no-checkout` clone 이나 `git worktree add <기준 커밋>` 으로 처음부터 푼다
+  - 재현이 기대와 다르면(G5 미재현) 코드보다 재현 조건부터 의심한다
+  - 증거 해시는 blob(`git show :<경로>` 또는 `HEAD:<경로>`)으로 계산하고, 문서에 적은 방법으로 한 번 다시 계산해 맞는지 확인한 뒤 커밋한다
+  - 문서 · 로그에서 뽑은 명령은 먼저 출력해 범위를 확인한 뒤 실행한다
+- 관련 rule: rule 25 R7-A · rule 24 R1 · rule 70 R3
