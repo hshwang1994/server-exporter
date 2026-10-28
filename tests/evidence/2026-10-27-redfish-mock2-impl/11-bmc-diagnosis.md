@@ -46,5 +46,11 @@
 | 06-bmc-007 | DOC_CORRECTED (WP8 `diagnosis.details` Redfish 키 · `account_service {}` + WP11 `write_demoted_by_device`) |
 | 06-bmc-008 | FIXED (WP1 — seam 복원) |
 | 06-bmc-009 | DOC_CORRECTED (WP8 `bmc.uuid` help) |
-| 06-bmc-010 | FIXED (합성 익명 성공 재생 테스트) |
+| 06-bmc-010 | FIXED (`site.yml` · `collect_standard.yml` 배선 문자열 존재 시험 — 렌더 · 재생 없음; 2026-10-28 정정, 종전 '합성 익명 성공 재생 테스트') |
 | FIX 10 | VALIDATED_EXISTING (`data.users` 불변 + 고정 테스트) |
+
+## 2026-10-28 정정 (독립 검증 부록 A)
+
+| 위치 | 이전 | 정정 | 근거 |
+|---|---|---|---|
+| 5절 06-bmc-010 | 합성 익명 성공 재생 테스트 | 배선 문자열 존재 시험(렌더 · 재생 없음) | `tests/unit/test_redfish_bmc_diagnosis_wp11.py::test_site_marks_anonymous_success_as_auth_success_null` 는 `site.yml` 의 `auth_success` 식과 `collect_standard.yml` 의 `role: "anonymous"` 문자열만 본다. 렌더 · 재생 시험 보강은 후속(별도 승인) |

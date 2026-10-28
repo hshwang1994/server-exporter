@@ -7,13 +7,13 @@
 
 | # | 규칙 | 구현 | 실측 근거 |
 |---|---|---|---|
-| (a) | 호스트 `PowerState == Off` → notice 1건 "호스트 전원 Off 관측 — 저장/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음". 섹션 status 불변 | `gather_system` 이 ComputerSystem 응답의 PowerState 를 기존 out dict(`bios_link_out`)에 기록 → `_collect_all_sections` 끝에서 1회 | dl380_gen12_03 `Systems/1.PowerState: Off` |
+| (a) | 호스트 `PowerState == Off` → notice 1건 "호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음"(2026-10-28 '네트워크' 추가 — 6절). 섹션 status 불변 | `gather_system` 이 ComputerSystem 응답의 PowerState 를 기존 out dict(`bios_link_out`)에 기록 → `_collect_all_sections` 끝에서 1회 | dl380_gen12_03 `Systems/1.PowerState: Off` |
 | (b) | Memory 멤버가 **Status 없음 ∧ CapacityMiB 0/None ∧ Manufacturer·PartNumber·SerialNumber 전부 비어 있음** → 빈 슬롯으로 제외 + notice "빈 DIMM 슬롯 N개 제외 (…)". 값이 하나라도 있으면 종전대로 보존(0 MiB 도 보존), `State=Absent` 는 종전 분기 | `gather_memory` | dl380_gen12_03 `Memory/proc1dimm11` 등 16건(DeviceLocator 만 있음) |
 | (c) | `State=Absent` PSU 의 `PowerCapacityWatts 0` → null, `FirmwareVersion ""/"0.00"` → null (state·health 유지). Absent 가 아니면 불변. legacy `/Power` 의 PSU 합 폴백도 Absent 제외(신 경로 D-07 과 같은 규칙) | `_psu_absent_placeholders_to_none` — `gather_power`(legacy) · `_gather_power_subsystem`(신) 양쪽 | dl380_gen12_03 PSU ×2 `Absent / 0 / "0.00"`; gen12_01/02/04 PSU#2 `UnavailableOffline`(Absent 아님) 은 1600/"2.00" 그대로 |
 | (d) | 온도·팬에 `Status.State` 가 있고 `Enabled` 가 아니면 reading → null (state·upper_critical 유지). **Status 가 없는 센서는 그대로**(CSUS ThermalMetrics 47~63건) | `_sensor_reading_if_enabled` — legacy Thermal temps/fans · ThermalSubsystem temps/fans; CSUS-R11 RPM join 은 Enabled(또는 Status 없음) 팬에만 | dl380_gen12_03 42/6 UnavailableOffline 0; gen12_01 Absent 7 건 0; `Enabled` 인데 0 인 센서 2건은 측정값으로 보존 |
 | (e) | 전원 Off 에서 Storage 멤버 0 → 별도 처리 없음, (a) 문장이 맥락을 준다. placeholder 생성 0(`controllers []`, `fc_hbas []`) | — | dl380_gen12_03 `Systems/1/Storage Members 0` |
 
-- 바꾸지 않은 것: `PowerControl[0].PowerCapacityWatts 1600`(BMC 가 준 값), `power_consumed_watts 0`, PSU 항목 자체(Absent 2건은 목록에 남아 state 로 보인다), `memory.total_mib`(빈 슬롯은 0 이었다). PCIeFunctions 보강은 OBSERVATION.
+- 바꾸지 않은 것: `PowerControl[0].PowerCapacityWatts 1600`(BMC 가 준 값), `power_consumed_watts 0`, PSU 항목 자체(Absent 2건은 목록에 남아 state 로 보인다), `memory.total_mib`(빈 슬롯은 0 이었다). PCIeFunctions 보강은 HOLD(03-storage-001 (b) — 5절과 표기 통일, 2026-10-28).
 
 ## 2. 테스트
 
@@ -39,10 +39,24 @@
 
 | 이슈 | 처분 | 근거 |
 |---|---|---|
-| 03-storage-001 (a) 전원 Off 신호 | FIXED(notice) | (a)·(e) — storage/network 에 placeholder 를 만들지 않고 system notice 로 맥락 |
+| 03-storage-001 (a) 전원 Off 신호 | FIXED(notice) | (a)·(e) — storage/network 에 placeholder 를 만들지 않고 system notice 로 맥락. 2026-10-28 정정(F-03): 종전 문구는 network 를 빼 network 맥락을 주지 못했다 → '네트워크' 추가. network 값은 종전과 같다 |
 | 03-storage-001 (b) controllers 보강 | **HOLD** | 사용자 결정 필요(Plan §6) |
 | 02-memory-001 | FIXED | (b), G-04 |
 | 05-power-001 | FIXED | (c), G-05 — PSU 항목은 남고(state Absent) placeholder 값만 null |
 | 05-thermal-002 | FIXED | (d), G-06 |
 | 05-thermal-001 (reading 부분) | FIXED(부분) | (d), G-07~08 — Absent 항목 제외 + 건수 notice 는 WP6 |
 | 04-firmware-009 | OBSERVATION_ONLY | 전원 Off 스냅샷의 `updateable` 은 raw 그대로 — 변경 없음 |
+
+## 6. 2026-10-28 정정 (독립 검증 F-03 · 03-storage-001 (a))
+
+- 원 이슈는 "storage/network 신호 없음", 분석 제안 문구는 "저장/네트워크 인벤토리가 비어 있을 수 있음" 인데 notice 문구가 network 를 뺐다. 그런데 132칸 dl380_gen12_03 network 칸을
+  이 notice 를 근거로 ISSUE → PASS 로 올렸다(독립 검증 FAIL). 사용자 결정(2026-10-28 Q2)으로 문구에 '네트워크' 를 넣었다(`ac368a4b`) — 조건(PowerState Off) · section `system` · 건수는 그대로.
+- 새 Tier 1(`../2026-10-28-redfish-mock2-review-fix/tier1-A`) dl380_gen12_03 notice: `호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음` 1건, 다른 17 label 0건.
+  network 값은 before = after(`interfaces` 4 · `ports` 4 — 어댑터 DA000004 · DA000007 각 2포트, link 전부 `unknown`). 같은 MAC 포트가 있어도 포트 link 가 `unknown` 이라
+  F-01 보충(03-network-002)은 일어나지 않는다.
+
+| 위치 | 이전 | 정정 |
+|---|---|---|
+| 1절 (a) notice 문구 | 저장/메모리/전원/온도 | 저장/네트워크/메모리/전원/온도 |
+| 1절 아래 '바꾸지 않은 것' | PCIeFunctions 보강은 OBSERVATION | HOLD(03-storage-001 (b)) |
+| 5절 03-storage-001 (a) 근거 | network 맥락이 있다고 적음 | 문구 정정 뒤에야 network 맥락 — network 값 불변 |

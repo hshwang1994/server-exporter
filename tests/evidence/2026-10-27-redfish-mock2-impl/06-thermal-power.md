@@ -9,7 +9,7 @@
 | 05-thermal-001 | `Status.State == Absent` 온도 센서/팬은 **항목을 두지 않는다** + notice 1건 "Absent 센서 N건 제외 (온도 n · 팬 m) — 미장착 슬롯". Status 없음(CSUS)·UnavailableOffline(전원 Off)은 Absent 가 아니다(WP3 규칙으로 reading null) | `_sensor_is_absent` · `_notice_absent_sensors` — legacy `/Thermal` 와 `ThermalSubsystem` 양쪽 |
 | 05-power-002 | PSU 의 입력 전력/전압 **키가 있고 값이 0** 이면 관측 notice 1건 "전원 공급 장치 <Name>[<MemberId>]: 입력 전력 0 W / 입력 전압 0 V 관측". 키 없음·null 은 무시, Absent 슬롯 제외. `psu_active`·`state` 불변, "AC 입력 없음" 같은 인과는 적지 않는다(03-fields 6.5 로) | `_psu_zero_input_notice` — legacy(`LineInputVoltage`·`PowerInputWatts`) · 신 경로(`Metrics.InputPowerWatts/InputVoltage.Reading`) |
 | 05-power-007 | 소비전력 폴백 순서 **EnvironmentMetrics → TelemetryService → PSU `Metrics.OutputPowerWatts` 합(DC 출력) → PSU `Metrics.InputPowerWatts` 합(AC 입력)**. "~24% 높음" 주석은 1대 1시점 비교였으므로 정의 차이만 남김 | `_gather_power_subsystem` |
-| 05-thermal-003 | ThermalSubsystem: 이름 폴백 `DeviceName → Name → DataSourceUri 마지막 세그먼트`; 팬 `SpeedPercent.Reading` 없고 `SpeedPercent.SpeedRPM` 있으면 RPM. 18 label 미발동 — 합성 fixture 만 | `_gather_thermal_subsystem` |
+| 05-thermal-003 | ThermalSubsystem: (a) 이름 폴백 `DeviceName → Name → DataSourceUri 마지막 세그먼트`; (c) 팬 `SpeedPercent.Reading` 없고 `SpeedPercent.SpeedRPM` 있으면 RPM. 18 label 미발동 — 합성 fixture 만. (b) `DataSourceUri` → Sensor GET 으로 health/state/upper_critical 보충은 **구현하지 않았다**(HOLD — 2026-10-28 정정, 아래 절) | `_gather_thermal_subsystem` |
 | 05-thermal-004 | 음수 "온도"(Lenovo `CPUn DTS TMargin`, CSUS `P*_THROT_OFFSET`) — **OBSERVATION_ONLY**, 값 보존(계약 6.7 각주는 WP8) | 변경 0 |
 
 ## 2. 테스트
@@ -36,5 +36,18 @@ DL380 4세트 `data.thermal.temperatures[]` 52·56·44·54 → **43·49·36·46*
 | 05-thermal-001 | FIXED (Absent 항목 제외 + 건수 notice; WP3 의 reading null 규칙과 합쳐 완료) |
 | 05-power-002 | FIXED (관측 notice — 인과 해석 없음) |
 | 05-power-007 | FIXED (폴백 순서 · 주석 정정; 18 label 소비전력 값 불변) |
-| 05-thermal-003 | FIXED (합성 검증 — 실장비 미발동) |
+| 05-thermal-003 | FIXED (a)(c)(합성 검증 — 실장비 미발동) + HOLD (b)(Sensor GET 보충 미구현 — 2026-10-28 정정) |
 | 05-thermal-004 | OBSERVATION_ONLY |
+
+## 2026-10-28 정정 (독립 검증 F-02 · 05-thermal-003)
+
+- 원 제안 3종 중 (a) 이름 폴백 · (c) `SpeedRPM` 폴백만 구현됐고 (b) `DataSourceUri` → Sensor GET 보충은 없다(`DataSourceUri` 는 이름 폴백에만 쓰인다). 승인된 계획 WP6 범위가 (a)(c) 였는데
+  처분표 · 이 문서 · NEXT_ACTIONS 어디에도 (b) 잔여가 없었다(독립 검증 FAIL).
+- (b) 를 지금 구현하지 않는 근거(미러 재집계 2026-10-28): CSUS 7대의 ThermalMetrics 온도 `DataSourceUri` 고유 377개(63/47/47/47/47/63/63, 팬 0) — 새 GET +377(사용자 승인 대상).
+  그 Sensor 본문 377개는 전부 미러에 있으나 `Status` · `Thresholds` 값이 하나도 없어 채워질 값이 0이다. iLO 7 ThermalMetrics 는 `DataSourceUri` 가 없고 legacy Thermal 11대는 무관.
+- 재개 조건: Sensor 에 Status/Thresholds 값이 있는 실장비 캡처 + 요청 예산 사용자 승인. 코드 변경 0.
+
+| 위치 | 이전 | 정정 |
+|---|---|---|
+| 1절 05-thermal-003 | 구현 서술만 | (a)(c) 구현 · (b) 미구현 HOLD 명시 |
+| 5절 처분 | FIXED (합성 검증) | FIXED (a)(c) + HOLD (b) |

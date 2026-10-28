@@ -1,0 +1,8 @@
+# Tier 1 산출 중 저장소에 두지 않는 것 (mirror_replay/README.md 2절): 봉투 중복·입력·PID·인증 evidence
+tier1-*/*/ansible_stdout.log
+tier1-*/*/ansible_stderr.log
+tier1-*/*/gather_checkpoint.jsonl
+tier1-*/*/.inventory_input.json
+tier1-*/*/.gather_limit_hosts
+tier1-*/*/server.pid
+tier1-*/*/gather_auth_evidence/

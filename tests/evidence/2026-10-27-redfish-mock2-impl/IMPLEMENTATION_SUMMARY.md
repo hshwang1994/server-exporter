@@ -40,12 +40,13 @@
 | Tier 2 최종(`tier2_replay.py`, 18 label) | 18/18 success · golden 보유 15 label GOLDEN_KEYS 차이 0 | `tier2-final/_vs_golden.md` |
 | 개수 정합(디스크·FC 포트) | 18/18 PASS · UNEXPLAINED 0 | `inventory-parity.md` |
 | INV-5(interfaces 에 FC/8옥텟 주소 없음) | 위반 0 · interfaces 수 불변(WP5 이후) | `tier1-final` |
-| 132칸 재판정 | **PASS 120 · ISSUE 2 · MOCK_LIMITATION 2 · N/A 8**(ISSUE 2 = dl380_gen12_03 storage/firmware — 03-storage-001 (b) HOLD 의 같은 원인; MOCK 2 = csus3200_01/03 storage 포트 단위 링크) | `coverage-132-after.md` |
+| 132칸 재판정 | **PASS 120 · ISSUE 2 · MOCK_LIMITATION 2 · N/A 8**(ISSUE 2 = dl380_gen12_03 storage/firmware — 03-storage-001 (b) HOLD 의 같은 원인; MOCK 2 = csus3200_01/03 storage 포트 단위 링크; 2026-10-28 재대조 — 수 불변, dl380_gen12_03 network · DL380/SR650 system 칸 근거 정정) | `coverage-132-after.md` |
 
 ## 4. 호출자가 볼 변화 (envelope)
 
 - **유일한 비-Additive**: Redfish `data.cpu.logical_threads` 키 소멸(top + `multi_node.partitions[].cpu`; OS/ESXi 는 그대로 — FIX 1). `schema/examples` · `output_examples` · baseline 4종에서도 제거.
-- 값이 채워지는 기존 키: `cpu.manufacturer`(FIX 2) · `hardware.bios_date`(Lenovo) · `bmc.timezone`(iLO 7) · `network.interfaces[].mtu` · `memory.slots[].rank_count`(CSUS) · `hardware.oem.machine_type/led_indicator`(Lenovo) · `hardware.health`(Rollup 폴백 — 18 label 값 불변).
+- Redfish 봉투에 새로 생긴 키: `cpu.manufacturer`(FIX 2 — 사전에는 OS/ESXi 항목으로 있던 키, 수정 전 Redfish 봉투 18개에는 키 자체가 없었다; 2026-10-28 분류 정정).
+- 값이 채워지는 기존 키: `hardware.bios_date`(Lenovo) · `bmc.timezone`(iLO 7) · `network.interfaces[].mtu` · `memory.slots[].rank_count`(CSUS) · `hardware.oem.machine_type/led_indicator`(Lenovo) · `hardware.health`(Rollup 폴백 — 18 label 값 불변).
 - 새 키(원천이 있을 때만 모듈이 내고 최종 JSON 은 항상 키): `storage.physical_disks[].wwn` · `cpu.summary.groups[].l2_cache_kb/l3_cache_kb` · `network.interfaces[].addresses[]` family ipv6(실측 0건).
 - 항목 수·값 변화: 빈 DIMM 제외(dl380_gen12_03 32 → 16) · Absent 센서 제외(DL380 4 label) · 비-Enabled 센서 reading null · Absent PSU capacity/firmware null · 빈 `-Pending` firmware 제외(Lenovo) · XCC3 FC 주소 NIC 제외(interfaces 9 → 5 등) · ports `CurrentLinkSpeedMbps 0` → null(Dell) · firmware category 재분류(Lenovo UEFI → bios · PSoC → backplane · HPM/SCM-FPGA/PLD → cpld · HPE MR4xxi → storage_controller · Embedded Video → other · FC HBA → other) · CSUS composition count 0 → null · PSU model 공백 제거 · locator `"23"` → `"DIMM 23"`.
 - 메타·진단: Lenovo XCC3 `meta.adapter_id = redfish_lenovo_xcc3`, notice 추가(전원 Off · 제외 건수 · 입력 0 관측 · bios_date 폴백 · FC HBA 카드 조건), `auth_success` 는 익명 수집 성공 시 null(18 label 은 true), `diagnosis.details.account_service.write_demoted_by_device`(복구 경로에서만).
@@ -53,7 +54,7 @@
 
 ## 5. 처분 집계 · 남은 것
 
-- 73건: FIXED 43 · DOC_CORRECTED 19 · OBSERVATION_ONLY 11(+ 병기 MOCK_LIMITATION 2 · VALIDATED_EXISTING 1 · **HOLD 1 = 03-storage-001 (b) controllers 보강 — 사용자 결정**). 전부 `ISSUE_DISPOSITION.md`.
+- 73건: FIXED 43 · DOC_CORRECTED 19 · OBSERVATION_ONLY 11(+ 병기 MOCK_LIMITATION 2 · VALIDATED_EXISTING 1 · **HOLD 1 = 03-storage-001 (b) controllers 보강 — 사용자 결정**). 전부 `ISSUE_DISPOSITION.md`. 2026-10-28 정정 뒤 HOLD 3(+ 05-thermal-003 (b) · 03-network-002 잔여 2 NIC — 독립 검증 F-01 · F-02).
 - 실장비 미검증: 전부 Mock 재생(HTTPS 미러 + 실제 playbook)이다. 실장비에서만 확인되는 것 — CSUS FC 포트 단위 링크(03-storage-004), Lenovo 복구 경로(401 → Family 세대, 06-bmc-001), RMC `@Redfish.WriteableProperties` repair 거동(06-bmc-002), iLO DateTime 실시간 값, 전원 Off 인과(C2).
 - 하지 않은 것: `main` 병합 · `production` 승격 · 실장비 접속 · 새 의존성 · `schema/output_examples/redfish_hpe_csus_3200.jsonc` 실측 구조 재작성(주석 예시 유지, OBSERVATION) · PCIeFunctions 로 controllers 보강(HOLD).
 - 다음: 새 Fable 세션 독립 검증(`INDEPENDENT_REVIEW_HANDOFF.md`) → 사용자 승인 → `main` 병합 방식 결정 → `prodgen` 승격.

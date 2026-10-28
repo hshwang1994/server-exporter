@@ -222,7 +222,7 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname='yicesxmgmt05' (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname='yicesxmgmt05' (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "PASS",
@@ -284,7 +284,7 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "PASS",
@@ -346,12 +346,12 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "전원 Off notice 있음 · interfaces 4 (03-storage-001 (a))"
+    "evidence": "전원 Off notice 에 '네트워크' 포함(2026-10-28 R3 `ac368a4b` — 새 Tier 1 봉투) · interfaces 4(link unknown) · adapters 2 · ports 4 — network 값은 before = after, 칸 근거는 notice 문구 (03-storage-001 (a); 2026-10-28 근거 교체)"
    },
    "storage": {
     "before": "ISSUE",
@@ -408,7 +408,7 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "PASS",
@@ -470,12 +470,12 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "PASS",
     "state": "PASS",
-    "evidence": "(종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5"
+    "evidence": "(종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 4건(03-network-002, 2026-10-28 — 칸 판정 기준 밖)"
    },
    "storage": {
     "before": "PASS",
@@ -532,12 +532,12 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5"
+    "evidence": "interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 3건(03-network-002, 2026-10-28 — 칸 판정 기준 밖) · 링크 미확정 1 NIC 잔여(NIC6 — 03-network-002 HOLD)"
    },
    "storage": {
     "before": "PASS",
@@ -594,12 +594,12 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "interfaces 11 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=11"
+    "evidence": "interfaces 11 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=11 · link 보충 10건(03-network-002, 2026-10-28 — 칸 판정 기준 밖)"
    },
    "storage": {
     "before": "PASS",
@@ -656,12 +656,12 @@
    "system": {
     "before": "ISSUE",
     "state": "PASS",
-    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
+    "evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)"
    },
    "network": {
     "before": "PASS",
     "state": "PASS",
-    "evidence": "(종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5"
+    "evidence": "(종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 3건(03-network-002, 2026-10-28 — 칸 판정 기준 밖) · 링크 미확정 1 NIC 잔여(NIC4 — 03-network-002 HOLD)"
    },
    "storage": {
     "before": "PASS",

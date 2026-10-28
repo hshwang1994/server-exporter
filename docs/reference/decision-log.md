@@ -115,7 +115,7 @@
 - **결정(사용자, Q1)**: HBA 가 `up` 인 값은 포트 단위 표준 링크 값(`LinkUp` · 구 NetworkPort `Up` · 종전부터 적혀 있던 `Connected`)뿐이다. `Enabled` · `Active` 는 표준 `Port.LinkStatus` 에서
   링크 의미가 불명이라 `down` + notice `링크 상태 값 미확정`(원문 포함)이다. 벤더 OEM 의 **포트별** 필드가 실제 Link Up 을 뜻한다는 근거(벤더 문서, 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가
   확인되면 그때 별도로 정규화한다 — 카드 단위 값은 대상이 아니다. 네트워크 정규화(`network.*.link_status`)는 바꾸지 않는다: 같은 FC 포트가 `network.ports[]` 에서는 `up`, `storage.hbas[]` 에서는
-  `down` 일 수 있다(의도된 차이 — Mock 18대 · 저장소 fixture 에 `Enabled`/`Active`/`Connected` 출현 0).
+  `down` 일 수 있다(의도된 차이 — Mock 18대 · 저장소 fixture 의 `LinkStatus` 값에 `Enabled`/`Active`/`Connected` 출현 0; `Connected` 는 Lenovo BIOS 속성 값으로만 나온다).
 - **결정(사용자, Q2)**: 전원 Off notice 문구에 '네트워크' 를 넣는다 — `호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음`(조건 · section · 건수 불변).
 - **결정(코드 규칙, F-01)**: Redfish `network.interfaces[]` 의 NIC 자체 `link_status` 가 없으면(unknown) 같은 MAC 을 가진 `network.ports[]` 들의 `link_status` 가 **하나의 값(up 또는 down)으로 일치할
   때만** 그 값으로 채운다. NIC 자체 값은 덮지 않고, 포트끼리 다르거나 짝 포트가 없으면 unknown 그대로다(HBA 의 down 정책을 쓰지 않는다). `speed_mbps` 는 같은 경우(NIC 링크 unknown)에 NIC 값이
@@ -133,6 +133,8 @@
   HBA 는 Mock 18대 값 변화 0 — `Enabled`/`Active` 를 보내는 BMC(실측 없음)에서만 `up` → `down` 으로 바뀐다.
 - **CI 시험**: 독립 검증의 CI gate 실패는 제품 결함 0, 실행 환경 요인이었다(pytester HOME · cp949 출력, `core.fileMode=true` 의 `commit -a` 가 실행 비트를 되돌림, 전역 `MSYS_NO_PATHCONV`,
   eol 속성 없는 파일의 CRLF checkout). 시험은 단언을 강화하는 쪽으로만 고쳤고 skip 추가 · 시험 삭제 0. WSL interop 의 Windows PowerShell 탐침(81건)은 skip 동작 변경이라 별도 승인 후속이다.
+- **회귀**: Mock 18대 Tier 1 재생(실제 playbook + HTTPS 미러) 2회가 서로 같고(차이 0), 구현 브랜치 최종 재생과의 차이는 위 SR650 V4 링크 값 · 파생값과 전원 Off notice 1건뿐이다(설명되지 않은 차이 0,
+  요청 수 · status · sections 불변, HBA 값 · 링크 notice 16건 불변). Tier 2 모듈 재생 18/18 성공 · golden 15대 차이 0, 디스크 · FC 포트 개수 정합 18/18. 실장비 검증은 아니다(실장비 캡처본 재생과 합성 시험).
 
 ## 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2 — FIX 1~11 · 결정 11 A안)
 

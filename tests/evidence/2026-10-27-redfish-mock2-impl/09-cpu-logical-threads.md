@@ -1,7 +1,7 @@
 # 09 — WP9 (FIX 1): Redfish `cpu.logical_threads` 키 제거 (02-cpu-001 HIGH · 02-cpu-002 · 02-cpu-006)
 
 - 날짜: 2026-10-27 · 브랜치 `fix/redfish-mock2-20261027`. **사용자 결정(지시서 2 FIX 1)**: Redfish 출력에서 `data.cpu.logical_threads` 키를 **완전히 제거**한다 — 이번 Round 의 유일한 명시적 스키마 예외(비-Additive). `sockets` · `cores_physical` 유지, HT 추정(코어×2) 금지, OS/ESXi 채널은 손대지 않는다. 플래그 `processor_summary_logical_count` 는 소비처가 없어 함께 삭제.
-- 근거(2026-10-26 분석 · 2차 실측): HT 비활성 5대(BIOS `HThread`/`ProcHyperthreading` Disabled)에서 BMC 의 `ProcessorSummary.LogicalProcessorCount` · `Processor.TotalThreads` 가 코어의 2배(지원 수)로 나왔다(02-cpu-001). 같은 RMC 계보에서도 1.75.108 은 LogicalProcessorCount 가 코어 수, 1.77.30 은 스레드 수(02-cpu-002), CIMC 4.1 은 TotalThreads 가 코어 수(2026-10-18 X3) — 펌웨어 값만으로 HT 상태를 확정할 수 없다. `TotalEnabledCores` 는 18대 전부 `TotalCores` 와 같아 영향 0(02-cpu-006 — 관찰 유지).
+- 근거(2026-10-26 분석 · 2차 실측): HT 비활성 5대(BIOS `HThread`/`ProcHyperthreading` Disabled)에서 BMC 의 `ProcessorSummary.LogicalProcessorCount` · `Processor.TotalThreads` 가 코어의 2배(지원 수)로 나왔다(02-cpu-001). 같은 RMC 계보에서도 1.75.108 은 LogicalProcessorCount 가 코어 수, 1.77.30 은 스레드 수(02-cpu-002), CIMC 4.1 은 TotalThreads 가 코어 수(2026-10-18 X3) — 펌웨어 값만으로 HT 상태를 확정할 수 없다. 활성 코어 신호가 있는 11대(`TotalEnabledCores` 6 — Lenovo 5 · Dell 1, `Oem.Hpe.CoresEnabled` 5 — DL380)는 값이 `TotalCores` 와 같아 영향 0이고 CSUS 7대는 신호가 없다(02-cpu-006 — 관찰 유지; 2026-10-28 정정 — 종전 '18대 전부 `TotalEnabledCores` 와 같음').
 
 ## 1. 변경
 
@@ -44,5 +44,17 @@
 |---|---|
 | 02-cpu-001 (HIGH, 추정) | FIXED — 정책으로 제외(값을 고친 것이 아니라 키를 없앰; OS 실측 대조는 하지 않았다 — Portal 은 OS/ESXi 값을 쓴다) |
 | 02-cpu-002 | DOC_CORRECTED (RMC 1.75 vs 1.77 의미 차이는 EXTERNAL_CONTRACTS 2026-10-27 행; 코드는 더 이상 그 값을 소비하지 않는다) |
-| 02-cpu-006 | OBSERVATION_ONLY (`TotalEnabledCores` 18대 == `TotalCores` — 장착→활성 의미 변경은 FIX 1 범위 밖) |
+| 02-cpu-006 | OBSERVATION_ONLY (활성 코어 신호 11대(`TotalEnabledCores` 6 · `Oem.Hpe.CoresEnabled` 5) == `TotalCores`, CSUS 7 신호 없음 — 2026-10-28 정정; 장착→활성 의미 변경은 FIX 1 범위 밖) |
 | 02-cpu-005 | OBSERVATION_ONLY (partitions[].cpu 에 `turbo_max_mhz` 없음 — `multi_node` 는 그대로, 2026-10-19 사용자 결정 범위) |
+
+## 6. 2026-10-28 정정 (독립 검증 F-05 · F-06)
+
+미러 18대 `Systems/*/Processors/*`(ProcessorType CPU · Absent 제외) 재집계 — `TotalEnabledCores` 보유 6 label(sr650_v4 ×4 · r1_Lenovo_SR650_01 · r1_DELL_R740_01),
+`Oem.Hpe.CoresEnabled` 보유 5 label(dl380_gen12 ×4 · r1_HPE_DL380_01), 둘 다 없음 7 label(CSUS). 신호가 있는 CPU 는 모두 `TotalCores` 와 같다. 처분(코드 0)은 그대로다.
+F-05: RMC 1.77.30 의 `LogicalProcessorCount` 는 HT 설정과 무관하게 ΣTotalThreads 다 — csus3200_02 는 BIOS `HThread Disabled` 인데 224 = ΣTotalThreads 224 = 2 × ΣTotalCores 112.
+1.75.108 은 코어 수(종전 기록). 이 문서 머리말의 '1.77.30 은 스레드 수' 는 맞고, 'HT 비활성이면 코어 수' 괄호가 있던 EXTERNAL_CONTRACTS · ADR-2026-10-19 를 고쳤다.
+
+| 위치 | 이전 | 정정 |
+|---|---|---|
+| 머리말 근거 | `TotalEnabledCores` 는 18대 전부 `TotalCores` 와 같음 | 신호 11대(6 + 5)만 같음, CSUS 7 신호 없음 |
+| 5절 02-cpu-006 | `TotalEnabledCores` 18대 == `TotalCores` | 위와 같음 |

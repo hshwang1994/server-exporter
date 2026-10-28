@@ -1,0 +1,628 @@
+[
+ {
+  "label": "dl380_gen12_01",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/dl380_gen12_01",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 10.1,
+  "exception": null,
+  "mirror_stats": {
+   "files": 1772,
+   "keyed": 1769,
+   "non_json": 1,
+   "skipped": 1,
+   "from_manifest": 541,
+   "statuses": {
+    "200": 1770,
+    "404": 262,
+    "405": 1,
+    "406": 276,
+    "400": 2
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "dl380_gen12_02",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/dl380_gen12_02",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 8.3,
+  "exception": null,
+  "mirror_stats": {
+   "files": 1501,
+   "keyed": 1498,
+   "non_json": 1,
+   "skipped": 1,
+   "from_manifest": 403,
+   "statuses": {
+    "200": 1499,
+    "404": 126,
+    "405": 1,
+    "406": 276
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "dl380_gen12_03",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/dl380_gen12_03",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 6.3,
+  "exception": null,
+  "mirror_stats": {
+   "files": 1203,
+   "keyed": 1200,
+   "non_json": 1,
+   "skipped": 1,
+   "from_manifest": 372,
+   "statuses": {
+    "200": 1201,
+    "404": 90,
+    "405": 1,
+    "400": 5,
+    "406": 276
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "dl380_gen12_04",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/dl380_gen12_04",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 9.3,
+  "exception": null,
+  "mirror_stats": {
+   "files": 1784,
+   "keyed": 1781,
+   "non_json": 1,
+   "skipped": 1,
+   "from_manifest": 421,
+   "statuses": {
+    "200": 1782,
+    "404": 143,
+    "405": 1,
+    "406": 276,
+    "400": 1
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "sr650_v4_01",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/sr650_v4_01",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 12.9,
+  "exception": null,
+  "mirror_stats": {
+   "files": 2133,
+   "keyed": 1897,
+   "non_json": 234,
+   "skipped": 1,
+   "from_manifest": 992,
+   "statuses": {
+    "200": 1898,
+    "404": 894,
+    "405": 97,
+    "500": 1
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "lenovo",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {},
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "sr650_v4_02",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/sr650_v4_02",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 10.7,
+  "exception": null,
+  "mirror_stats": {
+   "files": 2245,
+   "keyed": 2009,
+   "non_json": 234,
+   "skipped": 1,
+   "from_manifest": 993,
+   "statuses": {
+    "200": 2010,
+    "404": 894,
+    "405": 98,
+    "500": 1
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "lenovo",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {},
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "sr650_v4_03",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/sr650_v4_03",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 13.4,
+  "exception": null,
+  "mirror_stats": {
+   "files": 2722,
+   "keyed": 2486,
+   "non_json": 234,
+   "skipped": 1,
+   "from_manifest": 991,
+   "statuses": {
+    "200": 2487,
+    "404": 894,
+    "405": 96,
+    "500": 1
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "lenovo",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {},
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "sr650_v4_04",
+  "mirror": "C:/github/ClovirONE/mock2-fix-20261028/extract/sr650_v4_04",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 9.4,
+  "exception": null,
+  "mirror_stats": {
+   "files": 2093,
+   "keyed": 1857,
+   "non_json": 234,
+   "skipped": 1,
+   "from_manifest": 993,
+   "statuses": {
+    "200": 1858,
+    "404": 894,
+    "405": 98,
+    "500": 1
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "lenovo",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {},
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "r1_DELL_R740_01",
+  "mirror": "C:/github/서버mock데이터/1차/DELL_R740/01",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 5.7,
+  "exception": null,
+  "mirror_stats": {
+   "files": 6133,
+   "keyed": 6132,
+   "non_json": 0,
+   "skipped": 0,
+   "from_manifest": 0,
+   "statuses": {
+    "200": 6073,
+    "403": 2
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "dell",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {},
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "r1_HPE_DL380_01",
+  "mirror": "C:/github/서버mock데이터/1차/HPE_DL380/01",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 2.0,
+  "exception": null,
+  "mirror_stats": {
+   "files": 2055,
+   "keyed": 2053,
+   "non_json": 0,
+   "skipped": 1,
+   "from_manifest": 0,
+   "statuses": {
+    "200": 2022,
+    "404": 30,
+    "405": 1,
+    "400": 1
+   }
+  },
+  "hang": [
+   "ComponentIntegrity/TPM-1"
+  ],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.20.00",
+   "manager_type": "iLO 7"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ },
+ {
+  "label": "r1_Lenovo_SR650_01",
+  "mirror": "C:/github/서버mock데이터/1차/Lenovo_SR650/01",
+  "tag": "plain",
+  "layout": null,
+  "firmware_scope": null,
+  "elapsed_s": 2.9,
+  "exception": null,
+  "mirror_stats": {
+   "files": 2907,
+   "keyed": 2904,
+   "non_json": 0,
+   "skipped": 2,
+   "from_manifest": 1,
+   "statuses": {
+    "200": 2898,
+    "404": 8
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "lenovo",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {},
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": null
+ }
+]

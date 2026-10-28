@@ -12,13 +12,13 @@
 
 - 18 label 영향: `cpu.manufacturer` 18 label 전부 `Intel`(iDRAC raw `Intel`, 그 밖 `Intel(R) Corporation`), `groups[].manufacturer` 17 label `Intel(R) Corporation → Intel`(Dell 은 이미 `Intel`). `hardware.health` 는 15 fixture · 18 label 전부 `Status.Health` 가 있어 **값 불변**(폴백 미발동 — 합성 테스트만).
 
-## 2. 사전 (`schema/field_dictionary.yml` 247 → 261 항목 = +53 신규 · 정정 10 · 채널 제거 2 · `cpu.logical_threads` channel [os, esxi])
+## 2. 사전 (`schema/field_dictionary.yml` 207 → 261 항목(+54) — 2026-10-28 정정, 종전 '247 → 261 = +53'; 이후 WP10 `5536c010` 로 262 · 정정 10 · 채널 제거 2 · `cpu.logical_threads` channel [os, esxi])
 
 | 구분 | 항목 |
 |---|---|
 | 신규 cpu (02-cpu-007) | `cpu.sockets`(must) · `cpu.model`(must) · `cpu.logical_threads`(must, **[os, esxi]** — FIX 1) |
 | 신규 power/thermal (05-power-006) 34 | `power.power_supplies[]` + 하위 8(name · model · serial · manufacturer · part_number · power_capacity_w · firmware_version · health; `state` 는 기존) · `power.power_control` + 6(power_consumed_watts must · power_capacity_watts · interval_in_min · min/avg/max_consumed_watts) · `power.summary` + 12 · `thermal.temperatures[].name/health/state` · `thermal.fans[].name/health/state` |
-| 신규 correlation (01-correlation-010) | `correlation.bmc_ip`(must — "Manager EthernetInterfaces 중 IPv4 를 가진 첫 NIC, host_ip 와 다를 수 있음, OS/ESXi null") |
+| 신규 correlation (01-correlation-010) | `correlation.bmc_ip`(must — "Manager EthernetInterfaces 중 IPv4 를 가진 첫 NIC, host_ip 와 다를 수 있음, OS/ESXi null"; 2026-10-28 정정 F-04: 코드는 `data.bmc.ip`(① 대상 주소 NIC → ② HostInterface 아님 · Enabled → ③ IPv4 를 가진 첫 NIC) — 사전 · 03-fields 를 코드대로 고침) |
 | 신규 multi_node (FIX 6 · 06-09 ADR) 5 | `multi_node.composition`(object\|null) · `.resource_blocks[]` · `.processor_count`/`.memory_count`(integer\|null — 원천 없으면 null) · `multi_node.fabrics`(object[]\|null); `multi_node.summary` help 에 resource_block_count · fabric_count |
 | 신규 diagnosis.details (06-bmc-007) 10 | `channel` · `checked_ports` · `selected_port`(3채널) · `adapter_candidate`(3채널) · `adapter_first_pass` · `auth` · `product` · `redfish_version` · `systems_uri` · **`account_service`(`{}` = 정합 단계 미진입 — 정상 경로, 18 label 전부)** |
 | 정정 | `cpu.manufacturer`(Redfish 원천 · 표) · `cpu.summary`(LPC 규칙 → FIX 1/2) · `cpu.architecture`(채널별 어휘 `x86` vs `x86_64` — 02-cpu-004, 통일은 결정 항목) · `hardware.health`(원천 `Status.Health`, "BMC rollup" 삭제, PSU 등급은 벤더 결정) · `storage.controllers[].driver`(channel redfish 제거 — 03-storage-002) · `firmware[].updateable`(`boolean\|null` — 04-firmware-007) · `firmware[].category`(구조 근거 → 토큰 → 조인, FC HBA other) · `firmware[].pending`(Disabled · Version 없음 제외) · `bmc.uuid`(ServiceIdentification 삭제) · `bmc.datetime`(오프셋/UTC 형식 · 비교 키 아님) |
@@ -77,3 +77,10 @@
 | 02-cpu-007 · 05-power-005 · 05-power-006 · 03-storage-002 · 04-firmware-007 · 04-firmware-011 · 04-firmware-012 · 01-correlation-010 · 05-thermal-005 · 01-system-009 · 06-bmc-007 | DOC_CORRECTED |
 | 01-system-008 | DOC_CORRECTED (FIX 4 — 섹션 판정 불변) |
 | 04-bios-002 · 04-firmware-008 · 02-memory-005 · 02-memory-006 | OBSERVATION_ONLY (6.8 1줄 · 6.9 1줄 기재) |
+
+## 2026-10-28 정정 (독립 검증 부록 A · F-04)
+
+| 위치 | 이전 | 정정 | 근거 |
+|---|---|---|---|
+| 2절 제목 사전 항목 수 | 247 → 261 = +53 | 207 → 261(+54) → 262 | `grep -c '^\s*priority:'` — `b8985826` 207 · `6429ebe6` 261 · `5536c010` · `f92ebe6a` 262 |
+| 2절 `correlation.bmc_ip` 정의 | IPv4 를 가진 첫 NIC | `data.bmc.ip`(①②③) | `common/tasks/normalize/build_correlation.yml` · `redfish_gather.py` NIC 선택 |

@@ -34,7 +34,7 @@
 - 18/18 rc 0 · success · errors 0 (`run_meta.json`, build `mirror-replay-wp7-after`). `_diff_vs_after_wp6.md`(허용목록 `_allow.json` 4항목): **허용목록 밖 차이 0 · 요청 미설명 0**.
 - 요청 집합: CSUS 7 label 전부 **-11 distinct**(RackGroup/Rack1 `Power·PowerSubsystem·Thermal·ThermalSubsystem` 8 + r001u01 `Power·Thermal·EnvironmentMetrics` 3 — 총 -14 건: csus3200_01 200→186 · _02 148→134 · _03 184→170 · r1_01/02 145→131 · r1_03/04 214→200), 추가 0. 비-CSUS 11 label 요청 집합 불변.
 - 값 변화: CSUS 7 label `data.multi_node.composition.resource_blocks[0].processor_count/memory_count` `0 → null`(FIX 6). 그 밖 `data.*` 18 label 바이트 동일(`hbas[].link_status` 는 CSUS 6 label 전부 `down` 그대로 — A안).
-- notice: FC HBA 를 가진 CSUS 6 label 의 "링크 상태 미제공" notice 끝에 카드 조건이 붙었다(건수 불변 — csus3200_01 2 · _03 2 · r1_01 2 · r1_02 2 · r1_03 4 · r1_04 4 = 16건, 실측 Timestamp 그대로: 예 csus3200_01 PCIeCard11 `rack1/chassis_u1/cpu2/io_slot11` LinkUp 2026-10-16T01:06:26Z · PCIeCard14 `…/cpu3/io_slot14` 2026-10-21T01:16:06Z; 1차 01/02 PCIeCard10·15 2026-05-07, 1차 03/04 PCIeCard2·7·10·15 2026-06-11). 전부 `LinkUp`(LinkDown 0 — 분석 Round 의 59 관측과 일치). **csus3200_02(FC 없음) notice 2건 불변**, NIC/RAID 카드 문구 0, 비-CSUS notice 불변.
+- notice: FC HBA 를 가진 CSUS 6 label 의 "링크 상태 미제공" notice 끝에 카드 조건이 붙었다(건수 불변 — csus3200_01 2 · _03 2 · r1_01 2 · r1_02 2 · r1_03 4 · r1_04 4 = 16건, 실측 Timestamp 그대로: 예 csus3200_01 PCIeCard11 `rack1/chassis_u1/cpu2/io_slot11` LinkUp 2026-10-16T01:06:26Z · PCIeCard14 `…/cpu3/io_slot14` 2026-10-21T01:16:06Z; 1차 01/02 PCIeCard10·15 2026-05-07, 1차 03/04 PCIeCard2·7·10·15 2026-06-11). 전부 `LinkUp`(LinkDown 0). 미러 원문의 카드 링크 조건은 49건(csus3200_01 7 · _02 3 · _03 7 · r1_01 7 · r1_02 7 · r1_03 9 · r1_04 9, 전부 LinkUp)이다 — 종전 '분석 Round 의 59 관측과 일치' 는 감사 원문 수치를 옮긴 것(2026-10-28 정정). **csus3200_02(FC 없음) notice 2건 불변**, NIC/RAID 카드 문구 0, 비-CSUS notice 불변.
 - INV-5(interfaces MAC 6옥텟 ∧ FC/IB 주소 아님) 18 label 위반 0 · interfaces 수 불변. 디스크·FC 포트 개수 정합(전수 미러 노출 수 ↔ 최종 JSON) **18/18 PASS · UNEXPLAINED 0**(csus3200_02 FC 0 · dl380_gen12_03 디스크 0 · r1_CSUS 01/02 디스크 0 은 수집도 0).
 
 ## 5. 처분
@@ -43,7 +43,7 @@
 |---|---|
 | 01-multi_node-006 ≡ 05-power-004 | FIXED (섀시 본문 링크 gating — CSUS 7대 요청 -14, 비-CSUS 요청 불변) |
 | 01-multi_node-007 | FIXED (FIX 6 — count null) |
-| 03-storage-004 | FIXED (A안 — 카드 조건 참고 notice, 값·필드·요청 불변) + MOCK_LIMITATION (포트 단위 링크는 RMC 가 주지 않아 재생으로 확정 불가; 59 카드 조건 전부 LinkUp 이라 LinkDown 분기는 합성만) |
+| 03-storage-004 | FIXED (A안 — 카드 조건 참고 notice, 값·필드·요청 불변) + MOCK_LIMITATION (포트 단위 링크는 RMC 가 주지 않아 재생으로 확정 불가; 카드 조건 49건(2026-10-28 정정 — 종전 59) 전부 LinkUp 이라 LinkDown 분기는 합성만) |
 | 02-memory-002 | DOC_CORRECTED (FIX 3 — 원값 보존, 벤더 의미 계약 명시) |
 | 01-multi_node-003 | HOLD→WP11 뒤 FIXED 예정 (FIX 5 — 실측 baseline 교체는 bmc/diagnosis 변경 뒤 1회) |
 
@@ -54,3 +54,10 @@
 - 같은 커밋: `tests/regression/conftest.py` registry `hpe_csus_3200_redfish_MOCK` → `hpe_csus_3200_redfish`(주석 정정), `tests/regression/test_csus_mock_consistency.py` 를 실측 구조 가드(요약 카운트 == 길이 · 1/1/3 · composition/fabric 모양 · origin 실측·MOCK 시리얼 없음 · 디스크/FC 개수 정합 · FIX 1/4 계약)로 재작성(파일 이름은 이력상 유지), `test_cross_channel_consistency.py` T10 주석 · `test_hba_ib_canonical.py` 머리말(FC 2 → 4) 정정. `test_vendor_output_display.py` D3(`hpCsus`) · `tests/e2e/test_output_schema.py` · `test_failure_code_contract.py` 는 교체본으로 그대로 PASS.
 - 문서: `schema/baseline_v1/README.md`(표 행 · "합성 기준선 0 개"), `docs/contract/03-fields.md` §9 예시를 실측 구조로 교체 + "Lab 부재 주의"/"현재 mock fixture" 문단 정정, 합성 fixture `tests/fixtures/redfish/hpe_csus_3200/README.md` 에 "합성 설명 모델" 명시, `docs/ai/contracts/serial-number.md`(HBA serial 실측 null · 시리얼 사례), `NEXT_ACTIONS` BASE-01 2곳 DONE, ADR-2026-05-12 결정 6 이행 기록, `LAB_PENDING_MATRIX` C2, decision-log.
 - 처분: 01-multi_node-003(ADR 결정 6 미이행) → FIXED. 합성 `schema/output_examples/redfish_hpe_csus_3200.jsonc` 는 주석 예시(README: "기준선과 장비가 정확히 같지 않을 수 있다")로 두었다 — 실측 구조로 바꾸는 일은 별도(OBSERVATION).
+
+## 2026-10-28 정정 (독립 검증 부록 A)
+
+| 위치 | 이전 | 정정 | 근거 |
+|---|---|---|---|
+| 4절 notice 카드 조건 수 | 분석 Round 59 관측과 일치 | 49(7/3/7/7/7/9/9) · 전부 LinkUp | `../2026-10-28-redfish-mock2-review-fix/tools/csus_card_conditions.py` — PCIeDevice `Status.Conditions[].MessageId` `H3Alert.<ver>.LinkUp/LinkDown`, 같은 `@odata.id` 1번 |
+| 5절 03-storage-004 | 59 카드 조건 | 49 | 위와 같음. A안 값 · notice 16건 · 요청은 그대로(새 Tier 1 차이 0) |

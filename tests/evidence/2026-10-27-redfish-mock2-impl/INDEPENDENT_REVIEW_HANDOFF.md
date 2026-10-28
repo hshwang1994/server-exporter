@@ -13,7 +13,7 @@
 
 | 항목 | 값 |
 |---|---|
-| Windows | Python 3.13.15 · pytest 9.1.1 · Git Bash(`MSYS_NO_PATHCONV=1` 필요 — WSL 경로 변환 방지) · `PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1` |
+| Windows | Python 3.13.15 · pytest 9.1.1 · Git Bash(`MSYS_NO_PATHCONV=1` 은 3절 Tier 1 명령 한 줄에만 붙인다 — 전역 export 금지: `f92ebe6a` 에서 전역이면 `tests/unit/test_addon_checkout.py` 10건이 실패했다(독립 검증 G4, 2026-10-28 정정)) · `PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1` |
 | WSL `Ubuntu`(hshwang) | ansible-core 2.20.7 · Python 3.12.3 · `~/.se_vault_pass` — **playbook 실행** |
 | WSL `Ubuntu-24.04`(root) | Python 3.12.3 · openssl · `/root/se_mirrors/`(아래) · 443 바인드 — **재생 HTTPS 서버**(인증서는 runner 가 임시 생성) |
 | 2차 미러(11대) | 저장소 `tests/reference/redfish/mock2/<server>.zip`(불변, SHA256SUMS) → WSL `/root/se_mirrors/<server>` 로 추출(`tests/redfish-probe/mirror_replay/extract_mirrors.sh`). Windows 추출본 `C:\github\ClovirONE\mock2-audit-20261026\extract\<server>`(zip 과 동일함을 WP1 에서 확인) |
@@ -64,12 +64,12 @@ python tests/scripts/inventory_parity.py --help
 2. Tier 1 18/18 success · errors 0, 구현 세션 `tier1-final` 과 차이 0, `tier1-before` 와의 차이가 WP allowlist 합으로 전부 설명됨(미설명 0). `status` · `sections` 는 18 label 모두 수정 전과 같음.
 3. Tier 2 18/18 success · golden 15 label 차이 0. golden 변경 25건(G-01~G-25)마다 원장의 원천이 전수 미러/실측 봉투이고, 코드 출력 스냅샷이 아님.
 4. 개수 정합 18/18 PASS · UNEXPLAINED 0 · INV-5 0.
-5. `ISSUE_DISPOSITION.md` 73 ID 전부 처분이 있고, FIXED 43 건이 코드 diff·테스트·Tier 1 diff 로 뒷받침됨. OBSERVATION_ONLY 11 건은 코드 변경 0. HOLD 1(03-storage-001 (b)).
+5. `ISSUE_DISPOSITION.md` 73 ID 전부 처분이 있고, FIXED 43 건이 코드 diff·테스트·Tier 1 diff 로 뒷받침됨. OBSERVATION_ONLY 11 건은 코드 변경 0. HOLD 1(03-storage-001 (b)) — 2026-10-28 정정 뒤 HOLD 3(+ 05-thermal-003 (b) · 03-network-002 잔여 2 NIC).
 6. FIX 1~11 각각 확인: (1) Redfish 봉투 18 label 에 `data.cpu.logical_threads` 없음 · OS/ESXi baseline 5종에는 있음, (2) `cpu.manufacturer` Intel/AMD, (3) CSUS `speed_mhz` 3200 원값, (4) `sections.system = not_supported` + hostname, (5) `hpe_csus_3200_baseline.json` = csus3200_01 봉투(수정 2곳: `ip`·`correlation.host_ip`), (6) composition count null, (7) firmware category enum 에 새 값 없음(`hba` 없음) · FC HBA other, (8) `tests/redfish-probe/mirror_replay/` + fixture 11세트 커밋, (9) 원장, (10) `data.users` 불변, (11) `main`/`production` 미접촉(`git log origin/main`·`origin/production` 이 2026-10-26 이후 이 브랜치 커밋을 포함하지 않음).
 7. 벤더 이름 분기 없음: `python scripts/ai/verify_vendor_boundary.py` exit 0, `redfish_gather.py` 의 신규 분기가 DMTF enum/OEM 네임스페이스/장비 값(`Manager.Model` · `ManagerType` · `@Redfish.WriteableProperties` · `Oem.Hpe.Links.DateTimeService`)으로만 가름. 서버 이름/IP/Mock 경로 하드코딩 없음(`grep -rn "11\.65\.\|10\.173\.\|se_mirrors\|서버mock" redfish-gather module_utils adapters` 의 결과는 `adapters/redfish/hpe_csus_3200.yml` 의 2026-06-15 origin 주석 1줄(사이트 IP 기록, 종전부터 있음)뿐이어야 한다 — 코드 값은 0).
 8. 비밀: `python scripts/ai/verify_no_plaintext_secret.py --base b8985826` 0건; `tier1-*/` 에 `gather_auth_evidence/` · `.inventory_input.json` · `ansible_*.log` 가 커밋되지 않음(`.gitignore`).
 9. 사전·계약: `validate_field_dictionary.py` PASS, `docs/contract/03-fields.md` 가 사전·실제 봉투와 어긋나지 않음(샘플: 6.2 캐시/rank · 6.3.2 FC down 폴백 문구 · 6.4 (1)~(4) · 6.6 bmc · 6.9 firmware · §9 실측 구조).
-10. 재생 한계 명시: `MOCK_LIMITATION`(03-storage-004 포트 단위 · 06-bmc-001 복구 경로)을 PASS 로 올리지 않았는지(`coverage-132-after.md` PASS 120 · ISSUE 2 · MOCK 2 · N/A 8).
+10. 재생 한계 명시: `MOCK_LIMITATION`(03-storage-004 포트 단위 · 06-bmc-001 복구 경로)을 PASS 로 올리지 않았는지(`coverage-132-after.md` PASS 120 · ISSUE 2 · MOCK 2 · N/A 8 — 2026-10-28 재대조 뒤에도 같다. dl380_gen12_03 network 칸은 근거만 교체).
 
 ## 5. 알려진 한계 · 하지 않은 것
 
