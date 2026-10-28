@@ -144,9 +144,12 @@ def case_results() -> dict[str, tuple[str, str]]:
     bash = _find_bash()
     if not bash or not shutil.which("git"):
         pytest.skip("bash (Git for Windows / Linux) 또는 git 을 찾지 못함")
+    # 2026-10-28 (독립 검증 CI G4): 실행자 셸의 MSYS 경로 변환 끄기(MSYS_NO_PATHCONV · MSYS2_ARG_CONV_EXCL)가 하위 bash 로 새면
+    #   Git for Windows 에서 driver 의 경로 인자 변환이 바뀌어 사례가 무더기로 실패한다. Jenkins Runner(Linux)에는 없는 값이라 하위 실행에서 뺀다.
+    env = {k: v for k, v in os.environ.items() if k not in ("MSYS_NO_PATHCONV", "MSYS2_ARG_CONV_EXCL")}
     proc = subprocess.run(
         [bash, "-c", DRIVER, "driver", str(SCRIPT), str(ASKPASS)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300, env=env,
     )
     results: dict[str, tuple[str, str]] = {}
     for line in proc.stdout.splitlines():

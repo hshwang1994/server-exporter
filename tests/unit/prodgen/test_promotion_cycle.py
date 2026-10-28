@@ -32,7 +32,7 @@ from scripts.ai.prodgen.promote import _publish, promote, push_sync, remote_base
 from scripts.ai.prodgen.strip.psstrip import PowerShellParser
 from scripts.ai.prodgen.verify import GateResult, gates_live, gates_promotion, run_gates
 
-from .test_pipeline_tmp_repo import FILES, MANIFEST, _git  # noqa: F401  (same throw-away repository shape)
+from .test_pipeline_tmp_repo import FILES, MANIFEST, _git, _make_run_sh_executable  # noqa: F401  (same throw-away repository shape)
 
 _needs_ps = pytest.mark.skipif(not PowerShellParser().available, reason="PowerShell 파서 없음 — 생성(build)이 class B 로 막힌다")
 PROD = "refs/heads/production"
@@ -51,6 +51,7 @@ def world(tmp_path, monkeypatch):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(content.encode("utf-8"))
     (repo / "production_manifest.yml").write_bytes(MANIFEST.encode("utf-8"))
+    _make_run_sh_executable(repo)          # 2026-10-28 (CI G2): 디스크 실행 비트 — fileMode=true 에서 commit -a 가 644 로 되돌리지 않게
     _git(repo, "add", "-A")
     _git(repo, "update-index", "--chmod=+x", "app/run.sh")
     _git(repo, "commit", "-q", "-m", "init")

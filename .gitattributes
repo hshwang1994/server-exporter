@@ -14,3 +14,9 @@ Jenkinsfile* text eol=lf
 # Jenkins 가 load 하는 Groovy 라이브러리와 finalize corpus(JSONL · 기대값)는 Linux agent 에서 바이트 비교된다 (2026-10-03).
 *.groovy text eol=lf
 tests/fixtures/finalize_corpus/** text eol=lf
+
+# 2026-10-28 (독립 검증 CI G5): eol 속성이 없어 core.autocrlf=true 인 새 Windows checkout 에서 CRLF 로 풀리던 파일 — 시험이 바이트를 본다
+#   (prodgen 주석 제거 golden · LF 단언 시험, SHA256SUMS 는 `sha256sum -c` 가 줄 끝 CR 을 파일 이름으로 읽어 실패). index 는 이미 LF 라 blob 변경 0.
+tests/fixtures/prodgen/** text eol=lf
+tests/scripts/finalize_corpus_check.py text eol=lf
+tests/reference/redfish/mock2/SHA256SUMS text eol=lf
