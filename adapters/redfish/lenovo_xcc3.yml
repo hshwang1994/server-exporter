@@ -32,6 +32,8 @@
 #   - System URI: /redfish/v1/Systems/1 (실측 확인)
 #   - OEM namespace: Oem.Lenovo (실측 확인 — system.oem 은 V4 가 일부 키 미노출, FruPartNumber 등 보유)
 #   - RedfishVersion 1.15.0 (실측 2026-06-15 — 구 추정 "1.17.0 / schema bundle 2024.3" 정정)
+#     # DRIFT 발견 2026-10-28: 같은 장비(SN J902E57T · IHX414J 1.22)의 1차 미러 ServiceRoot 는 RedfishVersion 1.17.0 이다(1.15.0 은 어느 미러에도 없음).
+#     2차 Mock 4대(IHX438R 2.97)는 1.22.0. 선택 · 점수에 쓰지 않는 값이라 동작 영향 0 — metadata 정리는 캡처 근거 확인 뒤.
 #   - OpenBMC 기반 → Oem.Lenovo 영역이 표준 Redfish 우선 → OEM 의존 감소
 #   - FPGA firmware separate item — UpdateService/FirmwareInventory/FPGA (gather 자동 cover)
 #   - ExtendedError.1.2.2.json OEM registry 신규 (server-exporter 미사용)

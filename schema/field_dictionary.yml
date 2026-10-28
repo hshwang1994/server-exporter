@@ -30,6 +30,9 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
+# 변경 메모 (2026-10-28): 독립 검증 결함 정정 — help 문구만(키 · 타입 · channel · enum · priority 불변, schema_version 유지). network.interfaces[].link_status(같은 MAC
+#   포트 보충 규칙) · storage.hbas[].link_status(up = 표준 링크 값만) · correlation.bmc_ip / host_ip · bmc.ip(③ = IPv4 를 가진 첫 NIC) ·
+#   power.power_control.power_capacity_watts(원천 경로) · thermal.temperatures[].name / fans[].name(코드에 없는 MemberId 폴백 삭제).
 # 변경 메모 (2026-10-27): 2차 Mock 11대 구현 Round(C6 사전 drift 묶음 + FIX 1/2/4/6). +3 cpu(sockets · model · logical_threads[os, esxi] — Redfish 는 FIX 1 로
 #   logical_threads 를 내지 않는다) · +34 power/thermal 하위 키 · +1 correlation.bmc_ip · +5 multi_node.composition/fabrics · +10 diagnosis.details(Redfish 키 · account_service {} 의미).
 #   정정: cpu.manufacturer(Redfish 발행 FIX 2) · cpu.summary · cpu.architecture(채널별 어휘) · hardware.health(원천 Status.Health) · storage.controllers[].driver(redfish 제거) ·
@@ -1194,12 +1197,17 @@ fields:
     priority: nice
     channel: [redfish, esxi]
     help_ko: >-
-      장비가 보고한 전력 예산/가용 용량 W — **벤더·경로별로 뜻이 다르다**(2026-10-27, 05-power-005): legacy PowerControl.PowerCapacityWatts(iDRAC 예산값 1050 · iLO 7 AC 입력 잃은 PSU 제외 1600),
-      PowerSubsystem.CapacityWatts(XCC 3 1300 = 이중화 설정의 MaxPowerLimit) 또는 그 값이 없을 때 PSU 용량 합(Absent 제외). 설치 PSU 정격 합은 summary.total_capacity_w 다 — 둘을 섞지 않는다.
+      장비가 보고한 전력 예산/가용 용량 W — **벤더·경로별로 뜻이 다르다**(05-power-005, 2026-10-28 원천 정정). Power(legacy) 경로는 PowerControl[0].PowerCapacityWatts, 그 값이
+      없으면 PSU PowerCapacityWatts 합(State Absent 제외)이다. Power 가 없어 PowerSubsystem 경로로 가면 PSU 용량 합(Absent 제외)이고 PowerSubsystem.CapacityWatts 는 읽지 않는다.
+      섀시가 여럿이면 모든 섀시에 값이 있을 때만 합한다. DMTF Power 스키마는 PowerControl 값을 '섀시에 할당할 수 있는 총 전력(PSU 용량 또는 상위가 배정한 예산)' 으로 정의하고,
+      벤더별 산출 방식은 확인하지 못했다(Mock 미러 실측: iDRAC 1050 · iLO 7 1600 · XCC 3 1300 — 모두 legacy PowerControl 값, CSUS null). 설치 PSU 정격 합은
+      summary.total_capacity_w 다 — 둘을 섞지 않는다.
     help_en: >-
-      Power budget / available capacity reported by the device, in W — **meaning differs by vendor and path** (2026-10-27, 05-power-005): legacy PowerControl.PowerCapacityWatts
-      (iDRAC budget 1050, iLO 7 excludes a PSU that lost AC: 1600), PowerSubsystem.CapacityWatts (XCC 3 1300 = redundancy MaxPowerLimit), else the PSU capacity sum (Absent excluded).
-      The installed PSU rating sum is summary.total_capacity_w — do not mix the two.
+      Power budget / available capacity reported by the device, in W — **meaning differs by vendor and path** (05-power-005, source corrected 2026-10-28). Power (legacy) path:
+      PowerControl[0].PowerCapacityWatts, else the sum of PSU PowerCapacityWatts (State Absent excluded). Without a Power resource the PowerSubsystem path gives the PSU capacity
+      sum (Absent excluded); PowerSubsystem.CapacityWatts is not read. With several chassis the values are summed only when every chassis has one. The DMTF Power schema defines
+      the PowerControl value as the total power that can be allocated to the chassis (PSU capacity or a budget assigned upstream); how each vendor derives it is unverified (Mock
+      mirrors: iDRAC 1050, iLO 7 1600, XCC 3 1300 — all legacy PowerControl values; CSUS null). The installed PSU rating sum is summary.total_capacity_w — do not mix the two.
 
   power.power_control.interval_in_min:
     type: "integer|null"
@@ -1359,9 +1367,10 @@ fields:
     priority: nice
     channel: [redfish, esxi]
     help_ko: >-
-      온도 센서 이름(Name → MemberId; ThermalSubsystem 은 DeviceName → Name → DataSourceUri 마지막 세그먼트, 2026-10-27).
+      온도 센서 이름. Redfish: Thermal(legacy) 은 Name, ThermalSubsystem 은 DeviceName → Name → DataSourceUri 마지막 세그먼트(2026-10-27). MemberId 폴백은 없다(2026-10-28 코드 대조 정정).
     help_en: >-
-      Temperature sensor name (Name → MemberId; ThermalSubsystem: DeviceName → Name → last DataSourceUri segment, 2026-10-27).
+      Temperature sensor name. Redfish: Thermal (legacy) uses Name; ThermalSubsystem uses DeviceName → Name → last DataSourceUri segment (2026-10-27). There is no MemberId fallback
+      (corrected against the code 2026-10-28).
 
   "thermal.temperatures[].health":
     type: "string|null"
@@ -1386,9 +1395,9 @@ fields:
     priority: nice
     channel: [redfish, esxi]
     help_ko: >-
-      팬 이름(Name → MemberId; ThermalSubsystem 은 Name → DataSourceUri 마지막 세그먼트).
+      팬 이름. Redfish: Thermal(legacy) · ThermalSubsystem 모두 Name 원문이다(MemberId · DataSourceUri 폴백 없음 — 2026-10-28 코드 대조 정정).
     help_en: >-
-      Fan name (Name → MemberId; ThermalSubsystem: Name → last DataSourceUri segment).
+      Fan name. Redfish: the raw Name in both Thermal (legacy) and ThermalSubsystem (no MemberId or DataSourceUri fallback — corrected against the code 2026-10-28).
 
   "thermal.fans[].health":
     type: "string|null"
@@ -1682,13 +1691,15 @@ fields:
       Manager의 EthernetInterfaces에서 추출.
       서버 운영체제의 IP 주소가 아닌 BMC 전용 관리 IP.
       선택 규칙(2026-10-27, 06-bmc-005): ① 수집 대상 주소와 같은 IPv4 를 가진 NIC → ② Links.HostInterface 가 없고 InterfaceEnabled 가 false 가 아닌 NIC(iLO 7 의
-      USB 가상 NIC 16.1.15.1 제외) → ③ 컬렉션의 첫 NIC(종전). mac_address · dns_name 은 같은 NIC 에서 뽑는다. 실측 18대는 전용 관리 NIC 이 첫 멤버라 값 불변.
+      USB 가상 NIC 16.1.15.1 제외) → ③ IPv4 를 가진 첫 NIC(종전 규칙). 후보는 0.0.0.0 이 아닌 IPv4 를 가진 NIC 뿐이고 값은 고른 NIC 의 첫 IPv4 다(2026-10-28 문구 정정).
+      mac_address · dns_name 은 같은 NIC 에서 뽑는다. 실측 18대는 전용 관리 NIC 이 첫 멤버라 값 불변.
     help_en: >-
       BMC management interface IPv4 address.
       Extracted from Manager's EthernetInterfaces.
       This is the BMC management IP, not the server OS IP.
       Selection (2026-10-27, 06-bmc-005): (1) the NIC that carries the collection target address → (2) a NIC without Links.HostInterface whose InterfaceEnabled is not
-      false (excludes the iLO 7 USB virtual NIC 16.1.15.1) → (3) the first NIC of the collection (former rule). mac_address and dns_name come from the same NIC.
+      false (excludes the iLO 7 USB virtual NIC 16.1.15.1) → (3) the first NIC that has an IPv4 address (former rule). Only NICs with a non-0.0.0.0 IPv4 address are candidates
+      and the value is the chosen NIC's first IPv4 (wording corrected 2026-10-28). mac_address and dns_name come from the same NIC.
 
   # cycle 2026-06-14 (DELL R740 BMC-1): bmc.* 하위 필드 문서화. 모듈이 emit 하나
   # 미문서였던 필드(호출자 계약 보강). 출처 = Manager 리소스(/Managers/<id>) + 그 자체 NIC.
@@ -1836,28 +1847,31 @@ fields:
     priority: must
     channel: [redfish, os, esxi]
     help_ko: >-
-      Redfish: Manager EthernetInterfaces 중 IPv4 주소를 가진 **첫 NIC** 의 주소(0.0.0.0 제외) — 요청 대상 주소(host_ip)와 보통 같지만 NAT/VIP 로 접근하거나 공유 NIC 이
-      먼저 나열되는 장비에서는 다를 수 있다(2026-10-27 정의 문서화, 01-correlation-010). OS/ESXi: BMC 를 알 수 없어 null.
+      Redfish: **data.bmc.ip 와 같은 값**이다. Manager EthernetInterfaces 중 0.0.0.0 이 아닌 IPv4 를 가진 NIC 에서 ① 수집 대상 주소와 같은 주소를 가진 NIC → ② Links.HostInterface 가
+      없고 InterfaceEnabled 가 false 가 아닌 NIC → ③ 첫 NIC 순으로 고른 NIC 의 첫 IPv4(06-bmc-005, 2026-10-28 정의 정정 — 종전 문구 'IPv4 를 가진 첫 NIC' 는 ③ 뿐이다).
+      요청 대상 주소(host_ip)와 보통 같지만 대상 주소가 어느 Manager NIC 에도 없으면(NAT/VIP 경유 · 재생 시험) 다르다(01-correlation-010). OS/ESXi: BMC 를 알 수 없어 null.
     help_en: >-
-      Redfish: address of the **first** Manager EthernetInterface that has an IPv4 address (0.0.0.0 excluded) — usually equal to the request target (host_ip), but it can differ
-      behind NAT/VIP or when a shared NIC is listed first (definition documented 2026-10-27, 01-correlation-010). OS/ESXi: null (the BMC is unknown).
+      Redfish: **the same value as data.bmc.ip**. Among the Manager EthernetInterfaces that have a non-0.0.0.0 IPv4 address, the first IPv4 of the NIC chosen by (1) the NIC that
+      carries the collection target address → (2) a NIC without Links.HostInterface whose InterfaceEnabled is not false → (3) the first such NIC (06-bmc-005; definition corrected
+      2026-10-28 — the former wording 'first NIC with IPv4' is only step 3). Usually equal to the request target (host_ip), but different when the target address is on no Manager
+      NIC (NAT/VIP, replay tests) (01-correlation-010). OS/ESXi: null (the BMC is unknown).
 
   correlation.host_ip:
     type: "string"
     priority: must
     channel: [redfish, os, esxi]
     help_ko: >-
-      수집 대상 장비의 IP 주소.
-      Redfish 채널: BMC IP와 동일 (Redfish는 BMC를 통해 수집하므로 서버 OS IP를 알 수 없음).
+      수집 대상 장비의 IP 주소 — 요청한 대상 주소(inventory 의 ansible_host, 없으면 inventory_hostname) 그대로다.
+      Redfish 채널: 요청한 BMC 주소. 보통 bmc_ip(data.bmc.ip)와 같지만 요청 주소가 어느 Manager NIC 에도 없으면(NAT/VIP 경유 · 재생 시험) 다르다
+      (2026-10-28 정정 — 종전 'BMC IP와 동일'). Redfish 는 BMC 를 통해 수집하므로 서버 OS IP 는 알 수 없다.
       OS 채널: 서버 운영체제의 IP.
       ESXi 채널: ESXi 호스트의 IP.
-      Redfish에서 host_ip와 bmc_ip가 같은 것은 정상.
     help_en: >-
-      IP address of the gather target.
-      Redfish: equals BMC IP (Redfish collects via BMC, cannot determine server OS IP).
+      IP address of the gather target — the requested target address as given (inventory ansible_host, else inventory_hostname).
+      Redfish: the requested BMC address. Usually equal to bmc_ip (data.bmc.ip), but different when the requested address is on no Manager NIC (NAT/VIP, replay tests)
+      (corrected 2026-10-28 — formerly 'equals BMC IP'). Redfish collects via the BMC, so the server OS IP is unknown.
       OS: server OS IP.
       ESXi: ESXi host IP.
-      host_ip equaling bmc_ip in Redfish is expected behavior.
 
   # ──────────────────────────────────────────────────────────────────────────
   # diagnosis

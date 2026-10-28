@@ -48,6 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-28 — Redfish 2차 Mock 구현 독립 검증 결함 정정: XCC 3 NIC 링크 같은 MAC 포트 보충 · HBA up 값 표준 링크 값 한정 · 전원 Off notice 네트워크 · 사전/계약 원천 정정 |
 | 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2): FIX 1~11 · 결정 11 A안 · Lenovo XCC3 재선택 · 전원 Off · firmware category · XCC3 모양 · 전원/온도 의미 · CSUS 섀시 gating · 계약/사전 정정 |
 | 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합(uuid · 정격 클럭 · 스레드 · NIC 모델) · RAID 논리 볼륨 OS/ESXi |
 | 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 |
@@ -106,6 +107,33 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
+## 2026-10-28 — Redfish 2차 Mock 구현 독립 검증 결함 정정 (F-01~F-10 · HBA up 값 한정)
+
+- **사용자 지시**: 구현 브랜치(`fix/redfish-mock2-20261027` @ `f92ebe6a`) 독립 검증의 FAIL 10건(전부 LOW)과 CI gate 실패를 새 브랜치 `fix/redfish-mock2-review-20261028` 에서 고친다.
+  검증받은 SHA · 검증 증거는 보존하고 golden · baseline 은 결과에 맞춰 덮지 않는다. main 병합 · production 승격은 보류. HBA `link_status` 는 `up`/`down` 둘뿐이고 불확실하면 `down`
+  (`unknown` 복구 · 새 값 금지), CSUS A안(카드 단위 조건은 notice 참고만)은 유지.
+- **결정(사용자, Q1)**: HBA 가 `up` 인 값은 포트 단위 표준 링크 값(`LinkUp` · 구 NetworkPort `Up` · 종전부터 적혀 있던 `Connected`)뿐이다. `Enabled` · `Active` 는 표준 `Port.LinkStatus` 에서
+  링크 의미가 불명이라 `down` + notice `링크 상태 값 미확정`(원문 포함)이다. 벤더 OEM 의 **포트별** 필드가 실제 Link Up 을 뜻한다는 근거(벤더 문서, 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가
+  확인되면 그때 별도로 정규화한다 — 카드 단위 값은 대상이 아니다. 네트워크 정규화(`network.*.link_status`)는 바꾸지 않는다: 같은 FC 포트가 `network.ports[]` 에서는 `up`, `storage.hbas[]` 에서는
+  `down` 일 수 있다(의도된 차이 — Mock 18대 · 저장소 fixture 에 `Enabled`/`Active`/`Connected` 출현 0).
+- **결정(사용자, Q2)**: 전원 Off notice 문구에 '네트워크' 를 넣는다 — `호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음`(조건 · section · 건수 불변).
+- **결정(코드 규칙, F-01)**: Redfish `network.interfaces[]` 의 NIC 자체 `link_status` 가 없으면(unknown) 같은 MAC 을 가진 `network.ports[]` 들의 `link_status` 가 **하나의 값(up 또는 down)으로 일치할
+  때만** 그 값으로 채운다. NIC 자체 값은 덮지 않고, 포트끼리 다르거나 짝 포트가 없으면 unknown 그대로다(HBA 의 down 정책을 쓰지 않는다). `speed_mbps` 는 같은 경우(NIC 링크 unknown)에 NIC 값이
+  null 이고 짝 포트 속도가 하나로 일치할 때만 채운다 — 종전과 같은 범위다(링크가 있는 NIC 의 속도는 채우지 않는다). 종전 조건(링크 unknown 이고 속도 null 일 때만, MAC 당 포트 1개)은 `SpeedMbps` 가 있는
+  XCC 3 NIC 을 놓쳤고 본딩으로 같은 MAC 이 포트 둘에 걸리면 앞 포트를 덮었다.
+- **미해결(HOLD)**: sr650_v4_02 `NIC6` · sr650_v4_04 `NIC4` 는 본딩 영구 주소 NIC 이라 포트 쪽 출력(`associated_address` = `AssociatedMACAddresses[0]`)에 그 MAC 이 없어 unknown 으로 남는다. 원문에는
+  `PermanentMACAddress` → `PhysicalNetworkPortAssignment` → 포트 `LinkUp` 연결이 있지만, 쓰려면 모듈 출력(포트 주소 목록 또는 기능 영구 주소)을 바꿔야 해서 별도 승인 대상이다. NIC 의 `SpeedMbps` 로
+  링크를 추측하지 않는다.
+- **문서 정정(F-02~F-09)**: `correlation.bmc_ip` = `data.bmc.ip`(① 대상 주소 NIC → ② HostInterface 아님 · Enabled → ③ IPv4 를 가진 첫 NIC), `correlation.host_ip` = 요청 대상 주소(Manager NIC 에
+  없으면 bmc_ip 와 다름), `power_capacity_watts` 원천 = legacy `PowerControl[0].PowerCapacityWatts` → PSU 용량 합(PowerSubsystem 경로도 PSU 합, `CapacityWatts` 미사용; iLO 7 인과 문구 삭제),
+  온도 · 팬 이름 폴백(코드에 없는 MemberId 삭제), XCC 3 속도 단위 예시 · firmware 예시(sr650_v4_02 실제 2항목) · CSUS DIMM 정격(PC5-6400B → 3200, PC5-4800B → 2400) · 음수 센서 범위 재계산.
+  05-thermal-003 (b)(DataSourceUri → Sensor 보충)는 구현하지 않았다는 사실을 처분에 HOLD 로 적는다(요청 +377 · CSUS Sensor 값 null).
+- **영향**: envelope 13 필드 · 키 · enum · `schema_version` 불변, golden · baseline 변경 0, 새 HTTP 요청 0, OS/ESXi 0. 호출자가 볼 값 변화: SR650 V4(Lenovo XCC 3) 4대의 `interfaces[].link_status`
+  unknown → up/down 20건(up 14 · down 6), `is_primary` 4건 false → true, `summary.groups[].link_up_count` · `primary_speed_mbps` (실측 fixture 렌더 시험). HPE DL380 Gen12 전원 Off 호스트 notice 문구 1건.
+  HBA 는 Mock 18대 값 변화 0 — `Enabled`/`Active` 를 보내는 BMC(실측 없음)에서만 `up` → `down` 으로 바뀐다.
+- **CI 시험**: 독립 검증의 CI gate 실패는 제품 결함 0, 실행 환경 요인이었다(pytester HOME · cp949 출력, `core.fileMode=true` 의 `commit -a` 가 실행 비트를 되돌림, 전역 `MSYS_NO_PATHCONV`,
+  eol 속성 없는 파일의 CRLF checkout). 시험은 단언을 강화하는 쪽으로만 고쳤고 skip 추가 · 시험 삭제 0. WSL interop 의 Windows PowerShell 탐침(81건)은 skip 동작 변경이라 별도 승인 후속이다.
+
 ## 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2 — FIX 1~11 · 결정 11 A안)
 
 - **사용자 의심 / 지시**: 2026-10-26 분석 Round 의 73건을 단일 브랜치 `fix/redfish-mock2-20261027` 에서 WP0~WP12 로 반영하라. 결정 11건을 **FIX** 로 고정: (1) Redfish `data.cpu.logical_threads` 키 제거
@@ -123,7 +151,6 @@
 - **영향**: envelope 13 필드 · `sections` · `status` 판정 불변. 호출자가 볼 변화: Redfish `data.cpu.logical_threads` **키 소멸**(유일한 비-Additive — Portal 은 OS/ESXi 값 사용), `cpu.manufacturer` 추가,
   Lenovo XCC3 `meta.adapter_id = redfish_lenovo_xcc3`, 전원 Off/Absent 값 null · 항목 제외, firmware category 재분류(Lenovo UEFI → bios 등), CSUS 요청 -14 · composition count null, notice 문구 추가.
 - **회귀**: WP 마다 unit(5118) · integration(497) · e2e+regression(1094) · WSL 엔진 23 · syntax 3채널 · Tier 1 18/18(허용목록 밖 0) · 개수 정합 18 PASS · INV-5 0. 독립 검증은 새 Fable 세션이 같은 SHA 로 Tier 0/1/2 를 재실행한다.
-  evidence `tests/evidence/2026-10-27-redfish-mock2-impl/`(00~11 · golden-changes · tier0/tier1-*).
 - **FIX 5 이행(WP11 뒤)**: `schema/baseline_v1/hpe_csus_3200_baseline.json` 을 2차 Mock csus3200_01 의 Tier 1 실 봉투로 교체(재생 주소 127.0.0.1 → BMC IP 2곳만 수정, `baseline_origin` 실측 표기). 실 구조 1 파티션 · 1 RMC · 3 섀시 — 합성본(3 파티션 · 4 Manager)과 달라
   registry 라벨 `hpe_csus_3200_redfish`, 가드 테스트(`test_csus_mock_consistency.py`) 를 실측 구조·개수 정합으로 재작성, 03-fields §9 예시를 실측으로 교체. 2026-10-27 현재 합성 baseline 은 0 개다.
 

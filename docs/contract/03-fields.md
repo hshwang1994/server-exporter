@@ -542,8 +542,8 @@ for e in response["errors"]:
 > 원문 그대로 둔다(지어내지 않는다). 종전 표의 `0B → Intel` 은 오류였다(0x0B 는 Intersil, Intel 은 0x89/0x09). OS 채널과 Redfish 채널이 같은 표를 쓴다.
 > **2026-10-27 (FIX 3 — 2차 Mock 실측)** — Redfish `slots[].speed_mhz` 는 `OperatingSpeedMhz` **원값**이며 단위를 바꾸거나 보정하지 않는다. 벤더마다 뜻이 다르다:
 > iLO 7 · XCC 3 · iDRAC 는 전송률(MT/s — 예: DDR5 5600 모듈이 5600 또는 동작 4400), HPE Compute Scale-up Server 3200 RMC(H3) 는 **I/O 버스 클럭**이라
-> PC5-6400B 모듈이 `3200` 으로 나온다(실측 2026-10-21 csus3200_01/03 + 1차 4대). 값을 2배로 "보정" 하지 않는다 — 호출자가 장비 간 비교를 할 때는 `vendor`/`bmc.model` 을 함께 본다
-> (`docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-27 행).
+> PC5-6400B 모듈이 `3200`(2차 Mock csus3200_01~03), PC5-4800B 모듈이 `2400`(1차 Mock CSUS 4대)으로 나온다 — 모듈 정격은 DIMM 의 `Oem.Hpe.Label`(`PC5-…`)로 확인했다
+> (2026-10-28 정정). 값을 2배로 "보정" 하지 않는다 — 호출자가 장비 간 비교를 할 때는 `vendor`/`bmc.model` 을 함께 본다.
 
 ```json
 "memory": {
@@ -829,7 +829,7 @@ Mellanox NIC · RAID 컨트롤러 슬롯에도 붙는다(PCIe 슬롯 단위 조�
 ① 그 카드가 FC 전용(구조 신호로 FC 로 분류돼 `hbas[]` 가 생겼고 이더넷 포트 0) ② PCIeDevice 본문이 바로 그 카드의 `Controllers[].Links.PCIeDevices`(정확히 1건)로 받은 응답
 (섀시 `PCIeDevices` 열거 · 캐시는 쓰지 않음 — RAID 는 어떤 NetworkAdapter 도 가리키지 않아 걸러진다) ③ `MessageId` 의 등록부 접두가 adapter `vendor_notes.pcie_port_link_condition_registries`
 (CSUS 3200: `H3Alert`)에 선언돼 있고 마지막 세그먼트가 `LinkUp`/`LinkDown`(`PcieLinkTrainingOk` 등 PCIe 자체 링크 메시지는 제외). 새 필드 · 추가 요청 0, `LogService/Oem/Iel` 은 쓰지 않는다.
-선언 없는 벤더 · Port `LinkStatus` 가 있는 장비(iLO 7 · XCC 3 · iDRAC)는 종전 문장 · 값 그대로다. 정본 `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-27 행 · `tests/evidence/2026-10-27-redfish-mock2-impl/07-csus-chassis-fc.md`.
+선언 없는 벤더 · Port `LinkStatus` 가 있는 장비(iLO 7 · XCC 3 · iDRAC)는 종전 문장 · 값 그대로다.
 
 **조용히 빠지던 경로 (2026-10-18 보완)** — 녹화본 변형으로 재현해 고쳤다: FC 링크 기술 포트에 `Ethernet` 블록만 있어 Ethernet 으로 오분류(HBA 0건 · 오류 0건) · 포트 `Id` 가 정수이고
 짝 없는 기능이 있으면 TypeError 로 섹션 전체 소실 · 카드 목록은 200 인데 카드 GET 이 전부 404 면 흔적 없이 미지원 · 한 경로가 200 빈 목록이면 다른 경로의 5xx 가 묻힘 · 이름 · 컨트롤러
@@ -895,7 +895,9 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 > **2026-10-27 (C8 03-network-004/006/007)** — Redfish: (1) `ports[].current_link_speed_mbps` 는 링크가 없는 포트에서 `null` 이다(iDRAC9 `NetworkPorts` 의 `0` 도 — 종전 0; Gbps 경로와 같은 규칙).
 > 호스트 NIC `interfaces[].speed_mbps` 의 `0` 은 원문 그대로다. (2) `interfaces[].mtu` 는 호스트 EthernetInterface 에 `MTUSize` 가 없으면 같은 MAC 의 NetworkDeviceFunction `Ethernet.MTUSize` 로 채운다
 > (실측 XCC 3 · iLO 7 일부 1500, 요청 0 증가, 모듈 raw 는 그대로). (3) `IPv6Addresses` 도 `addresses[]` 에 `family: ipv6`(`prefix_length` · `origin`)로 들어간다 — 실측 18대는 전부 비어 있어 DMTF mockup 으로 검증.
-> (4) **단위 관찰(03-network-003, 변경 없음)** — XCC 3 호스트 NIC `interfaces[].speed_mbps` 는 `EthernetInterfaces.SpeedMbps` 원문이며 Gbps×1024 꼴(25 GbE = `25600`, 32 G = `32768`)이고, 같은 봉투의 `ports[].current_link_speed_mbps`(`CurrentSpeedGbps`×1000 = `25000`/`32000`)와 단위 정의가 다르다.
+> (4) **단위 관찰(03-network-003, 변경 없음)** — XCC 3 호스트 NIC `interfaces[].speed_mbps` 는 `EthernetInterfaces.SpeedMbps` 원문이며 Gbps×1024 꼴(25 GbE = `25600`)이고, 같은 봉투의 `ports[].current_link_speed_mbps`(`CurrentSpeedGbps`×1000 = `25000`)와 단위 정의가 다르다
+> — 예: sr650_v4_01 `NIC2` `speed_mbps 25600` ↔ 같은 MAC 포트 `slot13_0x170000` 포트 1 `current_link_speed_mbps 25000`. FC 32 G 포트(`32000`, sr650_v4_03 `slot5_0x4c0000` · `slot6_0xa70000` 포트 1)는
+> `interfaces[]` 짝이 없다 — 호스트 `EthernetInterfaces` 의 8옥텟 FC 주소 항목(`SpeedMbps 32768`)은 03-network-001 로 `interfaces[]` 에서 빠졌다(2026-10-28 예시 정정 — 종전 `32 G = 32768` 은 빠진 항목의 값이었다).
 > 두 값은 각각의 원천을 그대로 두며(값을 고치거나 환산하지 않는다), 비교할 때는 포트 값을 쓴다. iDRAC 9 는 두 값이 같고(10000/10000), iLO 7 · RMC 는 호스트 NIC 에 `SpeedMbps` 가 없어 `interfaces[].speed_mbps` 가 null 이다(2026-10-27 2차 Mock 실측).
 
 ```json
@@ -1049,13 +1051,14 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 (입력 없음)인데 `System.Status.Health` 가 `Warning` 이고 Critical 은 `hardware.oem.aggregate_server_health` 에만 있다; XCC 3 는 `Critical` 이다. `hardware.health` 만 보고 PSU 상태를 추정하지 않는다(6.1).
 > **2026-10-27 (2차 Mock — 05-power-002 · 005 · 006 · 007)** — (1) PSU 의 입력 전력/전압 **키가 있고 값이 0** 이면(`LineInputVoltage 0` · `PowerInputWatts 0` · `Metrics.InputPowerWatts.Reading 0`)
 > notice `전원 공급 장치 <Name>[<MemberId>]: 입력 전력 0 W / 입력 전압 0 V 관측` 1건을 남긴다 — 관측만 적고 "AC 입력 없음" 같은 인과는 적지 않는다(실측 iLO 7 PSU#2 `UnavailableOffline` · XCC 3 PSU1
-> `Health Critical`). `psu_active` · `state` 는 바뀌지 않는다. (2) `power_control.power_capacity_watts` 는 **벤더·경로별로 뜻이 다른 장비 예산/가용 용량**이다(iDRAC 예산 1050, iLO 7 AC 입력 잃은 PSU 제외 1600,
-> XCC 3 `PowerSubsystem.CapacityWatts` 1300 = 이중화 설정 MaxPowerLimit; 없으면 PSU 용량 합) — 설치 PSU 정격 합은 `summary.total_capacity_w` 다. (3) `power_consumed_watts` 원천 순서: legacy
+> `Health Critical`). `psu_active` · `state` 는 바뀌지 않는다. (2) `power_control.power_capacity_watts` 는 **벤더·경로별로 뜻이 다른 장비 예산/가용 용량**이다 — 원천은 Power(legacy) `PowerControl[0].PowerCapacityWatts`,
+> 없으면 PSU 용량 합(Absent 제외)이고, Power 가 없어 PowerSubsystem 경로로 가면 PSU 용량 합이다 — `PowerSubsystem.CapacityWatts` 는 읽지 않는다(2026-10-28 원천 정정). 실측 iDRAC 1050 · iLO 7 1600
+> (PSU 2대가 Absent 인 전원 Off 호스트도 1600) · XCC 3 1300 은 모두 legacy PowerControl 값이고 벤더별 산출 방식은 확인하지 못했다 — 설치 PSU 정격 합은 `summary.total_capacity_w` 다. (3) `power_consumed_watts` 원천 순서: legacy
 > `PowerControl.PowerConsumedWatts` → `EnvironmentMetrics.PowerWatts` → `TelemetryService`(장비가 정의한 소비) → PSU `Metrics.OutputPowerWatts` 합(DC 출력) → PSU `Metrics.InputPowerWatts` 합(AC 입력 —
 > 변환 손실만큼 높다). 어느 원천인지는 값에 드러나지 않아 정밀 비교에는 쓰지 않는다. (4) `power_supplies[]` 하위 키 8 · `power_control` 6 · `summary` 12 가 사전에 등재됐다 — Absent 슬롯의 `power_capacity_w` ·
 > `firmware_version "0.00"` 은 null 이다(WP3). ESXi 는 모델 · 시리얼 · 용량 · min/avg/max 가 null 이다.
 > **2026-10-10** — PSU 요약(`psu_count` · `power_capacity_watts` 의 PSU 합)은 `State=Absent` 슬롯을 제외한다. `power_capacity_watts` 의 출처는 둘이다:
-> legacy `Power.PowerControl.PowerCapacityWatts`(장비 예산값)와 `PowerSubsystem` 경로의 PSU 용량 합 — 같은 장비에서 값이 다를 수 있다.
+> legacy `Power.PowerControl[0].PowerCapacityWatts`(없으면 PSU 용량 합 — 값의 뜻은 벤더 정의, 위 (2))와 `PowerSubsystem` 경로의 PSU 용량 합 — 같은 장비에서 값이 다를 수 있다.
 > Power 와 Thermal 이 모두 404 면 `sections.power/thermal = not_supported` 다. PSU 컬렉션 · 멤버 조회가 404 가 아닌 오류로 끝나면 `errors[]` 에 남고
 > "PSU 0" 처럼 성공으로 보이지 않는다.
 > **2026-10-19** — (1) `power.summary`(`psu_count` · `redundant` · `total_capacity_w` · `capacity_unknown_count` · `consumed_watts` · `consumed_capacity_pct` 등): 용량을 아는 PSU 가 하나도 없으면 `total_capacity_w` 는 **`null`**
@@ -1069,7 +1072,7 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 
 > 2026-06-14 (DELL R740 BMC-1): bmc 하위 필드가 field_dictionary 에 문서화됨 (이전엔 `bmc.ip` 만).
 > **2026-10-27 (2차 Mock C11 — 06-bmc-003/004/005/006)** — (1) `ip` · `mac_address` · `dns_name` 은 같은 Manager NIC 에서 뽑는다: ① 수집 대상 주소를 가진 NIC → ② `Links.HostInterface` 가
-> 없고 `InterfaceEnabled` 가 false 가 아닌 NIC(iLO 7 의 USB 가상 NIC `16.1.15.1` 제외) → ③ 첫 NIC(종전). 실측 18대 값 불변. (2) `name` 은 layout 이 없어도 `ManagerType` 이 `RackManager`/`EnclosureManager` 면
+> 없고 `InterfaceEnabled` 가 false 가 아닌 NIC(iLO 7 의 USB 가상 NIC `16.1.15.1` 제외) → ③ IPv4 를 가진 첫 NIC(종전 — 후보는 0.0.0.0 이 아닌 IPv4 를 가진 NIC 뿐). 실측 18대 값 불변. (2) `name` 은 layout 이 없어도 `ManagerType` 이 `RackManager`/`EnclosureManager` 면
 > Manager `Id`(CSUS `RMC`) 또는 ManagerType — vendor 라벨 `iLO` 로 떨어지지 않는다. (3) `timezone` 은 `TimeZoneName`(iDRAC `CST6CDT` · RMC `Asia/Seoul`) → 없으면 iLO `DateTimeService` 의
 > `TimeZone.Value`(`JST-9:00` · `GMT-0`, +1 GET) → XCC 는 null. (4) `datetime` 표기는 벤더마다 다르다 — iLO 는 UTC `Z` + `datetime_offset`(`+09:00`) 분리, XCC · RMC · iDRAC 은 로컬시에 오프셋 포함
 > (`2026-10-22T15:48:28+09:00`). 두 키를 함께 읽어야 같은 시각이 된다; 수집 시각의 BMC 시계라 비교 키로 쓰지 않는다.
@@ -1102,7 +1105,7 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 > **2026-10-27 (2차 Mock — 05-thermal-001 · 003 · 004)** — (1) `Status.State == Absent` 인 온도 센서 · 팬은 **항목을 두지 않고** notice `Absent 센서 N건 제외 (온도 n · 팬 m) — 미장착 슬롯` 1건만
 > 남긴다(실측 iLO 7: 미장착 슬롯 센서 7~9개가 0 °C 로 나왔다). (2) `State` 가 `Enabled` 가 아니면(`UnavailableOffline` — 전원 Off 호스트) `reading_celsius` · `reading` 은 null 이고 `state` 는 원문이다
 > — 0 은 측정값이 아니다. `Status` 가 아예 없는 펌웨어(HPE CSUS RMC ThermalMetrics)는 `health` · `state` 가 null 이고 값은 그대로다. (3) **음수 `reading_celsius` 는 온도가 아니라 스로틀 마진**이다
-> (Lenovo `CPUn DTS TMargin` -52~-69 · `upper_critical 0`, CSUS `P*_THROT_OFFSET` -16~-59) — 0 에 가까울수록 임계에 가깝다. 수집기는 이름으로 거르지 않는다(벤더 문자열 분기 금지); 소비자가
+> (Lenovo `CPUn DTS TMargin` -48~-69 · `upper_critical 0`, CSUS `P*_THROT_OFFSET` -15~-60 — 2026-10-28 18대 봉투 재계산) — 0 에 가까울수록 임계에 가깝다. 수집기는 이름으로 거르지 않는다(벤더 문자열 분기 금지); 소비자가
 > `physical_context` 와 이름으로 가른다. (4) ThermalSubsystem 이름 폴백은 `DeviceName → Name → DataSourceUri 마지막 세그먼트`, 팬 `SpeedPercent.SpeedRPM` 이 있으면 RPM 으로 낸다(합성 검증).
 > **2026-10-19 (ESXi, 사용자 승인)** — ESXi 는 numericSensorInfo 의 sensorType `temperature` → `temperatures[]`(`reading_celsius` = currentReading×10^unitModifier 반올림, `health` green/yellow/red →
 > OK/Warning/Critical(unknown → null), `state: Enabled`, `upper_critical: null`(임계값 미제공), `physical_context` 는 센서 이름 앞 엔티티 — Processor→CPU · Memory Module→Memory · System Board→SystemBoard ·
@@ -1202,14 +1205,16 @@ Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 를 
 
 ### 6.9 `data.firmware` (Redfish 전용, 2026-10-27 신설 — 04-firmware-012)
 
-`UpdateService/FirmwareInventory` 멤버마다 1항목. 키 7개: `id`(멤버 Id) · `name` · `version` · `updateable`(`boolean|null`) · `component`(SoftwareId) · `category` · `pending`.
+`UpdateService/FirmwareInventory` 멤버마다 1항목. 키 7개: `id`(멤버 Id) · `name` · `version` · `updateable`(`boolean|null`) · `component`(SoftwareId) · `pending` · `category`.
 
 ```json
 "firmware": [
-  { "id": "UEFI", "name": "Firmware:UEFI", "version": "IHX414J 1.22", "updateable": true, "component": "UEFI-IHX4-10", "category": "bios", "pending": false },
-  { "id": "PCIeDevice.11", "name": "HPE SN1100Q 16Gb 2p FC HBA", "version": "9.15.05 (d0d5)", "updateable": null, "component": "rack1/chassis_u1/cpu2/io_slot11", "category": "other", "pending": false }
+  { "id": "UEFI", "name": "Firmware:UEFI", "version": "20L-1.50", "updateable": true, "component": "UEFI-IHE1-6", "pending": false, "category": "bios" },
+  { "id": "PCIeDevice_slot5_0x4c0000.Bundle", "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter", "version": "4.09.04", "updateable": true, "component": "DEVICE-1077-2281-1077-02F5-13", "pending": false, "category": "other" }
 ]
 ```
+
+(2차 Mock sr650_v4_02 봉투 발췌 — 2026-10-28 정정: 종전 예시는 UEFI 항목에 BMC 값을 섞었고 키 순서도 봉투와 달랐다.)
 
 - **`category`** — 구조 근거가 1순위(`Bios.Links.ActiveSoftwareImage` → `bios`, `Manager.Links.ActiveSoftwareImage` → `bmc`, 멤버 `RelatedItem` 이 `…/Bios` → `bios`; `RelatedItem → Managers/{id}` 는
   bmc 근거가 아니다 — Lenovo HPM-FPGA 가 같은 링크), 그 다음 검증된 토큰 사슬, 그 다음 같은 봉투 `storage.controllers[].controller_model` 과 이름 일치(`storage_controller`). enum 14값은
@@ -1221,7 +1226,8 @@ Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 를 
 - **Dell** — `Installed-`/`Current-`/`Previous-` 접두 Id 중 같은 컴포넌트는 처음 본 것 1건(first-seen dedup; `Previous-` 제외). 접두가 섞이는 것은 관찰(04-firmware-008).
 - **HPE CSUS 3200** — FirmwareInventory 가 complex/nPar 번들 2건뿐이라 adapter `firmware_inventory_scope: complex_only` 로 섀시 `PCIeDevices`(`PCIeDevice.<Id>`, name=Model, component=슬롯 라벨)
   와 PSU(`PowerSupply.<idx>`) 펌웨어를 보충한다. `hardware.bios_version == bmc.firmware_version`(번들 버전, 04-firmware-011) 이고 bios/bmc 항목은 없다.
-- **전원 Off 호스트** — 목록은 그대로 나오고 `system` notice `호스트 전원 Off 관측` 1건이 붙는다(WP3).
+- **전원 Off 호스트** — 목록은 그대로 나오고 `system` notice `호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음` 1건이 붙는다
+  (WP3; 2026-10-28 '네트워크' 추가 — 전원 Off 호스트는 `network.interfaces[].link_status` 가 unknown 이고 카드 포트가 0 일 수 있다).
 - 모듈 산출 최상위 `firmware_links`(category 구조 근거)는 최종 JSON 에 나가지 않는다.
 
 ## 7. 자주 묻는 질문
@@ -1236,8 +1242,10 @@ Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 를 
 아니다. 장비(BMC / OS / ESXi)가 hostname 을 제공하지 않으면 `null` 이다 (2026-06-16 정책 — "없는 건 없는 것"). **IP 로 fallback 하지 않는다.** 주소가 필요하면 별도 `ip` 필드를 본다. `hostname` 이 `ip` 와 같은 값으로 나오면 그건 옛 ip-fallback 잔재(정책 위반)다. 상세는 8절 참조.
 
 **Q. `correlation.bmc_ip` 와 `correlation.host_ip` 가 같다. 버그인가?**
-`host_ip` 는 요청 대상 주소, `bmc_ip` 는 Manager `EthernetInterfaces` 중 IPv4 를 가진 **첫 NIC** 의 주소(0.0.0.0 제외)다. Redfish 채널은 보통 같지만 **다를 수 있다** — NAT/VIP 로
-접근하거나 공유 NIC 이 먼저 나열되는 장비(2026-10-27 정의 문서화, 01-correlation-010; 2차 Mock 18대는 전용 관리 NIC 이 첫 멤버라 적절했다). OS / ESXi 채널은 `bmc_ip` 가 null 이다(OS 는 BMC 를 모른다).
+`host_ip` 는 요청 대상 주소(inventory 의 `ansible_host`, 없으면 `inventory_hostname`)이고, `bmc_ip` 는 `data.bmc.ip` 와 같은 값이다 — Manager `EthernetInterfaces` 중 0.0.0.0 이 아닌
+IPv4 를 가진 NIC 에서 ① 대상 주소를 가진 NIC → ② `Links.HostInterface` 가 없고 `InterfaceEnabled` 가 false 가 아닌 NIC → ③ 첫 NIC 순으로 고른 NIC 의 첫 IPv4 다(6.6, 06-bmc-005;
+2026-10-28 정정 — 종전 문구 "IPv4 를 가진 첫 NIC" 는 ③ 뿐이다). Redfish 채널은 보통 같지만 대상 주소가 어느 Manager NIC 에도 없으면(NAT/VIP 경유) **다르다** — Mock 재생 시험은 요청 주소가
+`127.0.0.1` 이라 18대 모두 `host_ip ≠ bmc_ip` 다(01-correlation-010). OS / ESXi 채널은 `bmc_ip` 가 null 이다(OS 는 BMC 를 모른다).
 
 **Q. HPE Compute Scale-up Server 3200 의 시리얼에 `-000` 이 붙는다 / OS 와 Redfish 가 다르다. 버그인가?**
 이 장비는 파티션(nPartition) 구조라 시스템 시리얼이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다 (`SGHD3TLNDD-000`).
