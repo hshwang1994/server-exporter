@@ -50,27 +50,43 @@ WATCHED_DIRS = [
 def _git_ls_files_staged(repo_root: Path, subdir: str) -> Optional[List[Tuple[str, str]]]:
     """git index의 <subdir> 추적 파일을 (경로, blob OID) list로 반환.
 
+    2026-10-28 (독립 검증 F-10): 경로는 `core.quotepath=off` + `-z` 로 받은 bytes 를 UTF-8 로 해석한다. 종전(`text=True` +
+    기본 quotepath)은 한글 경로를 8진 escape 문자열로 해싱해 실행자의 quotepath 설정에 따라 지문이 갈렸고(tests 의 한글 경로),
+    quotepath=false 이면 출력을 콘솔 인코딩(cp949)으로 풀다 실패했다. 이제 git 설정 · 콘솔 인코딩과 무관하게 같은 값이다.
     git 사용 불가(미설치 / 비 git 디렉터리) 시 None.
     """
     try:
         proc = subprocess.run(
-            ["git", "-C", str(repo_root), "ls-files", "-s", "--", subdir],
+            ["git", "-C", str(repo_root), "-c", "core.quotepath=off", "ls-files", "-s", "-z", "--", subdir],
             capture_output=True,
-            text=True,
             check=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         return None
     entries: List[Tuple[str, str]] = []
-    for line in proc.stdout.splitlines():
-        # 형식: "<mode> <oid> <stage>\t<path>"
-        if "\t" not in line:
+    for rec in proc.stdout.split(b"\0"):
+        # 형식: "<mode> <oid> <stage>\t<path>" — -z 라 경로는 escape 없는 원문, 레코드는 NUL 로 끝난다
+        if b"\t" not in rec:
             continue
-        meta, path = line.split("\t", 1)
+        meta, path = rec.split(b"\t", 1)
         parts = meta.split()
         if len(parts) >= 2:
-            entries.append((path, parts[1]))
+            entries.append((path.decode("utf-8", "surrogateescape"), parts[1].decode("ascii", "replace")))
     return entries
+
+
+def _git_untracked(repo_root: Path, subdirs: List[str]) -> List[str]:
+    """index 에 없는(.gitignore 제외) <subdirs> 의 파일 — `--update` 경고용. git 불가 시 빈 list."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_root), "-c", "core.quotepath=off", "ls-files", "-z", "--others", "--exclude-standard",
+             "--", *subdirs],
+            capture_output=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return []
+    return [p.decode("utf-8", "surrogateescape") for p in proc.stdout.split(b"\0") if p]
 
 
 def _fingerprint_dir_disk(d: Path) -> str:
@@ -105,7 +121,7 @@ def fingerprint_dir(repo_root: Path, subdir: str) -> str:
         return "missing"
     h = hashlib.sha1()
     for path, _oid in sorted(entries):
-        h.update(f"{path}\n".encode("utf-8"))
+        h.update(f"{path}\n".encode("utf-8", "surrogateescape"))
     return h.hexdigest()[:12]
 
 
@@ -147,6 +163,12 @@ def main() -> int:
         fp_path.parent.mkdir(parents=True, exist_ok=True)
         fp_path.write_text(_format_fingerprint_yaml(current), encoding="utf-8")
         print(f"baseline 갱신: {fp_path}")
+        # 2026-10-28 (독립 검증 F-10): 지문은 index 기준이다 — 아직 add 하지 않은 파일은 빠진다(차단하지 않고 알린다)
+        untracked = _git_untracked(repo_root, WATCHED_DIRS)
+        if untracked:
+            print(f"[WARN] index 에 없는 파일 {len(untracked)}개는 지문에 들어가지 않았다 — add/commit 뒤 --update 를 다시 실행:")
+            for p in untracked[:10]:
+                print(f"  - {p}")
         return 0
 
     if not fp_path.is_file():
