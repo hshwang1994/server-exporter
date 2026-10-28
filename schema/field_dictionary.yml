@@ -1039,16 +1039,30 @@ fields:
     # redfish(_normalize_link_status)/os-linux/os-windows/esxi-interfaces 코드 일치.
     # 이전 enum ["linkup","linkdown","none"]은 코드/baseline 어느 쪽과도 불일치였음(정본=코드).
     # redfish dell/hpe/lenovo baseline 의 linkup/linkdown/none 은 stale → 실장비 재캡처 의무.
+    # 2026-10-28 (독립 검증 F-01): Redfish 의 같은 MAC 포트 보충 규칙 명시 (normalize_standard.yml interfaces 번들).
     help_ko: >-
       NIC 링크 상태 (전 채널 통일 canonical).
       up=링크 활성, down=링크 비활성(미연결/disabled/offline 포함),
       unknown=상태 미제공/판별 불가 (HPE/Cisco System NIC 등), null=필드 자체 미제공.
       Redfish의 System EthernetInterfaces는 서버 NIC 하드웨어 정보이며,
       IP 주소/게이트웨이는 일반적으로 비어 있음 (OS 수준 정보이므로).
+      Redfish 보충: NIC 자체 값이 unknown 이면 MAC 이 같은 network.ports[](Ethernet,
+      포트 AssociatedMACAddresses 의 첫 주소)의 link_status 로 채운다. 같은 MAC 포트가 여럿이면
+      모두 같은 값일 때만 채우고, 그 NIC 의 speed_mbps 가 null 이면 포트 current_link_speed_mbps 도
+      같은 조건으로 채운다. NIC 자체 값은 덮어쓰지 않으며, 맞는 포트가 없거나 포트끼리 값이
+      다르면 unknown 그대로다(storage.hbas 의 down 규칙과 다름). 본딩으로 포트의 첫 주소가
+      다른 NIC 의 MAC 이면, 그 포트의 영구 주소로만 연결되는 NIC 은 unknown 으로 남는다.
     help_en: >-
       NIC link state (canonical, unified across all channels).
       up=link active, down=link inactive (incl. unplugged/disabled/offline),
       unknown=status not reported/undeterminable (HPE/Cisco System NICs), null=field absent.
+      Redfish fill: when the NIC itself reports unknown, the link_status of the network.ports[]
+      entry with the same MAC (Ethernet; the port's first AssociatedMACAddresses entry) is used.
+      With several same-MAC ports the value is filled only when they all agree; if the NIC's
+      speed_mbps is null, the port current_link_speed_mbps is filled under the same rule. NIC
+      values are never overwritten; with no matching port or disagreeing ports the value stays
+      unknown (unlike the storage.hbas down rule). When bonding makes a port's first address
+      another NIC's MAC, a NIC tied to that port only by its permanent address stays unknown.
 
   # ──────────────────────────────────────────────────────────────────────────
   # power

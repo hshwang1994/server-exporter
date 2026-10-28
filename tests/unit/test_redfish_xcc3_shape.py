@@ -4,8 +4,11 @@
   (a) 호스트 EthernetInterfaces 중 FC/IB 포트 주소(8옥텟 또는 network_adapters.ports 의 FC/IB 주소)는 network.interfaces 에서 제외하고
       normalize notice 1건을 남긴다. 모듈 raw(data.network)·ports[]·hbas[] 개수는 바뀌지 않는다 (사용자 3차 지시 (iii)).
   (b) Status.State=Disabled 이고 Version 이 빈 '-Pending' 펌웨어는 제외 + notice, Version 이 있으면 pending:true 보존.
-  (c) PSU 문자열 strip · link unknown ∧ speed null 인 NIC 만 같은 MAC 의 Ethernet 포트로 보충 · DIMM locator DeviceLocator → ServiceLabel → Slot ·
+  (c) PSU 문자열 strip · DIMM locator DeviceLocator → ServiceLabel → Slot ·
       Lenovo hardware.oem machine_type/led_indicator 를 System.SubModel/IndicatorLED 로.
+  (d) 03-network-002 (2026-10-28 독립 검증 F-01 정정): link 가 unknown 인 NIC 은 NIC speed 와 무관하게, MAC 이 같은 Ethernet 포트
+      전부가 같은 값일 때만 그 link 로 보충한다(그 NIC 의 speed 가 null 이면 speed 도). 종전 'unknown ∧ speed null' 은 XCC3 NIC 을 놓쳤다.
+      본딩 영구 주소 NIC(sr650_v4_02 NIC6 · _04 NIC4)은 포트 쪽 주소가 없어 unknown 으로 남는다 — 미해결, 추측하지 않는다.
   (i) XCC3 는 NetworkDeviceFunctions 컬렉션이 200·0건이어도 Port 신호로 FC 포트 4건이 hbas·ports 에 수집된다 (사용자 3차 지시).
   (ii) 디스크·FC 가 없는 장비는 physical_disks/hbas 가 정확히 [] 이고 placeholder 가 없다.
 기대값은 손으로 적었다.
@@ -13,6 +16,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -127,6 +131,150 @@ def test_exclusion_rule_uses_address_length_and_fc_ib_port_addresses():
     assert out["NIC2"]["link_status"] == "unknown" and out["NIC2"]["speed_mbps"] is None
     assert out["NIC5"]["link_status"] == "linkup" and out["NIC5"]["speed_mbps"] == 1000
     assert out["NIC5"]["is_primary"] is False and out["NIC1"]["is_primary"] is True   # IPv4 없음 → 첫 up NIC fallback
+
+
+# ── (d) 03-network-002 — 같은 MAC 포트로 link 보충: NIC speed 와 무관, 포트 전부 일치할 때만 ──────────────────────────────────────
+
+SUMMARY_TPL = _set_fact("redfish | normalize_standard | compute group summaries", "_rf_summary_network")
+
+
+def _eth_port(aid, pid, mac, link, speed):
+    return {"adapter_id": aid, "port_id": pid, "port_type": "Ethernet", "associated_address": mac,
+            "link_status": link, "current_link_speed_mbps": speed}
+
+
+def _nic(nid, mac, link="unknown", speed=None):
+    return {"id": nid, "name": nid, "mac": mac, "link_status": link, "speed_mbps": speed, "ipv4": []}
+
+
+def _ifaces(network, ports):
+    netad = {"ports": ports, "adapters": [], "fc_hbas": [], "infiniband": []}
+    return {i["id"]: i for i in _render(BUNDLE_TPL, _rf_d_network=network, _rf_d_netad=netad)["interfaces"]}
+
+
+def test_link_fill_does_not_depend_on_nic_speed():
+    # XCC3 실측 모양: 호스트 NIC 에 LinkStatus 가 없고 SpeedMbps 25600/0 이 있다 — 종전 조건(speed null)은 이 NIC 을 놓쳤다
+    out = _ifaces([_nic("NIC2", "aa:bb:cc:00:00:01", speed=25600), _nic("NIC1", "aa:bb:cc:00:00:02", speed=0)],
+                  [_eth_port("slot13", "1", "aa:bb:cc:00:00:01", "up", 25000), _eth_port("slot13", "2", "aa:bb:cc:00:00:02", "down", None)])
+    assert (out["NIC2"]["link_status"], out["NIC2"]["speed_mbps"]) == ("up", 25600)         # speed 는 NIC 값(포트 25000 아님)
+    assert (out["NIC1"]["link_status"], out["NIC1"]["speed_mbps"]) == ("down", 0)
+
+
+@pytest.mark.parametrize("links,expected", [
+    (("up", "up"), "up"),
+    (("down", "down"), "down"),
+    (("up", "down"), "unknown"),          # 포트끼리 다르면 보충하지 않는다
+    (("up", "unknown"), "unknown"),
+    (("up", None), "unknown"),
+])
+def test_link_fill_uses_every_same_mac_port_and_requires_agreement(links, expected):
+    # 본딩 실측(sr650_v4_02/04 NIC2): 같은 MAC 이 두 포트의 AssociatedMACAddresses[0] 에 있다. 종전에는 뒤 포트가 앞 포트를 덮었다
+    ports = [_eth_port("slot13", "1", "aa:bb:cc:00:00:01", links[0], 25000), _eth_port("slot14", "1", "aa:bb:cc:00:00:01", links[1], 25000)]
+    assert _ifaces([_nic("NIC2", "aa:bb:cc:00:00:01", speed=25600)], ports)["NIC2"]["link_status"] == expected
+
+
+@pytest.mark.parametrize("speeds,expected", [
+    ((25000, 25000), 25000),
+    ((25000, None), None),               # 포트끼리 다르면 null 유지
+    ((25000, 10000), None),
+    ((None, None), None),
+])
+def test_speed_fill_needs_null_nic_speed_and_agreeing_ports(speeds, expected):
+    ports = [_eth_port("a", "1", "aa:bb:cc:00:00:01", "up", speeds[0]), _eth_port("b", "1", "aa:bb:cc:00:00:01", "up", speeds[1])]
+    out = _ifaces([_nic("NIC1", "aa:bb:cc:00:00:01")], ports)
+    assert (out["NIC1"]["link_status"], out["NIC1"]["speed_mbps"]) == ("up", expected)
+
+
+def test_link_fill_never_overwrites_nic_values_and_never_defaults_to_down():
+    ports = [_eth_port("a", "1", "aa:bb:cc:00:00:01", "up", 25000), _eth_port("a", "2", "aa:bb:cc:00:00:02", "up", 25000)]
+    out = _ifaces([
+        _nic("NIC1", "aa:bb:cc:00:00:01", link="LinkDown"),            # NIC 자체 link 가 있으면 그대로 — speed 도 건드리지 않는다
+        _nic("NIC2", "aa:bb:cc:00:00:02", link="up"),                  # iLO 실측 모양(link up · speed null) — speed 보충 안 함
+        _nic("NIC3", "aa:bb:cc:00:00:03"),                             # 같은 MAC 포트 없음
+    ], ports)
+    assert (out["NIC1"]["link_status"], out["NIC1"]["speed_mbps"]) == ("linkdown", None)
+    assert (out["NIC2"]["link_status"], out["NIC2"]["speed_mbps"]) == ("up", None)
+    assert (out["NIC3"]["link_status"], out["NIC3"]["speed_mbps"]) == ("unknown", None)  # HBA 의 down 정책을 쓰지 않는다
+
+
+# 원천: 같은 MAC 의 Chassis/1/NetworkAdapters/<id>/Ports/<n>.LinkStatus (호스트 NIC 원문 Systems/1/EthernetInterfaces/NICn 에는 LinkStatus 가 없다)
+XCC3_LINKS = {
+    "real_lenovo_sr650_v4_01": ({"ToManager": "unknown", "NIC1": "down", "NIC2": "up", "NIC3": "down", "NIC4": "up"}, "NIC2"),
+    "real_lenovo_sr650_v4_02": ({"ToManager": "unknown", "NIC1": "down", "NIC2": "up", "NIC5": "down", "NIC6": "unknown"}, "NIC2"),
+    "real_lenovo_sr650_v4_03": ({"ToManager": "unknown", **{f"NIC{i}": "up" for i in (1, 2, 3, 4, 9, 10, 11, 12, 13, 14)}}, "NIC1"),
+    "real_lenovo_sr650_v4_04": ({"ToManager": "unknown", "NIC1": "down", "NIC2": "up", "NIC3": "down", "NIC4": "unknown"}, "NIC2"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(XCC3_LINKS))
+def test_xcc3_fixture_links_come_from_same_mac_ports(name):
+    links, primary = XCC3_LINKS[name]
+    b, g = _bundle_for(name)
+    out = {i["id"]: i for i in b["interfaces"]}
+    raw = {n["id"]: n for n in g["network"]}
+    assert all(raw[k]["link_status"] == "unknown" for k in out)                     # 모듈 값은 전부 unknown
+    assert {k: v["link_status"] for k, v in out.items()} == links
+    assert [k for k, v in out.items() if v["is_primary"]] == [primary]
+    assert all(out[k]["speed_mbps"] == raw[k]["speed_mbps"] for k in out)          # speed 는 NIC 값 그대로
+
+
+@pytest.mark.parametrize("name,nic", [("real_lenovo_sr650_v4_02", "NIC6"), ("real_lenovo_sr650_v4_04", "NIC4")])
+def test_bonded_permanent_mac_nic_stays_unknown(name, nic):
+    # 미해결(2026-10-28 HOLD): 이 NIC 의 MAC 은 slot14 Ports/1 의 AssociatedMACAddresses[1](영구 주소)에만 있고 모듈은 [0] 만 내보낸다.
+    # NIC 의 SpeedMbps 25600 으로 링크를 추측하지 않는다.
+    b, g = _bundle_for(name)
+    raw = {n["id"]: n for n in g["network"]}
+    port_addrs = {(p.get("associated_address") or "").lower() for p in g["network_adapters"]["ports"]}
+    assert raw[nic]["speed_mbps"] == 25600 and raw[nic]["mac"].lower() not in port_addrs
+    assert {i["id"]: i["link_status"] for i in b["interfaces"]}[nic] == "unknown"
+
+
+# 종전 보충 결과(DL380 3 label 16건, 전부 down)는 그대로이고, link 가 이미 있는 iLO NIC 의 speed(null)는 건드리지 않는다
+DL380_FILLED = {
+    "real_hpe_dl380": {"14", "141", "142", "206"},
+    "real_hpe_dl380_gen12_01": {"77", "141", "142", "270", "334", "461"},
+    "real_hpe_dl380_gen12_02": {"13", "14", "142", "205", "206", "334"},
+}
+
+
+@pytest.mark.parametrize("name", sorted(DL380_FILLED))
+def test_dl380_fill_result_is_unchanged(name):
+    b, g = _bundle_for(name)
+    raw = {n["id"]: n for n in g["network"]}
+    out = {i["id"]: i for i in b["interfaces"]}
+    filled = {k for k, v in out.items() if raw[k]["link_status"] == "unknown" and v["link_status"] != "unknown"}
+    assert filled == DL380_FILLED[name] and {out[k]["link_status"] for k in filled} == {"down"}
+    assert all(v["speed_mbps"] == raw[k]["speed_mbps"] for k, v in out.items())
+
+
+@pytest.mark.parametrize("name,unknown", [
+    ("real_hpe_csus3200_01", 8), ("real_hpe_csus3200_02", 4), ("real_hpe_csus3200_03", 8),   # 같은 MAC 포트 없음
+    ("real_hpe_dl380_gen12_03", 4),                                                          # 전원 Off — 포트 0
+    ("real_lenovo_sr650", 1),                                                                # ToManager
+    ("real_hpe_dl380_gen12_04", 0), ("real_dell_r740", 0),
+])
+def test_hosts_without_port_link_signal_keep_unknown(name, unknown):
+    b, _ = _bundle_for(name)
+    assert sum(1 for i in b["interfaces"] if i["link_status"] == "unknown") == unknown
+
+
+def _summary(name, interfaces):
+    env = NativeEnvironment()
+    env.filters["regex_replace"] = lambda s, pat, rep="": re.sub(pat, rep, "" if s is None else str(s))
+    return env.from_string(SUMMARY_TPL).render(_rf_d_netad=_golden(name)["data"]["network_adapters"], _rf_norm_interfaces=interfaces)
+
+
+@pytest.mark.parametrize("name,groups", [
+    ("real_lenovo_sr650_v4_01", [(None, 1, 0), (0, 2, 0), (25600, 2, 2)]),
+    ("real_lenovo_sr650_v4_02", [(None, 1, 0), (0, 2, 0), (25600, 1, 1), (25600, 1, 0)]),   # 마지막 그룹 = NIC6 (unknown)
+    ("real_lenovo_sr650_v4_03", [(None, 1, 0), (25600, 4, 4), (25600, 6, 6)]),
+    ("real_lenovo_sr650_v4_04", [(None, 1, 0), (0, 2, 0), (25600, 1, 1), (25600, 1, 0)]),   # 마지막 그룹 = NIC4 (unknown)
+])
+def test_xcc3_network_summary_counts_filled_links(name, groups):
+    b, _ = _bundle_for(name)
+    s = _summary(name, b["interfaces"])
+    assert [(x["speed_mbps"], x["quantity"], x["link_up_count"]) for x in s["groups"]] == groups
+    assert s["primary_speed_mbps"] == 25600
 
 
 # ── (i)(ii) 사용자 3차 지시 — XCC3 FC 포트 수집 · 장치 없는 장비의 빈 목록 ──────────────────────────────────────────────────

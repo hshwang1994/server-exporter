@@ -914,6 +914,11 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 - `up` / `down` — 링크 활성 / 비활성(미연결·disabled·offline 포함)
 - `unknown` — 상태 미제공/판별 불가 (HPE iLO / Cisco System NIC 등에서 종종 발생)
 - `null` — 응답에 필드 자체가 없음
+- **Redfish 보충 (2026-10-28 정정)** — 호스트 NIC 자체 값이 `unknown` 이면 MAC 이 같은 `network.ports[]`(Ethernet — 포트 `AssociatedMACAddresses` 의 첫 주소)의
+  `link_status` 로 채운다. 같은 MAC 포트가 여럿이면 모두 같은 값일 때만 채우고, 그 NIC 의 `speed_mbps` 가 null 이면 포트 `current_link_speed_mbps` 도 같은 조건으로 채운다.
+  NIC 자체 값은 덮어쓰지 않고, 맞는 포트가 없거나 포트끼리 값이 다르면 `unknown` 그대로다(`storage.hbas` 의 `down` 규칙과 다르다). 종전 조건(`unknown` 이면서 `speed_mbps` null)은
+  `SpeedMbps` 가 있는 XCC 3(SR650 V4) 호스트 NIC 을 놓쳤다 — 실측 4대 20건이 `unknown` 에서 `up`/`down` 이 됐다. 본딩으로 포트의 첫 주소가 다른 NIC 의 MAC 인 경우,
+  그 포트의 영구 주소로만 연결되는 NIC 은 `unknown` 으로 남는다(실측 2건 — 미해결).
 > **2026-10-10** — (1) `default_gateways[]` 는 **기본 경로 전부**다: Linux 는 metric 이 다른 복수 기본 경로 · ECMP(nexthop 마다) · IPv6 를 모두 내고(`ip route`
 > 의 via/dev 토큰을 읽는다 — `default dev ppp0` · `nhid` 형식도 바르게 읽는다), Windows 는 IPv4 · IPv6 를 가족별로 낸다. 기본 경로가 없는 host 는 `[]` 다
 > (종전 Linux 는 `"None"` 문자열이 들어갔다). (2) `interfaces[].addresses[].gateway` 는 그 주소 가족의 기본 경로가 그 인터페이스에 있을 때만 값이 있고,

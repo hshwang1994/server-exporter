@@ -75,7 +75,11 @@
     # 2026-10-27 (C4 03-network-001, 실측 Lenovo XCC3 SR650 V4): 호스트 EthernetInterfaces 가 FC HBA 포트를 8옥텟 "MAC"(=WWPN) 으로
     #   함께 노출한다(sr650_v4_02/03 각 4건). 주소가 8옥텟이거나 network_adapters.ports[] 의 FC/IB 포트 주소와 같으면 서버 NIC 이
     #   아니므로 interfaces 에서 뺀다(storage.hbas / storage.infiniband 가 그 포트를 요약한다). 모듈 raw(data.network)는 그대로다.
-    #   같은 루프에서 03-network-002: link_status 가 unknown 이고 speed 가 null 인 NIC 만, MAC 이 같은 Ethernet 포트의 link/speed 로 보충한다.
+    #   같은 루프에서 03-network-002: link_status 가 unknown 인 NIC 만, MAC 이 같은 Ethernet 포트(여러 개면 전부)의 link 로 보충하고 그 NIC 의
+    #   speed 가 null 이면 포트 speed 도 함께 본다. 포트끼리 값이 다르면 보충하지 않는다(unknown/null 유지 — HBA 의 down 정책 아님).
+    #   NIC 자체 값은 덮어쓰지 않고, link 가 이미 있는 NIC 의 speed 는 건드리지 않는다.
+    #   2026-10-28 (독립 검증 F-01): 종전 조건 'unknown ∧ speed null' 은 SpeedMbps 가 있는 XCC3 호스트 NIC 을 놓쳤고, MAC 당 포트 1개만 담아
+    #   같은 MAC 을 쓰는 두 포트(본딩)에서 앞 포트를 덮어썼다. 포트 주소는 모듈이 내보내는 AssociatedMACAddresses[0] 뿐이라 본딩 영구 주소 NIC 은 남는다.
     #   제외 수는 번들에 담아 다음 task 가 facts 로 풀고 normalize notice 에 쓴다.
     _rf_norm_interfaces_bundle: >-
       {%- set ns = namespace(out=[], primary_marked=false, fc_excluded=0, fc_addrs=[], eth_ports={}) -%}
@@ -85,7 +89,7 @@
         {%- if paddr and ('fibre' in pt or pt == 'fc' or 'fcoe' in pt or 'infin' in pt or pt == 'ib') -%}
           {%- set _ = ns.fc_addrs.append(paddr) -%}
         {%- elif paddr -%}
-          {%- set _ = ns.eth_ports.update({paddr: p}) -%}
+          {%- set _ = ns.eth_ports.update({paddr: (ns.eth_ports.get(paddr, []) + [p])}) -%}
         {%- endif -%}
       {%- endfor -%}
       {%- for nic in (_rf_d_network | default([])) -%}
@@ -118,11 +122,14 @@
         {%- endif -%}
         {%- set link = (nic.link_status|lower) if nic.link_status is defined and nic.link_status is not none else 'unknown' -%}
         {%- set speed = nic.speed_mbps|default(none) -%}
-        {%- set eport = ns.eth_ports.get(nic_hex, none) if nic_hex else none -%}
-        {%- if eport is not none and link == 'unknown' and speed is none -%}
-          {%- set plink = (eport.link_status | default('') | string | lower) -%}
-          {%- if plink in ['up', 'down'] -%}{%- set link = plink -%}{%- endif -%}
-          {%- set speed = eport.current_link_speed_mbps | default(none) -%}
+        {%- set eports = ns.eth_ports.get(nic_hex, []) if nic_hex else [] -%}
+        {%- if eports and link == 'unknown' -%}
+          {%- set plinks = eports | map(attribute='link_status') | map('default', '') | map('string') | map('lower') | unique | list -%}
+          {%- if plinks | length == 1 and plinks[0] in ['up', 'down'] -%}{%- set link = plinks[0] -%}{%- endif -%}
+          {%- if speed is none -%}
+            {%- set pspeeds = eports | map(attribute='current_link_speed_mbps') | map('default', none) | unique | list -%}
+            {%- if pspeeds | length == 1 -%}{%- set speed = pspeeds[0] -%}{%- endif -%}
+          {%- endif -%}
         {%- endif -%}
         {%- set is_pri = false -%}
         {%- if not ns.primary_marked and link in ['linkup','up'] and addrs|length > 0 -%}
