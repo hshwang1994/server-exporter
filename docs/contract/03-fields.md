@@ -551,7 +551,7 @@ for e in response["errors"]:
   "total_basis":  "physical_installed",  // 합계의 산출 기준
   "installed_mb": 655360,                // 물리 장착 (Redfish / OS 채널)
   "visible_mb":   null,                  // OS / ESXi 가 보는 양 (Redfish 미수집 — spec 미정의)
-  "free_mb":      null,                  // 가용량 (OS 채널 전용)
+  "free_mb":      null,                  // 가용량 (OS · ESXi 채널 — Redfish 는 항상 null)
   "slots":        [ /* DIMM 개별 정보 */ ],
   "summary":      { /* 같은 단위 DIMM 묶은 집계 */ }
 }
@@ -560,7 +560,8 @@ for e in response["errors"]:
 **Channel 매핑 (2026-05-11)**:
 - `installed_mb` channel: `[redfish, os]` — ESXi 는 ansible_memtotal_mb 만 (DIMM slot 미수집) → channel 제외
 - `visible_mb` channel: `[os, esxi]` — Redfish API spec 미정의 (`Memory.v1_*.json` 에 `VisibleMiB` 없음) → channel 제외
-- `free_mb` channel: `[os]` — OS 채널 전용
+- `free_mb` channel: `[os, esxi]` — Redfish 는 BMC 가 OS 가용량을 알 수 없어 항상 null (2026-10-29 SA-11 정정: 종전 이 줄은 `[os]` 였고
+  사전에 항목이 없었다 — ESXi 도 `vmware_host_facts` 의 `ansible_memfree_mb` 를 낸다)
 - 정본: `schema/field_dictionary.yml` 의 memory.installed_mb / memory.visible_mb / memory.free_mb 의 `channel:` 배열
 
 `total_basis` 값으로 어느 채널 기준인지 안다.
@@ -590,6 +591,18 @@ for e in response["errors"]:
 > **2026-10-27 (C8)** — Redfish 도 `cpu.summary.groups[].l2_cache_kb` · `l3_cache_kb`(소켓당 KB)를 낸다: Processor OEM 캐시(iLO `Oem.Hpe.Cache[]` · XCC `Oem.Lenovo.CacheInfo[]` ·
 > iDRAC `DellProcessor.Cache{N}InstalledSizeKB` · HPE RMC `Oem.Hpe.L3CacheSize` "22.50 MB" → KB) — 실측 6737P `65536`/`147456`, 없으면 null(RMC 는 L3 만). `memory.slots[].rank_count` 는
 > `RankCount` 가 없는 HPE RMC 에서 OEM Label `1Rx4` 의 `1` 로 채운다(02-memory-004). DIMM 속도는 FIX 3 메모.
+> **2026-10-29 (Summary 정합성 — SA-04 · SA-05 · SA-11)** — Redfish 는 **부분 합을 전체 합으로 쓰지 않는다**(null = 미제공 · 확정 불가, 0 = 확인한 0).
+> (1) memory: DIMM 합은 DIMM 목록을 다 읽고 모든 DIMM 의 `CapacityMiB` 를 알 때만 `total_mb` · `installed_mb` · `summary.grand_total_gb` 가 된다. 멤버 조회 실패
+> (5xx · 404 · `@odata.id` 없음 · 컬렉션 절단)나 용량 미상 DIMM 이 있으면 같은 System 의 `MemorySummary.TotalSystemMemoryGiB` 가 양수이고 아는 합 이상(용량 미상 DIMM 이
+> 있으면 아는 합 초과)일 때만 그 값을 쓰고, 아니면 `null` 이다 — notice `DIMM 합계를 확정하지 못함 … 부분 합을 쓰지 않음`. 종전에는 읽은 DIMM 의 합을 전체로 적었다.
+> 그룹은 아는 DIMM 만 담으므로 이때 `grand_total_gb` 와 그룹 합이 다를 수 있다. 멤버 조회 실패는 종전처럼 `errors[]` 에도 남는다.
+> (2) cpu: `cores_physical` 은 CPU 목록을 다 읽고 모든 CPU 의 `TotalCores` 가 양수일 때만 합이다. 아니면 같은 System 의 `ProcessorSummary.CoreCount` 가 양의 정수이고
+> (아는 코어 합 + 코어 미상 CPU 수) 이상이며 `ProcessorSummary.Count`(있으면)가 목록 수 이상일 때 그 값, 그것도 아니면 `null`(notice `… 부분 합을 쓰지 않음`).
+> `sockets` 는 목록을 다 읽었으면 목록 수, 아니면 목록 수 이상인 `ProcessorSummary.Count`, 그것도 아니면 `null`. `cpu.summary` 그룹에 코어 미상 CPU 가 있으면 그 그룹의
+> `total_cores` · `cores_per_socket` 은 `null` 이다. `TotalCores` 0 이하는 미상으로 본다(설치된 CPU 의 0 코어는 없다).
+> (3) 요약 그룹 키 전체: memory 는 `unit_capacity_gb` · `type` · `speed_mhz` · `manufacturer` · `part_number` · `quantity` · `group_total_gb`(ESXi 는 DIMM 정보가 없어 그룹 없음),
+> cpu 는 사전 `cpu.summary` 참조. memory `unit_capacity_gb` 는 half-even 반올림(1536 MiB → 2, 2560 MiB → 2)이고 storage 는 내림이다(사용자 결정 유지).
+> 18대 Mock 미러에서는 (1)(2) 가 발동하지 않아 값이 바뀌지 않는다 — 합성 입력과 함수 단위 시험으로 확인했다. 같은 규칙을 `multi_node.partitions[]` 에도 쓴다(9절).
 
 ### 6.3 `data.storage`
 
@@ -613,11 +626,34 @@ for e in response["errors"]:
 > **2026-10-19** — (1) Redfish `controllers[]`: 컨트롤러 정체(모델 · 펌웨어 · 제조사 · health) · 드라이브 · 볼륨이 전부 없는 Storage 멤버는 뺀다(실측 HPE CSUS 3200 node01/02 "Npar 0 Storage" — 빈 컨테이너).
 > 정체는 없는데 드라이브가 있으면 System 이 연결한 섀시의 `PCIeDevices` 가운데 **드라이브 위치(`PhysicalLocation.PartLocation.ServiceLabel`)를 슬롯 위치(`Slot.Location.PartLocation.ServiceLabel`)가 포함하는 장치가 정확히 1개일 때**
 > 그 장치의 Model/Manufacturer/FirmwareVersion/Status 를 컨트롤러로 채운다(실측 node03: `HPE SR3258p-16i/e PCIe4 Controller` · Adaptec · `03.01.44.040-0`). 후보가 0 · 2개 이상이면 null + notice — 모델 · 벤더 이름으로 추정하지 않는다.
-> Storage 전체에 드라이브가 0건이고 섀시에 `Drives` 컬렉션이 있으면 그 드라이브를 `Chassis.<id>` 컨테이너(`<Chassis.Name> Drives`)에 담고 notice 를 남긴다. 셋 다 "정보가 없을 때만" 발동 — 정보를 주는 벤더(Dell PERC · HPE MR · Lenovo RAID)는 요청 수 · 값 불변.
+> Storage 전체에 드라이브가 0건이고 섀시에 `Drives` 컬렉션이 있으면 그 드라이브를 `Chassis.<id>` 컨테이너(`<Chassis.Name> Drives`)에 담고 notice 를 남긴다 — **이 셋째 규칙은
+> 2026-10-29 SA-12 로 바뀌었다(Storage 드라이브 수와 무관한 합집합 — 아래 2026-10-29 메모)**. 셋 다 "정보가 없을 때만" 발동 — 정보를 주는 벤더(Dell PERC · HPE MR · Lenovo RAID)는 요청 수 · 값 불변.
 > (2) ESXi `physical_disks[].protocol` 은 LUN 이 붙은 어댑터 종류로 채운다(FC → `FibreChannel` · `iSCSI` · `SAS` · `SATA` · `NVMe`) — 종전에는 항상 null 이어서 `summary.groups[].protocol` 이 다른 채널과 맞지 않았다.
 > RAID 컨트롤러 뒤 LUN(논리 볼륨) · 어댑터 미상은 null(Linux 의 RAID 가상 디스크와 같다). (3) ESXi `datastores[]` 의 `freeSpace` 가 없으면(None) `free_mb` · `used_mb` · `usage_percent` 는 null 이다(종전 0 → 사용률 100%);
 > 0 은 진짜 0 으로 둔다. 문자열 용량은 B/KB/MB/GB/TB/PB(IEC `TiB` 포함)를 모두 읽는다(종전 KB · PB · Bytes 를 GB 로 읽었다). (4) Linux 는 lsblk 가 `disk` 로 내는 가상 블록 장치(`zram*` · `nbd*` · `drbd*` · `ram*` · `fd*`)를
 > `physical_disks[]` 와 summary 에서 뺀다(pmem 은 실제 장치라 남긴다). (5) Redfish `hbas[]` 수집 경로에 System `NetworkInterfaces` 링크가 추가됐다 — 6.3.2.
+> **2026-10-29 (Summary 정합성 — SA-07 · SA-12 · SA-11)** — Redfish:
+> (1) **`summary.grand_total_gb` 의 0 과 null** — 전원 상태는 판정에 쓰지 않고 드라이브 목록 원천의 구조만 본다. 원천은 Storage 멤버 본문의 `Drives` 배열(빈 배열 포함) ·
+> SimpleStorage `Devices` · SmartStorage 디스크 컬렉션 · 섀시 `Drives` 컬렉션 · 섀시 `Links.Drives` 다. 원천을 하나 이상 읽었고 모두 비었고 실패가 없으면 `0`(확인한 0),
+> 원천을 하나도 읽지 못했으면 `null`(수집하지 못함 — 디스크 0개를 확인할 근거가 없다), 원천이나 원천이 가리킨 멤버(Storage 멤버 · 드라이브)를 다 읽지 못했으면 `null`
+> (일부 실패 포함), 그 밖은 합(GiB 내림)이다. `null` 이면 storage notice 가 남는다. storage 를 수집하지 않았으면 섹션 상태가 말하고 값은 `null` 이다.
+> **404 처리 원칙** — 선택 링크(섀시 본문 · 섀시 `Drives` 컬렉션)의 404 는 "미제공" 이라 원천으로도 실패로도 세지 않는다. 원천이 가리킨 멤버(Storage 멤버 · 드라이브)의
+> 404 는 가리킨 것을 못 읽은 것이라 미완결이다. 볼륨 · 컨트롤러 정보 · PCIe 식별 실패는 디스크 합과 무관해 세지 않는다.
+> 실측 Mock: `dl380_gen12_03`(전원 Off)은 Storage 컬렉션 200 · 멤버 0 이고 섀시에 `Drives` · `Links.Drives` 가 없어 원천이 없다 → `null`(종전 0). r1 CSUS 01 · 02 는
+> `Storage/1` 의 `"Drives": []` 와 섀시 `r001u01/Drives`(200, 멤버 0)가 있어 `0` 을 유지한다. 전원 Off 알림(F-03)은 설명용으로 그대로 남는다. 같은 규칙을
+> `multi_node.partitions[].storage.summary` 에도 쓴다. 한계(실장비 미확인): 전원 Off 에서 `Drives: []` 를 주는 BMC 는 "확인한 0" 이 되고, 디스크가 없는 장비가 원천을
+> 노출하지 않으면 `null` 이다. OS/ESXi 는 이 판정을 쓰지 않는다 — 운영 중인 OS 가 디스크를 직접 보고, 수집에 실패하면 섹션이 failed 다(종전 그대로).
+> (2) **섀시 드라이브 합집합(SA-12)** — `physical_disks[]` · `controllers[]` 는 Storage 가 가리킨 드라이브에 System 섀시와 각 Storage `Links.Enclosures` 섀시가 **광고한**
+> `Drives` 컬렉션 · `Links.Drives` 를 더한다(광고가 없으면 요청하지 않는다 — 경로를 조립하지 않는다). 중복은 `@odata.id`, 그다음 `SerialNumber` 로 지운다. Storage 에 없던
+> 드라이브만 `Chassis.<id>` 컨테이너에 담고 notice 를 남긴다. Serial 이 없어 같은 디스크인지 판정할 수 없는 섀시 전용 드라이브는 Storage 에 드라이브가 있으면 더하지 않고
+> notice 와 `grand_total_gb` `null` 로 남긴다. Storage 가 드라이브를 하나도 가리키지 않을 때의 종전 경로(A-10)와 문장은 그대로다. 요청은 광고된 섀시 링크만큼 는다
+> (Mock 미러: HPE DL380 Gen12 `Chassis/DE00B000` · `…/Drives`, HPE CSUS `Chassis/r001u01/Drives`, Dell `Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1`). 18대 Mock 미러는 섀시
+> 쪽 참조가 모두 Storage 와 같은 URI 라 추가된 디스크가 0 이다(미러 실응답 기준). pytest golden 의 recording 에는 이 경로들이 없어 재생 중 404(replay-miss)가 되므로,
+> golden 이 바뀌지 않은 것은 SA-12 정확성의 근거가 아니다(검증 한계 — `tests/evidence/2026-10-29-redfish-summary-fix/`). 섀시에만 드라이브를 노출하는 장비(NVMe direct-attach 등)와
+> 선택 링크가 404 가 아닌 5xx 를 주는 장비의 동작은 실장비로 확인하지 못했다.
+> (3) **그룹 키 · 단위(SA-11)** — `summary.groups[]` 는 `unit_capacity_gb` · `model` · `media_type` · `protocol` · `quantity` · `group_total_gb`(세 채널 같다)이고,
+> `unit_capacity_gb` 는 `physical_disks[].total_mb`(MiB) ÷ 1024 내림(GiB — 세 채널 모두 내림, 사용자 결정)이다. 용량을 모르는 디스크는 그룹 · 합에서 뺀다.
+> `logical_volumes[].total_mb` 와 `physical_disks[].total_mb` 는 같은 MiB 다 — 출력에 십진 GB 키는 없다(사전 `logical_volumes[].total_mb` 의 종전 문구 정정).
 
 스토리지는 다음 하위 list 가 있다.
 
@@ -818,8 +854,9 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 (b) **값 미확정** — notice `네트워크 카드 … 링크 상태 값 미확정, down 으로 기록`(포트=원문): 키는 있는데 값이 `null` · `Unknown` · 미인식 벤더 문자열이거나
 `Enabled` · `Active` 다. `Enabled` · `Active` 는 표준 `Port.LinkStatus` 에서 링크 의미가 정해지지 않은 값이라 2026-10-28 사용자 결정으로 `up` 에서 `down` 으로 바뀌었다
 (2026-10-28 기준 Mock 미러 18대 · fixture 출현 0). 벤더 OEM 의 포트별 값이 실제 링크 활성을 뜻한다는 근거(벤더 문서 또는 실장비 캡처와 같은 포트의 OS 측 상태 대조)가
-확인되면 그 벤더만 별도로 정규화한다 — 카드 단위 값은 대상이 아니다. 네트워크 쪽(`network.*.link_status`)은 이 규칙을 쓰지 않아 같은 포트가 `network.ports[]` 에서는 `up`
-으로 보일 수 있다. 카드 · 컨트롤러 상태(`Health OK` · `State Enabled`), `Port.LinkState`(관리 상태), 속도 값은 포트 링크 근거로 쓰지 않는다.
+확인되면 그 벤더만 별도로 정규화한다 — 카드 단위 값은 대상이 아니다. 네트워크 쪽(`network.*.link_status`)은 이 규칙을 쓰지 않는다 — 2026-10-29 (SA-09) 부터
+`Enabled` · `Active` · 미인식 값과 `Starting` · `Training` 은 `network.ports[]` 에서 `unknown` + notice 이고(종전 `Enabled` · `Active` 는 `up`, `Starting` · `Training` 은 `down`),
+같은 포트가 여기서는 `down` 이다. HBA 의 값과 notice 는 이 변경으로 바뀌지 않았다(HBA 전용 값 집합으로 고정 — 6.4 `link_status`). 카드 · 컨트롤러 상태(`Health OK` · `State Enabled`), `Port.LinkState`(관리 상태), 속도 값은 포트 링크 근거로 쓰지 않는다.
 실제 링크 상태가 필요하면 OS 채널 결과와 `wwpn` 으로 맞춰 본다 — Portal 은 그렇게 표시한다.
 
 **카드 단위 조건은 포트 상태가 아니다 (2026-10-27, 03-storage-004 — 사용자 결정 11 A안)** — HPE CSUS 3200 RMC 는 FC 링크를 Port 가 아니라
@@ -876,7 +913,8 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 무조건 쓰지 않는다. 표기는 소문자 `xxxx:xxxx:xxxx:xxxx`.
 
 **`link_status` · 속도** — IB 항목은 `LinkUp`/`Up` → `up`, `LinkDown`/`NoLink`/`Down` → `down`, `Starting`/`Training`/없음 → `unknown`.
-`network.ports[].link_status` 는 종전 규칙(협상 중 = `down`)이라 같은 포트가 training 중이면 둘이 다를 수 있다.
+`network.ports[].link_status` 도 2026-10-29 (SA-09) 부터 `Starting` · `Training` 을 `unknown` 으로 둬(종전 `down`) 같은 포트가 협상 중이어도 두 값이 같다.
+`network.ports[]` 만 그 밖에 `Connected` → `up`, `Disconnected` · `Disabled` · `Inactive` · `Offline` → `down` 으로 받는다(IB 항목에서는 `unknown`).
 `rate_gbps` 는 `up` 일 때만 `CurrentSpeedGbps`(없으면 `CurrentLinkSpeedMbps`/1000, 정수는 int)이고 `rate` 는 항상 null 이다.
 
 **빈 `infiniband` 의 뜻**
@@ -925,6 +963,12 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
   NIC 자체 값은 덮어쓰지 않고, 맞는 포트가 없거나 포트끼리 값이 다르면 `unknown` 그대로다(`storage.hbas` 의 `down` 규칙과 다르다). 종전 조건(`unknown` 이면서 `speed_mbps` null)은
   `SpeedMbps` 가 있는 XCC 3(SR650 V4) 호스트 NIC 을 놓쳤다 — 실측 4대 20건이 `unknown` 에서 `up`/`down` 이 됐다. 본딩으로 포트의 첫 주소가 다른 NIC 의 MAC 인 경우,
   그 포트의 영구 주소로만 연결되는 NIC 은 `unknown` 으로 남는다(실측 2건 — 미해결).
+- **Redfish 원문 매핑 (2026-10-29 SA-09)** — `interfaces[]` · `ports[]` · 파티션 NIC 공통: `LinkUp` · `Up` · `Connected` → `up`, `LinkDown` · `Down` · `NoLink` · `Disconnected` ·
+  `Disabled` · `Inactive` · `Offline` → `down`, 그 밖은 `unknown` 이다. `Starting` · `Training` 은 DMTF `Port.LinkStatus` · `NetworkPort.LinkStatus` 에서 링크를 협상하는 전이 상태라
+  링크가 아직 정해지지 않았다(사용자 의견 — 2026-06-08 의 `down` 매핑 폐지, `storage.infiniband` 와 같은 규칙). `Enabled` · `Active` 는 링크 값이 아니라 State 값이고(종전 `up`),
+  미인식 값도 원문 대신 `unknown` 이다(종전 원문 그대로). 원문이 있는데 `unknown` 이 되면 notice 를 남긴다 — NIC 는 `section: network` 로 EthernetInterfaces 경로당 1건(`Id=원문` 목록),
+  포트는 `section: network_adapters` 로 1건(`카드/포트=원문` 목록). 위 보충은 포트 값이 `up` 또는 `down` 하나로 모일 때만 채우므로 협상 중인 포트로 NIC 를 `down` 으로 채우지 않는다.
+  `storage.hbas[]` 는 이 매핑을 쓰지 않는다(6.3.2 — 값 · notice 불변). 18대 Mock 미러 · fixture 에는 이 값들이 나오지 않아 출력이 바뀌지 않았다 — 실제로 이 값을 내는 장비는 확인하지 못했다.
 > **2026-10-10** — (1) `default_gateways[]` 는 **기본 경로 전부**다: Linux 는 metric 이 다른 복수 기본 경로 · ECMP(nexthop 마다) · IPv6 를 모두 내고(`ip route`
 > 의 via/dev 토큰을 읽는다 — `default dev ppp0` · `nhid` 형식도 바르게 읽는다), Windows 는 IPv4 · IPv6 를 가족별로 낸다. 기본 경로가 없는 host 는 `[]` 다
 > (종전 Linux 는 `"None"` 문자열이 들어갔다). (2) `interfaces[].addresses[].gateway` 는 그 주소 가족의 기본 경로가 그 인터페이스에 있을 때만 값이 있고,
@@ -940,6 +984,16 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 > `network.adapters[]` 목록은 그대로다. 실측 HPE CSUS 3200 node01: NIC 0장 · FC 카드 2장 → `adapter_count 0`(종전 2), node03: Mellanox 4 + FC 4 → 4(종전 8). Dell R740(NIC + FC) 도 FC 카드 수만큼 줄어든다.
 > (3) 속도를 못 읽은 NIC(링크 다운 · 가상 NIC)도 OS/ESXi summary 에 `speed_mbps: null` 그룹으로 들어가고 `link_up_count` 를 센다 — 종전에는 빼서 `link_up_count == quantity` 가 늘 참이었고 다운 NIC 가 보이지 않았다.
 > (4) ESXi vmnic 그룹의 `link_type` 은 `ethernet` 이다(종전 null); OS 는 그대로 null(Ethernet 임을 단정하지 않는다).
+> **2026-10-29 (`summary` — Summary 정합성 SA-08 · SA-10 · SA-01 · SA-15 · SA-18, Redfish)** — (1) `groups[].speed_mbps`: NIC 속도 `0` 은 그룹 키에서 `null` 이다
+> (사용자 결정 — Summary 만, 상세 `interfaces[].speed_mbps` 의 원본 `0` 은 그대로). link down 이면 협상 속도가 없고, `up` · `unknown` 인데 `0` 이면 확인되지 않은 속도다.
+> 모델 · 제조사 · `link_type` 이 같은 `null` 그룹이 있으면 합쳐진다. 실측 Mock: Dell R740 2그룹 · Lenovo SR650(r1) 2그룹 · SR650 V4 `_01` · `_02` · `_04` 각 1그룹이 `0` → `null`
+> (합쳐진 그룹 없음 — 그룹 수 불변). iLO 7 · RMC 는 호스트 NIC 에 `SpeedMbps` 가 없어 원래 `null` 그룹이었다 — 링크 없는 NIC 의 그룹 키가 벤더에 따라 `0` 과 `null` 로
+> 갈리던 것이 `null` 로 같아졌다. (2) `primary_speed_mbps` 는 `is_primary` NIC 의 속도이고, 그 값이 `0` · `null` 이거나 대표 NIC 이 없으면 `null` 이다(종전: 첫 link up NIC 의
+> 속도 — 18대 Mock 은 두 정의의 값이 같다). (3) `port_count` · `adapter_count` 는 원천(EthernetInterfaces · NetworkAdapters)을 끝까지 읽었을 때만 정수(0 포함)이고,
+> 미지원 · 404 · 실패 · 일부 멤버 실패 · 미수집이면 `null` 이다(종전 0 — 9절 개수 원칙과 같다). (4) `adapters[]` 와 `adapter_count` 는 제조사 · 모델이 없고 포트 수 · 기능 수가
+> 0 이며 `Controllers` 의 기능 · 포트 링크도 최상위 `NetworkDeviceFunctions` 링크도 없는 카드를 뺀다(빈 슬롯 · 관리 카드 자리표시 — 실측 HPE CSUS 3200 `Rmp`, 최상위 `Ports`
+> 링크만 있음; 종전 동작 그대로 — 문서만 보강). (5) `groups[].model` · `manufacturer` 는 그 NIC 이 속한 카드(`adapters[]`)의 값이다 — NIC `Id` 에서 `-N-N` · `-N` 접미를 뗀 값이
+> 카드 `Id` 와 같으면 그 카드, 아니면 NIC MAC 과 같은 주소(`ports[]` 의 `AssociatedMACAddresses` 첫 주소)를 가진 포트의 카드, 둘 다 없으면 `null` 이다(종전 동작 — 문서만 보강).
 
 #### 6.4.1 본딩/티밍 토폴로지 (2026-06-15 — OS 채널, Additive)
 
@@ -1067,6 +1121,15 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 > (2) System 이 `Links.Chassis` 로 섀시를 **2개 이상** 연결하면 Power 를 섀시마다 읽어 합친다 — `power_supplies[]` 는 이어 붙이고, `power_consumed_watts` · `power_capacity_watts` 는 전 섀시 값이 있을 때만 합(하나라도 모르면 null),
 > min/avg/max 는 null, Power 가 없는(404) 섀시는 건너뛰고 notice(`섀시 … Power 리소스 없음 — 합산에서 제외` · `System 이 연결한 섀시 N개의 PSU · 소비전력을 합침`). 1섀시 장비(실측 전 벤더 · CSUS 4노드)는 종전 경로 그대로다.
 > 다중 섀시 실 응답은 아직 없다(합성 시험만).
+> **2026-10-29 (Summary 정합성 — SA-17 · SA-19 · SA-06)** — (1) **반올림(SA-17, 사용자 결정)**: 측정 전력(`power_consumed_watts` · `min/avg/max_consumed_watts`, PSU 입력 · 출력 측정값과
+> 그 합, Telemetry · `EnvironmentMetrics.PowerWatts.Reading`)은 소수를 버리지 않고 정수로 반올림한다 — 짝수 반올림(half-even: 591.5 → 592, 592.5 → 592, 815.75 → 816). PSU 합은 PSU 마다
+> 반올림한 뒤 더한다. 타입은 integer 그대로이고 정격(`power_capacity_watts` · PSU 용량)은 바뀌지 않는다. 실측 Mock: HPE CSUS 3200 Telemetry `TotalPowerConsumedWatts` 원천 `591.5` ·
+> `815.75` · `945.75` → 592 · 816 · 946(종전 절삭 591 · 815 · 945 — `power_control` · `multi_node.chassis[]` · `summary.consumed_watts` 가 같은 값). 원천이 정수이거나 두 방식의 결과가
+> 같은(`600.25` · `1000.5`) 장비는 불변이다. (2) **측정 가능 범위는 관측값이 아니다(SA-19)**: `EnvironmentMetrics.PowerWatts.ReadingRangeMin` · `ReadingRangeMax` 는 DMTF Sensor 정의상
+> 센서가 잴 수 있는 범위라 `min_consumed_watts` · `max_consumed_watts` 로 쓰지 않는다 — 그 경로에서는 `null` 이다(종전 범위값을 그대로 적었다). 18대 Mock 은 legacy Power 경로라 값이
+> 바뀌지 않는다(합성 입력으로 확인). (3) **`summary.health_rollup`(SA-06, 사용자 결정 — Redfish · ESXi 함께)**: 설치(Absent 제외) PSU 가 0 개면 집계할 대상이 없어 `null` 이다(종전 `Unknown`).
+> PSU 가 있으면 `Critical` > `Warning` > `OK` 순의 최악값이고, 상태를 보고한 PSU 가 하나도 없을 때만 `Unknown` 이다(종전 그대로). 실측 Mock: `dl380_gen12_03`(전원 Off, PSU 전부 Absent)
+> `Unknown` → `null`. ESXi 는 PSU 센서가 0 개인 호스트만 바뀐다(ESXi baseline 은 PSU 2개라 불변). `filter_plugins/power_summary.py` 와 Redfish normalize 가 같은 규칙이다(동치 시험).
 
 ### 6.6 `data.bmc` (Redfish 전용)
 
@@ -1128,6 +1191,10 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 `reading_units` 를 반드시 확인. `upper_critical` 은 legacy 경로에서만 채워지고 신 schema 경로는 null.
 > **2026-10-19** — System 이 `Links.Chassis` 로 섀시를 2개 이상 연결하면 Thermal 을 섀시마다 읽어 `temperatures[]` · `fans[]` 를 이어 붙인다(Thermal 이 없는 섀시는 건너뛰고 notice). 1섀시 장비는 종전과 같다.
 > 다중 섀시 실 응답은 아직 없다(합성 시험만) — 6.5 (2).
+> **2026-10-29 (SA-16 — 문서만 보강, 동작 변경 없음)** — Redfish `fans[].reading` 원천 순서: legacy `/Thermal` 은 `Fans[].Reading`(없으면 `ReadingRPM`)과 `ReadingUnits`, ThermalSubsystem 은
+> `Fan.SpeedPercent.Reading`(Percent) → `SpeedPercent.SpeedRPM`(RPM) → 그래도 값이 없고 팬 `Status.State` 가 없거나 `Enabled` 이면 `Chassis/{id}/Sensors` 중 `ReadingType: Rotational` 이고
+> `RelatedItem` 이 그 Fan 을 가리키는 센서의 `Reading`(단위는 센서 `ReadingUnits` — 실측 HPE CSUS 3200: Fan 리소스에 `SpeedPercent` 가 없다). 요청을 줄이려고 URI 에 `fan` 이 들어간
+> 센서만 읽는다. `Status.State` 가 있고 `Enabled` 가 아니면 reading 은 `null`, `State` 가 없으면 값을 그대로 둔다(위 2026-10-27 (2)).
 
 ### 6.8 `data.bios` (Redfish 전용 보조 데이터, 2026-09-15)
 
@@ -1428,7 +1495,7 @@ CSUS 3200 은 `data.system.hostname` 을 RMC 이름으로 정하므로 `hostname
       },
       "fabrics": [
         { "id": "FlexGrid", "name": "Flex Grid", "fabric_type": null, "state": "Enabled", "health": "OK",
-          "switch_count": 2, "endpoint_count": 0,
+          "switch_count": 2, "endpoint_count": null,
           "switches":  [ { "id": "r001u01_HARP0", "name": "rack1/chassis_u1/harp0", "switch_type": null, "health": "OK" },
                          { "id": "r001u01_HARP1", "name": "rack1/chassis_u1/harp1", "switch_type": null, "health": "OK" } ],
           "endpoints": [] }
@@ -1441,6 +1508,12 @@ CSUS 3200 은 `data.system.hostname` 을 RMC 이름으로 정하므로 `hostname
 > 위 예시는 2026-10-27 용인 2차 Mock `csus3200_01`(RMC 1.77.30) 실측 봉투(`schema/baseline_v1/hpe_csus_3200_baseline.json`)를 줄인 것이다 — 1 nPartition · 1 Manager(RMC) · 3 Chassis(RackGroup → Rack1 → r001u01) 가 실제 모양이고,
 > 2026-05-12 ~ 2026-10-27 의 합성 예시(3 파티션 · 4 Manager · Base/Expansion 섀시)는 실측과 달라 교체했다(사용자 FIX 5). 전원·온도는 장비 섀시 `r001u01` 에만 있다(RackGroup/Rack1 은 navigation property 가 없어 요청하지 않는다 — C5).
 > `composition.resource_blocks[].processor_count/memory_count` 는 ResourceBlock 에 Processors/Memory 배열이 없어 **null** 이다(FIX 6 — 0 으로 지어내지 않는다). `fabric_type`/`switch_type` 은 RMC 가 값을 주지 않아 null.
+> **2026-10-29 (Summary 정합성 — SA-01 · SA-02 개수 원칙)** — `multi_node` 의 개수는 원천 컬렉션을 끝까지 읽고 나열된 멤버를 모두 읽었을 때만 정수(0 포함)이고, 링크 없음 · 404 ·
+> GET 실패 · 멤버 일부 실패 · 절단이면 `null` 이다(종전 0 — "보지 못함" 을 "0개" 로 적었다). 대상은 `summary.partition_count` · `manager_count` · `chassis_count` · `resource_block_count` ·
+> `fabric_count`, `composition.resource_block_count`, `fabrics[].switch_count` · `endpoint_count` 다. 목록(`partitions` · `managers` · `chassis` · `resource_blocks` · `switches` · `endpoints` 등)은
+> 읽은 항목만 담고 비면 `[]` 를 유지한다(사용자 결정 — 개수만 `null`). ServiceRoot 가 노출하지 않은 `composition` · `fabrics` 는 종전처럼 `null` 이다. 실패의 원인은 `errors[]` 가 가르고,
+> 404 는 미제공이라 오류를 남기지 않는다. 실측 Mock: HPE CSUS 3200 7대의 `Fabrics/FlexGrid` 본문에 `Endpoints` 키가 없어 `endpoint_count` 가 `0` → `null` 이 됐다(`switch_count` 2 ·
+> `endpoints` `[]` 는 그대로). 위 FIX 6 의 `null` 과 같은 원칙이다.
 
 ### 확장 컴포넌트 (2026-06-09)
 
@@ -1455,7 +1528,7 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | `fabrics` | `Fabrics` + `Fabrics/{id}` (Switches/Endpoints) | `[]` of {id/fabric_type/health/`switch_count`/`endpoint_count`/`switches[]`/`endpoints[]`} | NUMAlink FlexGrid (Switches+Endpoints, Links/Zones 미사용 — 설명 모델). ServiceRoot 미노출 시 `null` |
 
 > **실측 (2026-10-27)**: 위 5종은 2026-06-09 당시 lab 부재 web sources 합성 검증이었고, 용인 2차 Mock 3대(RMC 1.77.30)에서 실제 모양을 확인했다 — `boot` 있음, `thermal`/`power` 는 장비 섀시(`r001u01`)만, `log_services` IDC/Debug 등,
-> `composition` 1 block(count null — FIX 6), `fabrics` FlexGrid(switch 2 HARP0/1 · endpoint 0, `fabric_type` null — RMC 가 값을 주지 않는다; 종전 placeholder `PCIe` 는 합성본과 함께 사라졌다).
+> `composition` 1 block(count null — FIX 6), `fabrics` FlexGrid(switch 2 HARP0/1 · endpoint 개수 null — `Endpoints` 링크 없음, 2026-10-29 SA-01 · 종전 0, `fabric_type` null — RMC 가 값을 주지 않는다; 종전 placeholder `PCIe` 는 합성본과 함께 사라졌다).
 
 ### 호출자 가이드
 
@@ -1466,9 +1539,14 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | 확장 컴포넌트 인식 호출자 | `multi_node.composition` / `multi_node.fabrics` (null 가드) + `partitions[].boot` / `chassis[].thermal` / `managers[].log_services` 순회 |
 | RMC 응답 없음 | `diagnosis.failure_stage` 가 `protocol` 이면 사이트 RMC 의 Redfish 서비스가 꺼져 있을 수 있다 ([../operate/06-rmc-activation.md](../operate/06-rmc-activation.md)) |
 
-### 파티션 하위 요약의 한계
-- (2026-10-10, 2026-10-27 실측 재확인) `multi_node.partitions[].network.summary` 는 빈 그룹, `memory.total_gb` 는 null · `total_basis` 는 고정값이다 — 파티션 단위 요약은 계산하지 않는다.
-  실측(csus3200_01: slots 32 · interfaces 8)에서도 같다. 두 값은 파티션 하위 섹션의 한계로 두고 지어내지 않는다(관찰 — 변경 없음).
+### 파티션 하위 요약 (2026-10-29 SA-03 정정)
+- 종전 이 절의 "파티션 단위 요약은 계산하지 않는다" · "`memory.total_gb` 는 null" 은 사실과 달랐다 — `memory.total_gb` 라는 키는 없고, cpu · memory · storage 요약은 2026-05-29 부터
+  파티션마다 계산해 왔다. 2026-10-29 부터 그 요약은 top-level 과 같은 의미 · 단위 · null 규칙을 **그 파티션 안에서** 쓴다: 코어 · 용량을 모르면 부분 합 대신 `null`(6.2), BMC 요약은
+  그 파티션 System 의 `ProcessorSummary` · `MemorySummary` 만 같은 검사로 쓴다, memory 그룹 용량은 half-even 이고 0 GB 그룹은 만들지 않는다(종전 내림), storage 는 내림이고
+  `grand_total_gb` 는 6.3 의 0 / null 규칙이다, CPU 제조사는 top-level 과 같은 표로 정규화한다(실측 CSUS 3200 7대 `Intel(R) Corporation` → `Intel` — 종전 원문). 파티션 cpu 그룹 키는
+  `model` · `manufacturer` · `max_speed_mhz` · `architecture` · `sockets` · `cores_per_socket` · `total_cores` 다(top-level 의 L2 · L3 캐시 키는 없다).
+- `partitions[].network.summary` 는 계산하지 않아 `{"groups": []}` 이다 — 카드 · 포트를 파티션 단위로 수집하지 않으므로(`adapters` · `ports` 도 `[]`) 지어내지 않는다.
+  `partitions[].memory.total_basis` 는 고정값 `physical_installed` 다. 실측(csus3200_01: slots 32 · interfaces 8)도 같다.
 
 실측 fixture: `tests/fixtures/redfish/real_hpe_csus3200_{01,02,03}`(2차) · `real_hpe_csus3200`(1차) 와 baseline `hpe_csus_3200_baseline.json`(2차 csus3200_01). 합성 fixture `tests/fixtures/redfish/hpe_csus_3200/` 는 설명 모델로만 남아 있다(README 참조).
 

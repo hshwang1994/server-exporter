@@ -30,6 +30,11 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
+# 변경 메모 (2026-10-29): Redfish Summary 정합성 수정(SA-01~19, docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md). null = 미제공 · 확정 불가,
+#   0 = 확인한 0, 부분 합은 전체 합이 아니다. 타입 확장(integer → integer|null): multi_node.summary 개수 · fabrics/composition 개수 · network.summary
+#   adapter_count/port_count · cpu.summary 그룹 total_cores/cores_per_socket · storage.summary.grand_total_gb(값이 null 로 나올 수 있게 된 키 — 문서 표기).
+#   +2 Nice — memory.free_mb · network.portgroups(이미 나가던 키의 뜻을 사전에 올림). 문구 정정: link_status(SA-09) · power 반올림/범위값(SA-17 · 19) ·
+#   health_rollup(SA-06) · storage 합집합/0 · null(SA-07 · 12) · 그룹 키 목록(SA-11) · fans[].reading(SA-16). 기존 항목의 channel · enum · priority 불변, schema_version 유지.
 # 변경 메모 (2026-10-28): 독립 검증 결함 정정 — help 문구만(키 · 타입 · channel · enum · priority 불변, schema_version 유지). network.interfaces[].link_status(같은 MAC
 #   포트 보충 규칙) · storage.hbas[].link_status(up = 표준 링크 값만) · correlation.bmc_ip / host_ip · bmc.ip(③ = IPv4 를 가진 첫 NIC) ·
 #   power.power_control.power_capacity_watts(원천 경로) · thermal.temperatures[].name / fans[].name(코드에 없는 MemberId 폴백 삭제).
@@ -551,10 +556,12 @@ fields:
       Redfish 채널에서 주로 제공. OS 채널에서는 dmidecode 권한 부족 시 null 가능.
       ESXi 채널은 미수집 (ansible_memtotal_mb 만 제공) — channel 에서 제외 (cycle 2026-05-11).
       total_mb와 동일한 값일 수 있으나, total_basis가 다르면 의미가 다름.
+      Redfish 는 total_mb 와 같은 값 · 같은 규칙이다(2026-10-29 SA-05 — DIMM 부분 합을 쓰지 않는다, total_mb 참조).
     help_en: >-
       Physically installed memory capacity (MB).
       Primarily provided by Redfish. May be null in OS channel (dmidecode permission).
       ESXi channel excluded (cycle 2026-05-11) — ansible_memtotal_mb only.
+      Redfish: same value and rule as total_mb (2026-10-29 SA-05 — a partial DIMM sum is never used; see total_mb).
 
   memory.visible_mb:
     type: "integer|null"
@@ -570,6 +577,22 @@ fields:
       OS or hypervisor visible memory capacity (MB).
       OS/ESXi channels only. Redfish excluded (cycle 2026-05-11) — not defined in BMC spec.
 
+  # 2026-10-29 (SA-11): 이미 나가던 키 — 사전 등재만(값 · 채널 동작 불변).
+  memory.free_mb:
+    type: "integer|null"
+    priority: nice
+    channel: [os, esxi]
+    help_ko: >-
+      수집 시점에 운영체제 · 하이퍼바이저가 보고한 가용 메모리 (MB, 순간값).
+      Linux: /proc/meminfo MemAvailable(캐시 · 버퍼 포함 가용량) ÷ 1024 내림 — MemAvailable 이 없는 커널(3.14 미만)은 null(MemFree 로 바꾸지 않는다).
+      Windows: setup fact ansible_memfree_mb. ESXi: vmware_host_facts 의 ansible_memfree_mb.
+      Redfish 는 BMC 가 OS 가용량을 알 수 없어 항상 null — channel 에서 제외(visible_mb 와 같은 이유).
+    help_en: >-
+      Available memory (MB) reported by the OS / hypervisor at collection time (point-in-time value).
+      Linux: /proc/meminfo MemAvailable (includes reclaimable cache/buffers) / 1024, floored — null on kernels without MemAvailable
+      (< 3.14; never replaced by MemFree). Windows: setup fact ansible_memfree_mb. ESXi: ansible_memfree_mb from vmware_host_facts.
+      Redfish is always null (the BMC cannot see OS free memory) and is excluded from channel, as with visible_mb.
+
   # cycle 2026-06-14 (DELL R740 MEM-1/MEM-2): memory.total_mb + per-DIMM slots[] 문서화.
   memory.total_mb:
     type: "integer|null"
@@ -579,9 +602,16 @@ fields:
       총 메모리 용량 (MB). total_basis 가 산출 기준을 규정 (Redfish=physical_installed).
       Redfish 는 per-DIMM CapacityMiB 합 또는 MemorySummary.TotalSystemMemoryGiB*1024 fallback.
       '_mb' 키지만 Redfish 채널 값은 이진 MiB (프로젝트 컨벤션, total_basis help 참조).
+      Redfish 2026-10-29 (SA-05): DIMM 합은 DIMM 목록을 다 읽고 모든 DIMM 의 CapacityMiB 를 알 때만 쓴다. 멤버 조회 실패 · 용량 미상 DIMM 이
+      있으면 아는 DIMM 의 합(부분 합)을 쓰지 않고, 같은 System 의 MemorySummary.TotalSystemMemoryGiB 가 양수이며 아는 합 이상(용량 미상 DIMM 이
+      있으면 아는 합 초과)일 때만 그 값 × 1024, 아니면 null + notice('부분 합을 쓰지 않음'). DIMM 합이 0 일 때의 fallback 도 같은 검사를 거친다.
     help_en: >-
       Total memory capacity (MB). total_basis qualifies the basis (Redfish=physical_installed).
       Redfish = sum of per-DIMM CapacityMiB or MemorySummary.TotalSystemMemoryGiB*1024 fallback.
+      Redfish 2026-10-29 (SA-05): the DIMM sum is used only when the whole DIMM list was read and every CapacityMiB is known. With a failed
+      member read or an unknown-capacity DIMM the partial sum is not used: MemorySummary.TotalSystemMemoryGiB × 1024 of the same System is used
+      only when it is positive and at least the known sum (greater than it when a DIMM capacity is unknown), otherwise null + notice. The
+      fallback for a zero DIMM sum passes the same check.
 
   "memory.slots[]":
     type: "array of object"
@@ -701,11 +731,20 @@ fields:
       controllers[].drives[]에도 같은 디스크가 컨트롤러별로 나타남.
       physical_disks는 컨트롤러 구분 없이 전체 디스크를 한 번만 보여줌.
       CapacityBytes=0인 드라이브 (Empty Bay, FlexFlash)는 제외됨.
+      Redfish 2026-10-29 (SA-12): Storage 멤버가 가리킨 드라이브에 System 섀시와 각 Storage 의 Links.Enclosures 섀시가 **광고한** Drives 컬렉션 ·
+      Links.Drives 를 합집합으로 더한다(광고가 없으면 요청하지 않는다). 중복은 @odata.id, 그다음 SerialNumber 로 지운다. Serial 이 없어 같은 디스크인지
+      판정할 수 없는 섀시 전용 드라이브는 Storage 에 드라이브가 있으면 더하지 않고 notice 와 storage.summary.grand_total_gb = null 로 남긴다.
+      종전 A-10(2026-10-19)은 Storage 전체 드라이브가 0건일 때만 섀시를 봤다(storage.controllers[] 참조).
     help_en: >-
       System-wide physical disk list (deduplicated).
       Same disks also appear under controllers[].drives[] grouped by controller.
       physical_disks shows all disks once without controller grouping.
       Drives with CapacityBytes=0 (Empty Bay, FlexFlash) are excluded.
+      Redfish 2026-10-29 (SA-12): the drives referenced by Storage members are unioned with the Drives collection / Links.Drives **advertised**
+      by the System chassis and by each Storage's Links.Enclosures chassis (nothing is requested without an advertised link). Duplicates are
+      removed by @odata.id, then SerialNumber. A chassis-only drive without a serial cannot be matched, so when Storage already lists drives it
+      is not added; a notice is left and storage.summary.grand_total_gb is null. The former A-10 rule (2026-10-19) looked at the chassis only
+      when Storage had zero drives (see storage.controllers[]).
 
   "storage.physical_disks[].id":
     type: "string|null"
@@ -831,7 +870,8 @@ fields:
       Redfish 2026-10-19: Storage 멤버에 StorageControllers 가 없고 드라이브가 있으면 섀시 PCIeDevices 중 드라이브 위치(ServiceLabel)를 포함하는
       슬롯의 장치가 정확히 1개일 때 그것을 컨트롤러로 삼아 controller_model/manufacturer/firmware/health 를 채운다(0 · 2개 이상이면 null + notice,
       이름으로 추정하지 않는다). 컨트롤러 정체 · 드라이브 · 볼륨이 전부 없는 빈 컨테이너(실측 CSUS 3200 "Npar 0 Storage")는 controllers[] 에서 뺀다.
-      Storage 전체에 드라이브가 0건이면 섀시 Drives 컬렉션을 `Chassis.<id>` 컨테이너로 담는다. 정보를 주는 벤더(Dell/HPE/Lenovo)는 요청 · 값 불변.
+      Storage 가 가리키지 않은 섀시 드라이브(섀시 Drives 컬렉션 · Links.Drives — 2026-10-29 SA-12 합집합, 종전 A-10 은 Storage 전체 드라이브 0건일 때만)는
+      `Chassis.<id>` 컨테이너(name `<Chassis.Name> Drives`)로 담고 notice 를 남긴다. 실측 Mock 미러 18대는 섀시 쪽 참조가 모두 Storage 와 같은 URI 라 추가 0건.
       OS(Linux): lspci (id=pci, controller_model=칩, driver, controller_type).
       OS(Windows): 현재 미수집([]) — Storage Spaces 도입 시 (NEXT_ACTIONS).
       ESXi: hostBusAdapter + pciDevice vendor (id=vmhba, driver, controller_type).
@@ -840,8 +880,10 @@ fields:
       Redfish: StorageControllers (model/firmware/health/drives).
       Redfish 2026-10-19: when a Storage member has no StorageControllers but has drives, the single chassis PCIeDevice whose slot
       ServiceLabel contains the drive location is used as the controller (0 or 2+ candidates: null + notice; no name guessing).
-      Containers with no controller identity, drives or volumes (CSUS 3200 "Npar 0 Storage") are dropped. If Storage has zero drives
-      overall, the chassis Drives collection is wrapped in a `Chassis.<id>` container. Vendors that already expose the data are unchanged.
+      Containers with no controller identity, drives or volumes (CSUS 3200 "Npar 0 Storage") are dropped. Chassis drives (chassis Drives
+      collection / Links.Drives) that Storage does not reference are wrapped in a `Chassis.<id>` container with a notice (2026-10-29 SA-12
+      union; the former A-10 rule applied only when Storage had zero drives overall). In the 18 Mock mirrors every chassis reference is a
+      URI Storage already lists, so nothing is added.
       OS(Linux): lspci (id=pci, controller_model=chip, driver, controller_type).
       OS(Windows): not collected yet ([]) — pending Storage Spaces (NEXT_ACTIONS).
       ESXi: hostBusAdapter + pciDevice vendor (id=vmhba, driver, controller_type).
@@ -981,14 +1023,16 @@ fields:
     # rename/십진 MB 재계산은 호출자 계약 breaking(rule 13 R5) → 키/값 유지, 단위는 문서로만 명시.
     help_ko: >-
       논리 볼륨 용량. **주의: 키 이름은 total_mb 이나 값은 MiB(이진)다** — CapacityBytes ÷ 2^20
-      (1048576). 십진 MB(÷10^6) 아님. physical_disks 의 capacity_gb(십진 GB)와 단위계가 달라
-      합산/비교 시 주의. RAID 레벨에 따라 물리 디스크 합산 용량과 다를 수 있음 (예: RAID1 2×480GB
-      → 약 457GiB 볼륨). 이름/값은 호출자 계약 유지 위해 의도적으로 현행 유지.
+      (1048576). 십진 MB(÷10^6) 아님. physical_disks[].total_mb 도 같은 MiB(÷2^20 내림)이고
+      storage.summary 의 unit_capacity_gb 는 그 값을 1024 로 나눠 내림한 GiB 다 — 십진 GB 키는 출력 envelope 에 없다
+      (2026-10-29 SA-11 정정: 종전 문구의 'physical_disks 의 capacity_gb(십진 GB)' 는 envelope 에 없는 키였다). RAID 레벨에 따라 물리 디스크 합산 용량과
+      다를 수 있음 (예: RAID1 2×480GB → 약 457GiB 볼륨). 이름/값은 호출자 계약 유지 위해 의도적으로 현행 유지.
     help_en: >-
       Logical volume capacity. **NOTE: despite the _mb name, the value is in MiB (binary)** —
-      CapacityBytes / 2^20 (1048576), not decimal MB (/10^6). Differs in unit system from
-      physical_disks capacity_gb (decimal GB). May differ from raw physical disk total by RAID
-      level (e.g. RAID1 2×480GB → ~457GiB). Name/value intentionally kept for caller contract.
+      CapacityBytes / 2^20 (1048576), not decimal MB (/10^6). physical_disks[].total_mb uses the same MiB (/2^20, floored) and
+      storage.summary unit_capacity_gb is that value / 1024, floored (GiB) — the output envelope has no decimal-GB key (2026-10-29
+      SA-11 correction: the former 'physical_disks capacity_gb (decimal GB)' was not an envelope key). May differ from raw physical
+      disk total by RAID level (e.g. RAID1 2×480GB → ~457GiB). Name/value intentionally kept for caller contract.
 
   "storage.logical_volumes[].health":
     type: "string|null"
@@ -1049,6 +1093,11 @@ fields:
       unknown=상태 미제공/판별 불가 (HPE/Cisco System NIC 등), null=필드 자체 미제공.
       Redfish의 System EthernetInterfaces는 서버 NIC 하드웨어 정보이며,
       IP 주소/게이트웨이는 일반적으로 비어 있음 (OS 수준 정보이므로).
+      Redfish 원문 매핑(2026-10-29 SA-09 — network.ports[] · multi_node 파티션 NIC 도 같다): LinkUp · Up · Connected → up,
+      LinkDown · Down · NoLink · Disconnected · Disabled · Inactive · Offline → down, Starting · Training(DMTF 정의상 링크 협상 중인 전이 상태) ·
+      Enabled · Active(링크 값이 아니라 State 값) · 미인식 값 → unknown. 원문이 있는데 unknown 이 되면 notice 를 남긴다 — NIC 은 System 의 EthernetInterfaces
+      경로마다 1건(`Id=원문` 목록), 포트는 1건(`카드/포트=원문` 목록).
+      종전(2026-06-08)의 Starting · Training → down · Enabled · Active → up · 미인식 원문 그대로 내보내기는 폐지. storage.hbas[] 는 이 매핑을 쓰지 않는다.
       Redfish 보충: NIC 자체 값이 unknown 이면 MAC 이 같은 network.ports[](Ethernet,
       포트 AssociatedMACAddresses 의 첫 주소)의 link_status 로 채운다. 같은 MAC 포트가 여럿이면
       모두 같은 값일 때만 채우고, 그 NIC 의 speed_mbps 가 null 이면 포트 current_link_speed_mbps 도
@@ -1059,6 +1108,12 @@ fields:
       NIC link state (canonical, unified across all channels).
       up=link active, down=link inactive (incl. unplugged/disabled/offline),
       unknown=status not reported/undeterminable (HPE/Cisco System NICs), null=field absent.
+      Redfish raw mapping (2026-10-29 SA-09 — also network.ports[] and multi_node partition NICs): LinkUp/Up/Connected → up;
+      LinkDown/Down/NoLink/Disconnected/Disabled/Inactive/Offline → down; Starting/Training (transitional link-negotiation states in DMTF),
+      Enabled/Active (State values, not link values) and unrecognized values → unknown. A raw value that becomes unknown leaves a notice —
+      one per System EthernetInterfaces path for NICs (`Id=raw` list) and one for ports (`card/port=raw` list).
+      The former 2026-06-08 mapping (Starting/Training → down, Enabled/Active → up, unrecognized raw passed through) is retired.
+      storage.hbas[] does not use this mapping.
       Redfish fill: when the NIC itself reports unknown, the link_status of the network.ports[]
       entry with the same MAC (Ethernet; the port's first AssociatedMACAddresses entry) is used.
       With several same-MAC ports the value is filled only when they all agree; if the NIC's
@@ -1187,10 +1242,14 @@ fields:
       현재 소비 전력 W. 원천 순서(2026-10-27 정리, 05-power-007): legacy PowerControl.PowerConsumedWatts → EnvironmentMetrics.PowerWatts → TelemetryService(장비가 정의한 '소비')
       → PSU Metrics.OutputPowerWatts 합(DC 출력 — 소비에 가장 가깝다) → PSU Metrics.InputPowerWatts 합(AC 입력 — 변환 손실만큼 높다). 어느 원천인지는 값으로 알 수 없다 —
       정밀 비교에는 쓰지 않는다. ESXi 는 Watts 센서가 정확히 1개일 때만. 없으면 null(0 은 거짓 값).
+      Redfish 소수 원천값(실측 Telemetry MetricValue "591.5" · "815.75")은 정수 반올림이다 — half-even(591.5 → 592, 592.5 → 592, 815.75 → 816;
+      2026-10-29 SA-17 사용자 결정, 종전 절삭). PSU Metrics 합은 PSU 마다 반올림한 뒤 더한다. 타입은 integer 그대로.
     help_en: >-
       Current power draw in W. Source order (settled 2026-10-27, 05-power-007): legacy PowerControl.PowerConsumedWatts → EnvironmentMetrics.PowerWatts → TelemetryService
       (the device's own definition of consumption) → sum of PSU Metrics.OutputPowerWatts (DC output — closest to consumption) → sum of PSU Metrics.InputPowerWatts (AC input —
       higher by conversion loss). The source is not visible in the value, so do not use it for precise comparison. ESXi: only when exactly one Watts sensor exists. null when unknown.
+      Fractional Redfish source values (measured Telemetry MetricValue "591.5", "815.75") are rounded to an integer, half-even (591.5 → 592,
+      592.5 → 592, 815.75 → 816; 2026-10-29 SA-17 user decision, previously truncated). PSU Metrics sums round each PSU before adding. Type stays integer.
 
   power.power_control.power_capacity_watts:
     type: "integer|null"
@@ -1223,27 +1282,33 @@ fields:
     priority: skip
     channel: [redfish, esxi]
     help_ko: >-
-      구간 최소 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null.
+      구간 최소 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null. 소수는 정수 반올림(half-even, 2026-10-29 SA-17).
+      EnvironmentMetrics PowerWatts.ReadingRangeMin 은 센서가 낼 수 있는 값의 범위(측정 가능 범위)라 관측 최소가 아니다 — 쓰지 않는다(2026-10-29 SA-19,
+      종전 코드는 이 값을 넣었다).
     help_en: >-
-      Window minimum power in W (legacy PowerMetrics). null on new path / ESXi.
+      Window minimum power in W (legacy PowerMetrics). null on new path / ESXi. Fractions are rounded half-even (2026-10-29 SA-17).
+      EnvironmentMetrics PowerWatts.ReadingRangeMin is the range the sensor can report, not an observed minimum, and is not used
+      (2026-10-29 SA-19; the code used it before).
 
   power.power_control.avg_consumed_watts:
     type: "integer|null"
     priority: skip
     channel: [redfish, esxi]
     help_ko: >-
-      구간 평균 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null.
+      구간 평균 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null. 소수는 정수 반올림(half-even, 2026-10-29 SA-17).
     help_en: >-
-      Window average power in W (legacy PowerMetrics). null on new path / ESXi.
+      Window average power in W (legacy PowerMetrics). null on new path / ESXi. Fractions are rounded half-even (2026-10-29 SA-17).
 
   power.power_control.max_consumed_watts:
     type: "integer|null"
     priority: skip
     channel: [redfish, esxi]
     help_ko: >-
-      구간 최대 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null.
+      구간 최대 소비 전력 W(legacy PowerMetrics). 신 경로 · ESXi 는 null. 소수는 정수 반올림(half-even, 2026-10-29 SA-17).
+      EnvironmentMetrics PowerWatts.ReadingRangeMax 는 측정 가능 범위의 상한이라 쓰지 않는다(2026-10-29 SA-19, min_consumed_watts 참조).
     help_en: >-
-      Window maximum power in W (legacy PowerMetrics). null on new path / ESXi.
+      Window maximum power in W (legacy PowerMetrics). null on new path / ESXi. Fractions are rounded half-even (2026-10-29 SA-17).
+      EnvironmentMetrics PowerWatts.ReadingRangeMax is the upper bound of the reportable range and is not used (2026-10-29 SA-19; see min_consumed_watts).
 
   power.summary:
     type: "object"
@@ -1341,8 +1406,12 @@ fields:
     channel: [redfish, esxi]
     help_ko: >-
       PSU health 의 최악값(Critical > Warning > OK). 설치 PSU 가 없으면 null.
+      PSU 는 설치돼 있으나 OK · Warning · Critical 을 하나도 보고하지 않으면 'Unknown'. 2026-10-29 (SA-06, 사용자 결정 — Redfish · ESXi 함께): 종전 코드는
+      설치 PSU 0 개(목록 없음 · 전부 Absent · ESXi PSU 센서 없음)에서도 'Unknown' 을 냈다 — 이 문장대로 null 로 맞췄다.
     help_en: >-
       Worst PSU health (Critical > Warning > OK). null when no PSU is installed.
+      'Unknown' when PSUs are installed but none reports OK / Warning / Critical. 2026-10-29 (SA-06, user decision — Redfish and ESXi
+      together): the code used to emit 'Unknown' with zero installed PSUs (no list, all Absent, no ESXi PSU sensor); it now follows this text (null).
 
   power.summary.consumed_watts:
     type: "integer|null"
@@ -1472,8 +1541,17 @@ fields:
     type: "integer|null"
     priority: nice
     channel: [redfish, esxi]
-    help_ko: "팬 속도 수치 (Reading 또는 ReadingRPM; 신 schema 는 SpeedPercent). reading_units 와 함께 해석."
-    help_en: "Fan speed value (Reading or ReadingRPM; new schema SpeedPercent). Interpret with reading_units."
+    help_ko: >-
+      팬 속도 수치 (Reading 또는 ReadingRPM; 신 schema 는 SpeedPercent). reading_units 와 함께 해석.
+      Redfish 신 schema(ThermalSubsystem/Fans): SpeedPercent.Reading(Percent) → 없으면 SpeedPercent.SpeedRPM(RPM) → 둘 다 없으면 Chassis/Sensors 중
+      ReadingType 이 Rotational 이고 RelatedItem 이 그 Fan 을 가리키는 센서의 Reading(단위 = 센서 ReadingUnits, 실측 HPE CSUS 3200 RPM — Fan 리소스에
+      SpeedPercent 가 없다). Status.State 가 있고 Enabled 가 아닌 팬은 null(State 가 없으면 값 유지). 2026-10-29 (SA-16) 출처 문서화 — 코드 동작 불변.
+    help_en: >-
+      Fan speed value (Reading or ReadingRPM; new schema SpeedPercent). Interpret with reading_units.
+      Redfish new schema (ThermalSubsystem/Fans): SpeedPercent.Reading (Percent) → else SpeedPercent.SpeedRPM (RPM) → else the Reading of a
+      Chassis/Sensors entry whose ReadingType is Rotational and whose RelatedItem points at that Fan (units = the sensor's ReadingUnits;
+      measured HPE CSUS 3200: RPM — its Fan resources carry no SpeedPercent). null for fans whose Status.State exists and is not Enabled
+      (kept when State is absent). Source documented 2026-10-29 (SA-16); code behaviour unchanged.
 
   "thermal.fans[].reading_units":
     type: "string|null"
@@ -1496,11 +1574,20 @@ fields:
       Redfish: 모든 프로세서의 TotalCores를 합산한 값.
       OS: ansible_processor_count × cores_per_socket.
       '소켓당 코어'가 아닌 '전체 코어 수'임에 주의.
+      Redfish 2026-10-29 (SA-04): 합은 CPU 목록을 다 읽었고(processors 오류 없음) 모든 CPU 의 TotalCores 가 양수일 때만 쓴다 — TotalCores 가 없거나
+      0 이하이면 그 CPU 의 코어는 미상이다(설치된 CPU 의 0 코어는 있을 수 없다). 아니면 같은 System 의 ProcessorSummary.CoreCount 가 양의 정수이고
+      (아는 코어 합 + 코어 미상 CPU 수) 이상이며 ProcessorSummary.Count(있으면)가 CPU 목록 수 이상일 때 그 값, 그것도 아니면 null + notice
+      ('부분 합을 쓰지 않음'). 종전에는 코어를 아는 CPU 만 더한 부분 합을 전체 코어로 적었다.
     help_en: >-
       Total physical cores across all sockets.
       Redfish: sum of TotalCores from all processors.
       OS: ansible_processor_count × cores_per_socket.
       Note: this is total cores, not per-socket.
+      Redfish 2026-10-29 (SA-04): the sum is used only when the whole CPU list was read (no processors error) and every TotalCores is
+      positive — a missing or non-positive TotalCores means that CPU's cores are unknown (an installed CPU cannot have zero cores).
+      Otherwise ProcessorSummary.CoreCount of the same System is used when it is a positive integer, at least (known cores + CPUs with
+      unknown cores), and ProcessorSummary.Count (if present) is at least the CPU list size; failing that, null + notice. Previously the
+      partial sum of the CPUs with known cores was reported as the total.
 
   cpu.sockets:
     type: "integer|null"
@@ -1509,9 +1596,13 @@ fields:
     help_ko: >-
       CPU 소켓(패키지) 수. Redfish: ProcessorType 이 CPU 인 Processor 멤버 수(없으면 ProcessorSummary.Count), Linux lscpu Socket(s),
       Windows Win32_Processor 수, ESXi ansible_processor_count. 모르면 null (1 placeholder 금지). 2026-10-27 등재(02-cpu-007 — 코드는 처음부터 냈다).
+      Redfish 2026-10-29 (SA-04): 멤버 수는 CPU 목록을 다 읽었을 때만 쓴다. 목록이 비었거나 일부 멤버를 읽지 못했으면 CPU 목록 수 이상인
+      ProcessorSummary.Count, 그것도 아니면 null(읽은 멤버 수 = 부분 목록 길이를 쓰지 않는다).
     help_en: >-
       CPU socket (package) count. Redfish: number of Processor members whose ProcessorType is CPU (else ProcessorSummary.Count),
       Linux lscpu Socket(s), Windows Win32_Processor count, ESXi ansible_processor_count. null when unknown (never a placeholder 1). Registered 2026-10-27.
+      Redfish 2026-10-29 (SA-04): the member count is used only when the whole CPU list was read; with an empty list or an unread member,
+      ProcessorSummary.Count (if at least the list size) is used, otherwise null (the partial list length is never used).
 
   cpu.model:
     type: "string|null"
@@ -2140,12 +2231,22 @@ fields:
       cores_per_socket 은 세 채널 모두 total_cores // sockets (Redfish 는 2026-10-19 부터 — 종전 첫 소켓 값; 동질 CPU 는 값이 같다).
       groups[].manufacturer 는 cpu.manufacturer 와 같은 정규화값이다(2026-10-27 FIX 2). cpu.logical_threads 는 OS/ESXi 채널만 낸다(2026-10-27 FIX 1 —
       Redfish BMC 스레드 수는 HT 상태를 확정하지 못한다; 종전 LogicalProcessorCount 우선 · adapter 플래그 규칙은 삭제).
+      그룹 키 전체(2026-10-29 SA-11 — 위 4개는 대표 키): model · manufacturer · max_speed_mhz · l2_cache_kb · l3_cache_kb · sockets · cores_per_socket ·
+      total_cores 에 더해 Redfish 는 architecture, Linux · Windows 는 turbo_max_mhz, ESXi 는 architecture · turbo_max_mhz. multi_node.partitions[] 그룹은
+      model · manufacturer · max_speed_mhz · architecture · sockets · cores_per_socket · total_cores.
+      Redfish 2026-10-29 (SA-04): 그룹에 코어 수(TotalCores) 미상 CPU 가 하나라도 있으면 그 그룹의 total_cores · cores_per_socket 은 null 이다
+      (sockets 는 목록의 CPU 수) — 종전에는 아는 코어만 더한 부분 합을 그룹 값으로 적었다. 파티션 그룹도 같다(SA-03).
     help_en: >-
       CPU group summary. groups[]={model, sockets, cores_per_socket, total_cores}.
       Aggregates sockets sharing the same model for operational visibility.
       cores_per_socket is total_cores // sockets on all channels (Redfish since 2026-10-19; previously the first socket's value).
       groups[].manufacturer is normalized like cpu.manufacturer (2026-10-27 FIX 2). cpu.logical_threads is emitted by the OS/ESXi channels only
       (2026-10-27 FIX 1 — BMC thread counts cannot establish the HT state; the former LogicalProcessorCount-first / adapter-flag rules were removed).
+      Full group keys (2026-10-29 SA-11 — the four above are the main ones): model, manufacturer, max_speed_mhz, l2_cache_kb, l3_cache_kb,
+      sockets, cores_per_socket, total_cores, plus architecture (Redfish), turbo_max_mhz (Linux, Windows), architecture and turbo_max_mhz
+      (ESXi). multi_node.partitions[] groups: model, manufacturer, max_speed_mhz, architecture, sockets, cores_per_socket, total_cores.
+      Redfish 2026-10-29 (SA-04): when a group holds any CPU whose TotalCores is unknown, that group's total_cores and cores_per_socket are
+      null (sockets still counts the listed CPUs) — previously the partial sum of known cores was used. Partition groups follow the same rule (SA-03).
 
   "memory.summary":
     type: "object"
@@ -2156,11 +2257,24 @@ fields:
       + grand_total_gb. 같은 단위 용량 DIMM 의 수량 + 총량 + 전체 총량.
       2026-10-19: grand_total_gb 는 총량을 모르면 null(0 금지 — Linux 는 DMI 합 → MEM_PHYS_MB → MemTotal, Redfish 는 슬롯 합 → total_mb 원천).
       GB 반올림이 0 이 되는 DIMM(512 MiB 이하)은 세 채널 모두 unit_capacity_gb 0 그룹을 만들지 않는다.
+      그룹 키 전체(2026-10-29 SA-11): unit_capacity_gb · type · speed_mhz · manufacturer · part_number · quantity · group_total_gb (Redfish · Linux · Windows —
+      ESXi 는 DIMM 정보가 없어 groups 가 비고 grand_total_gb 만). unit_capacity_gb 는 DIMM MiB ÷ 1024 의 half-even 반올림(1536 MiB → 2, 2560 MiB → 2 —
+      사용자 결정 유지)이고 storage 의 내림과 다르다.
+      Redfish 2026-10-29 (SA-05): DIMM 목록이 미완결이면(멤버 조회 실패 · 용량 미상 DIMM) grand_total_gb 는 아는 DIMM 의 합이 아니라 memory.total_mb 와
+      같은 근거(검사를 통과한 MemorySummary.TotalSystemMemoryGiB)이거나 null + notice 다. 그룹은 아는 DIMM 만 담으므로 이때 grand_total_gb 와 그룹 합이 다를 수 있다.
+      multi_node.partitions[].memory.summary 도 같은 규칙이다(SA-03 — 그 파티션 System 의 MemorySummary 만 쓴다).
     help_en: >-
       Memory group summary. groups[]={unit_capacity_gb, type, quantity, group_total_gb}
       + grand_total_gb. Quantity, group total, and grand total of DIMMs by capacity.
       2026-10-19: grand_total_gb is null when the total is unknown (never 0 — Linux: DMI sum → MEM_PHYS_MB → MemTotal; Redfish: slot sum → total_mb source).
       DIMMs that round to 0 GB (≤ 512 MiB) never form a unit_capacity_gb 0 group on any channel.
+      Full group keys (2026-10-29 SA-11): unit_capacity_gb, type, speed_mhz, manufacturer, part_number, quantity, group_total_gb (Redfish,
+      Linux, Windows — ESXi has no DIMM data, so groups is empty and only grand_total_gb is set). unit_capacity_gb is DIMM MiB / 1024 rounded
+      half-even (1536 MiB → 2, 2560 MiB → 2 — kept by user decision), unlike the storage floor.
+      Redfish 2026-10-29 (SA-05): with an incomplete DIMM list (failed member read, unknown-capacity DIMM) grand_total_gb is not the known
+      DIMM sum but the same basis as memory.total_mb (a MemorySummary.TotalSystemMemoryGiB that passes the check) or null + notice. Groups
+      hold only known DIMMs, so grand_total_gb can then differ from the group sum. multi_node.partitions[].memory.summary follows the same
+      rule (SA-03 — only that partition System's MemorySummary is used).
 
   "storage.summary":
     type: "object"
@@ -2169,9 +2283,28 @@ fields:
     help_ko: >-
       디스크 그룹 summary. groups[]={unit_capacity_gb, media_type, protocol, quantity,
       group_total_gb} + grand_total_gb. 같은 단위 용량/미디어 디스크의 수량 + 총량.
+      그룹 키 전체(2026-10-29 SA-11): unit_capacity_gb · model · media_type · protocol · quantity · group_total_gb (세 채널 같다). unit_capacity_gb 는
+      physical_disks[].total_mb(MiB) ÷ 1024 내림(GiB — 세 채널 모두 내림, 사용자 결정 유지; 931.5 GiB 디스크 → 931). 용량을 모르는 디스크는 그룹 · 합에서 뺀다.
+      grand_total_gb (type integer|null) — Redfish 2026-10-29 (SA-07, 전원 상태는 판정에 쓰지 않는다): 드라이브 목록 원천(Storage 멤버 Drives 배열 —
+      빈 배열 포함 · SimpleStorage Devices · SmartStorage 디스크 컬렉션 · 섀시 Drives 컬렉션 · 섀시 Links.Drives)을 하나 이상 읽었고 모두 비었으며 실패가
+      없으면 0(확인한 0). 원천을 하나도 읽지 못했거나(수집하지 못함 — 디스크 0 개를 확인할 근거 없음) · 원천이나 원천이 가리킨 멤버(Storage 멤버 ·
+      드라이브)를 다 읽지 못했으면(가리킨 것의 404 포함 · 일부 실패 포함) null + notice. 선택 링크(섀시 본문 · 섀시 Drives 컬렉션)의 404 는 미제공이라
+      원천으로도 실패로도 세지 않는다. 볼륨 · 컨트롤러 정보 · PCIe 식별 실패는 디스크 합과 무관하다. storage 를 수집하지 않았으면 null. 파티션 summary 도 같다.
+      OS/ESXi 는 이 판정을 쓰지 않는다(운영 중인 OS 가 디스크를 직접 보고, 수집이 실패하면 섹션이 failed 다 — 종전 그대로).
     help_en: >-
       Disk group summary. groups[]={unit_capacity_gb, media_type, protocol, quantity,
       group_total_gb} + grand_total_gb. Quantity and totals by capacity/media.
+      Full group keys (2026-10-29 SA-11): unit_capacity_gb, model, media_type, protocol, quantity, group_total_gb (same on all channels).
+      unit_capacity_gb is physical_disks[].total_mb (MiB) / 1024, floored (GiB — floored on all three channels, kept by user decision;
+      a 931.5 GiB disk → 931). Disks with unknown capacity are left out of groups and the total.
+      grand_total_gb (type integer|null) — Redfish 2026-10-29 (SA-07; power state is not used): 0 (confirmed zero) when at least one
+      drive-list source (Storage member Drives array incl. an empty one, SimpleStorage Devices, SmartStorage disk collection, chassis
+      Drives collection, chassis Links.Drives) was read, all were empty and nothing failed. null + notice when no source was read (not
+      collected — no basis to confirm zero disks) or a source or a member it points to (Storage member, drive) could not be fully read
+      (incl. a 404 on something pointed to, incl. partial failures). A 404 on an optional link (chassis body, chassis Drives collection)
+      means "not provided" and counts neither as a source nor as a failure. Volume, controller-detail and PCIe-identity failures do not
+      affect the disk total. null when storage was not collected. Partition summaries follow the same rule. OS/ESXi do not use this
+      rule (the running OS sees the disks itself; a failed collection fails the section — unchanged).
 
   "network.summary":
     type: "object"
@@ -2186,6 +2319,16 @@ fields:
       adapter_count 는 network.adapters[] 중 포트가 전부 FC/FCoE/InfiniBand 인 카드를 뺀 수(그 카드는 storage.hbas/infiniband 로 요약; 포트 정보 없는 카드는 센다).
       세는 단위: Redfish 는 호스트 포트 · 카드, OS 는 논리 NIC(VLAN 하위 · bond slave · bridge/team member 제외), ESXi 는 vmnic(link_type 'ethernet').
       속도를 모르는 NIC(링크 다운 · 가상 NIC)도 speed_mbps null 그룹으로 세고 link_up_count 를 센다.
+      Redfish 2026-10-29 (Summary 정합성):
+      - groups[].speed_mbps (SA-08, 사용자 결정): NIC 속도 0 은 그룹 키에서 null 이다 — link down 이면 협상 속도가 없고, up · unknown 인데 0 이면 확인되지
+        않은 속도다. 상세 network.interfaces[].speed_mbps 의 원본 0 은 그대로다. 모델 · 제조사 · link_type 이 같은 null 그룹과 합쳐진다.
+      - primary_speed_mbps (SA-10): is_primary NIC 의 속도. 그 값이 0 · null 이거나 대표 NIC 이 없으면 null(종전: 첫 link up NIC 의 속도).
+      - port_count / adapter_count (type integer|null, SA-01 개수 원칙): 원천(EthernetInterfaces · NetworkAdapters)을 끝까지 읽었을 때만 정수(0 포함),
+        미지원 · 404 · 실패 · 일부 멤버 실패 · 미수집이면 null(종전 0).
+      - adapter_count 와 network.adapters[] 는 제조사 · 모델이 없고 포트 수 · 기능 수가 0 이며 Controllers 의 기능 · 포트 링크도 최상위
+        NetworkDeviceFunctions 링크도 없는 카드를 뺀다(빈 슬롯 · 관리 카드 placeholder — 실측 HPE CSUS 3200 'Rmp', 최상위 Ports 링크만 있음; SA-15 문서화).
+      - groups[].model · manufacturer (SA-18 문서화): 그 NIC 이 속한 카드(network.adapters[])의 값이다. NIC Id 에서 '-N-N' · '-N' 접미를 뗀 값이 카드 Id 와
+        같으면 그 카드, 아니면 NIC MAC 과 같은 주소(network.ports[] 의 AssociatedMACAddresses 첫 주소)를 가진 포트의 카드다. 둘 다 없으면 null.
     help_en: >-
       NIC group summary. groups[]={speed_mbps, model, manufacturer, link_type, quantity, link_up_count}
       + adapter_count + port_count + primary_speed_mbps.
@@ -2195,6 +2338,20 @@ fields:
       adapter_count excludes network.adapters[] whose ports are all FC/FCoE/InfiniBand (those are summarised under storage.hbas/infiniband; cards without port info are counted).
       Unit counted: Redfish host ports/cards, OS logical NICs (VLAN children, bond slaves, bridge/team members excluded), ESXi vmnics (link_type 'ethernet').
       NICs with unknown speed (link down, virtual) are counted in a speed_mbps null group with link_up_count.
+      Redfish 2026-10-29 (Summary consistency):
+      - groups[].speed_mbps (SA-08, user decision): a NIC speed of 0 is null in the group key — link down means no negotiated speed, and 0
+        with up/unknown is an unconfirmed speed. The raw 0 in network.interfaces[].speed_mbps is kept. Such NICs merge with the null group
+        of the same model/manufacturer/link_type.
+      - primary_speed_mbps (SA-10): the speed of the is_primary NIC; null when that value is 0/null or there is no primary NIC (previously
+        the first link-up NIC's speed).
+      - port_count / adapter_count (type integer|null, SA-01 count rule): an integer (0 included) only when the source (EthernetInterfaces,
+        NetworkAdapters) was read to the end; null when unsupported, 404, failed, partly failed or not collected (previously 0).
+      - adapter_count and network.adapters[] leave out a card with no manufacturer/model, zero port and function counts, no function/port
+        links under Controllers and no top-level NetworkDeviceFunctions link (empty slot or management-card placeholder — measured HPE CSUS
+        3200 'Rmp', which has only a top-level Ports link; documented as SA-15).
+      - groups[].model / manufacturer (documented as SA-18): taken from the card (network.adapters[]) the NIC belongs to — the card whose Id
+        equals the NIC Id without a '-N-N' / '-N' suffix, else the card of the port whose address (first AssociatedMACAddresses entry of
+        network.ports[]) equals the NIC MAC. null when neither matches.
 
   # ──────────────────────────────────────────────────────────────────────────
   # NIC / HBA / InfiniBand 깊이 (어댑터 단위 / 포트 단위 정보)
@@ -2233,9 +2390,26 @@ fields:
     help_ko: >-
       NIC port-level 정보. adapter_id/port_id/link_status/current_link_speed_mbps/
       port_type (Ethernet/FibreChannel/InfiniBand).
+      link_status 는 network.interfaces[].link_status 와 같은 Redfish 매핑이다(2026-10-29 SA-09 — Starting · Training · Enabled · Active · 미인식 값은
+      unknown + notice '네트워크 포트 링크 상태 값 미확정'). 같은 FC 포트의 storage.hbas[].link_status 는 up/down 둘뿐이라 값이 다를 수 있다.
     help_en: >-
       NIC port-level info. adapter_id/port_id/link_status/current_link_speed_mbps/
       port_type (Ethernet/FibreChannel/InfiniBand).
+      link_status uses the same Redfish mapping as network.interfaces[].link_status (2026-10-29 SA-09 — Starting/Training/Enabled/Active/
+      unrecognized values are unknown + a 'network port link state value unresolved' notice). storage.hbas[].link_status for the same FC
+      port has only up/down, so the two can differ.
+
+  # 2026-10-29 (SA-11): 이미 나가던 키 — 사전 등재만(값 · 채널 동작 불변).
+  "network.portgroups":
+    type: "object[]"
+    priority: nice
+    channel: [esxi]
+    help_ko: >-
+      ESXi 표준 vSwitch 포트그룹 목록(vmware_portgroup_info) — 항목마다 portgroup(이름) · vswitch · vlan_id(4095 = 모든 VLAN trunk).
+      network.virtual_switches[].portgroups(이름 목록)와 같은 원천이다. Redfish · OS 는 항상 [] — channel 에서 제외.
+    help_en: >-
+      ESXi standard vSwitch portgroups (vmware_portgroup_info) — each entry has portgroup (name), vswitch and vlan_id (4095 = trunk of all
+      VLANs). Same source as network.virtual_switches[].portgroups (a name list). Always [] on Redfish and OS, so they are excluded from channel.
 
   "network.virtual_switches[]":
     type: "object[]"
@@ -2641,7 +2815,8 @@ fields:
       키는 있는데 값이 null·Unknown·미인식이거나 Enabled·Active(표준 Port.LinkStatus 에서 링크 의미가 불명 — 2026-10-28 사용자 결정, 종전 up)이면
       down + notice '링크 상태 값 미확정, down 으로 기록'(원문 포함). 짝 없는 기능은 이름으로 찾은 부모 포트 값을 상속하고, 부모도 없으면 down + 미제공 notice.
       카드 · 컨트롤러 상태(Health OK · State Enabled), PCIeDevice 조건(LinkUp 등 — 카드 단위, notice 의 참고 문구로만), Port.LinkState(관리 상태),
-      속도 값은 포트 링크 근거로 쓰지 않는다. 네트워크 링크(network.*.link_status)는 이 규칙을 쓰지 않는다(Enabled·Active 는 네트워크에서 up 그대로).
+      속도 값은 포트 링크 근거로 쓰지 않는다. 네트워크 링크(network.*.link_status)는 이 규칙을 쓰지 않는다(네트워크는 2026-10-29 SA-09 부터
+      Starting · Training · Enabled · Active · 미인식 값을 unknown + notice 로 적는다 — HBA 의 값 · notice 는 그대로).
       Linux fc_host port_state: Online·Marginal → up / 그 밖(Offline·Linkdown·Error·Blocked·Bypassed·Loopback·Diagnostics·Unknown·Deleted·없음·읽기 실패) → down.
       Windows MSFT_InitiatorPort.OperationalStatus: 2 → up / 3~8 → down / 1·없음 → MSFC PortState 2 → up, 그 밖 → down.
       ESXi HostBusAdapter.status: online → up / 그 밖(offline·unbound·unknown·없음) → down.
@@ -2659,7 +2834,8 @@ fields:
       'link state value unresolved, recorded as down' (raw value included). An unlinked function inherits its name-matched parent port;
       no parent → down + not-provided notice. Card/controller status (Health OK, State Enabled), PCIeDevice conditions (LinkUp etc. — card
       level, only as a reference phrase in the notice), Port.LinkState (admin state) and speed values are not port-link evidence. Network
-      link fields (network.*.link_status) do not use this rule (Enabled/Active stay up there).
+      link fields (network.*.link_status) do not use this rule (since 2026-10-29 SA-09 they record Starting/Training/Enabled/Active/unrecognized
+      values as unknown + notice — the HBA values and notices are unchanged).
       Linux fc_host port_state: Online/Marginal → up; anything else (Offline/Linkdown/Error/Blocked/Bypassed/Loopback/Diagnostics/Unknown/Deleted/absent/unreadable) → down.
       Windows OperationalStatus: 2 → up; 3-8 → down; 1/absent → MSFC PortState 2 → up, otherwise down.
       ESXi HostBusAdapter.status: online → up; anything else (offline/unbound/unknown/absent) → down.
@@ -2786,12 +2962,14 @@ fields:
     help_ko: >-
       IB 포트 링크 상태. up=활성(Linux state ACTIVE · Windows Status Up · Redfish LinkUp/Up), down=명확한 링크 없음(DOWN · Disconnected ·
       LinkDown/NoLink), unknown=중간 상태 또는 미확인(Linux INIT/ARMED/ACTIVE_DEFER · Windows Disabled/Not Present 등 · Redfish Starting/Training/없음).
-      DOWN 과 미확인을 같은 값으로 적지 않는다. network.ports[].link_status(Redfish) 는 협상 중을 down 으로 적는 종전 규칙이라 같은 포트가
-      training 중이면 둘이 다를 수 있다.
+      DOWN 과 미확인을 같은 값으로 적지 않는다. 2026-10-29 (SA-09)부터 network.ports[].link_status(Redfish) 도 협상 중(Starting · Training)을
+      unknown 으로 적어 같은 포트의 두 값이 갈리지 않는다(그쪽만 Connected → up, Disconnected · Disabled · Inactive · Offline → down 을 더 받는다).
     help_en: >-
       IB port link state. up=active (Linux ACTIVE / Windows Up / Redfish LinkUp), down=definite no link (DOWN / Disconnected /
       LinkDown/NoLink), unknown=intermediate or undetermined (Linux INIT/ARMED/ACTIVE_DEFER, Windows Disabled/Not Present,
-      Redfish Starting/Training/absent). Redfish network.ports[].link_status keeps the older rule (negotiating=down).
+      Redfish Starting/Training/absent). Since 2026-10-29 (SA-09) Redfish network.ports[].link_status also records negotiating states
+      (Starting/Training) as unknown, so the two values for one port no longer split (that field additionally maps Connected → up and
+      Disconnected/Disabled/Inactive/Offline → down).
 
   "storage.infiniband[].model":
     type: "string|null"
@@ -2906,9 +3084,16 @@ fields:
     help_ko: >-
       partition_count / manager_count / chassis_count / representative_partition / resource_block_count / fabric_count(2026-10-27 등재 — 뒤 둘은 composition · fabrics 가 null 이면 null).
       호출자가 멀티-노드 규모 파악 시 사용.
+      개수(type integer|null) — 2026-10-29 (SA-01 · SA-02, 사용자 결정): 원천 컬렉션(Systems · Managers · Chassis · ResourceBlocks · Fabrics)을 끝까지 읽고
+      나열된 멤버를 모두 읽었을 때만 정수(0 포함)다. 링크 없음 · 404 · 컬렉션 실패 · 멤버 일부 실패 · 절단은 null(종전 0 — "보지 못함" 을 "0개" 로 적었다).
+      목록(partitions[] · managers[] · chassis[] · fabrics[])은 읽은 멤버만 담는다. 실패는 errors[] 로 구분한다.
     help_en: >-
       partition_count / manager_count / chassis_count / representative_partition / resource_block_count / fabric_count (documented 2026-10-27 — the last two are null when composition / fabrics is null).
       Used by callers to gauge multi-node scale.
+      Counts (type integer|null) — 2026-10-29 (SA-01, SA-02, user decision): an integer (0 included) only when the source collection
+      (Systems, Managers, Chassis, ResourceBlocks, Fabrics) was read to the end and every listed member was read. A missing link, 404,
+      collection failure, partly failed members or truncation give null (previously 0 — "not seen" was reported as "zero"). The lists
+      (partitions[], managers[], chassis[], fabrics[]) hold the members that were read; failures are told apart by errors[].
 
   multi_node.composition:
     type: "object|null"
@@ -2916,8 +3101,11 @@ fields:
     channel: [redfish]
     help_ko: >-
       CompositionService + ResourceBlocks 요약(enabled · state · health · resource_block_count · resource_blocks[]). ServiceRoot 에 CompositionService 가 없으면 null.
+      resource_block_count(type integer|null)는 ResourceBlocks 컬렉션을 끝까지 읽었을 때만 정수 — 링크 없음 · 실패는 null(2026-10-29 SA-02, 종전 0).
     help_en: >-
       CompositionService + ResourceBlocks summary (enabled, state, health, resource_block_count, resource_blocks[]). null when the ServiceRoot has no CompositionService.
+      resource_block_count (type integer|null) is an integer only when the ResourceBlocks collection was read to the end; a missing link or
+      a failure gives null (2026-10-29 SA-02, previously 0).
 
   "multi_node.composition.resource_blocks[]":
     type: "object[]"
@@ -2952,8 +3140,15 @@ fields:
     channel: [redfish]
     help_ko: >-
       Fabrics 요약 목록(id · name · fabric_type · state · health · switch_count · endpoint_count · switches[] · endpoints[]). Fabrics 컬렉션이 없으면 null. CSUS 3200 FlexGrid 는 fabric_type null(DMTF enum 에 NUMAlink 없음).
+      switch_count · endpoint_count(type integer|null)는 그 Fabric 의 Switches · Endpoints 컬렉션을 끝까지 읽었을 때만 정수(빈 컬렉션 200 → 0)이고, 링크 없음 ·
+      404 · 실패 · 멤버 일부 실패는 null 이다 — switches[] · endpoints[] 는 읽은 멤버만 담고 [] 를 유지한다(2026-10-29 SA-01 사용자 결정. 실측 CSUS 3200
+      FlexGrid 는 본문에 Endpoints 키가 없어 endpoint_count null · endpoints [] — 종전 0).
     help_en: >-
       Fabric summaries (id, name, fabric_type, state, health, switch_count, endpoint_count, switches[], endpoints[]). null without a Fabrics collection. CSUS 3200 FlexGrid has fabric_type null (no NUMAlink in the DMTF enum).
+      switch_count / endpoint_count (type integer|null) are integers only when that Fabric's Switches / Endpoints collection was read to the
+      end (an empty 200 collection gives 0); a missing link, 404, failure or partly failed members give null — switches[] / endpoints[] keep
+      the members read and stay [] (2026-10-29 SA-01, user decision. Measured CSUS 3200 FlexGrid has no Endpoints key, so endpoint_count is
+      null and endpoints is [] — previously 0).
 
   "multi_node.partitions[]":
     type: "object[]"
@@ -2962,9 +3157,17 @@ fields:
     help_ko: >-
       Partition 별 system / cpu / memory / storage / network 수집 결과 리스트. 각
       entry: id (Partition0/Partition1) / system_uri / system / cpu / memory / storage / network.
+      파티션의 cpu · memory · storage summary 는 top-level 과 같은 규칙이다(2026-10-29 SA-03 — 코어 · 용량 미상이면 null, memory half-even ·
+      0 GB 그룹 없음, storage 내림 · 0/null 판정은 storage.summary 참조, 제조사는 cpu.manufacturer 와 같은 정규화). 총량의 BMC 요약은 그 파티션
+      System 의 ProcessorSummary · MemorySummary 만 쓴다. 파티션 network.summary 는 계산하지 않는다 — 카드 · 포트를 파티션 단위로 수집하지 않으므로
+      추정하지 않고 {groups: []} 로 둔다.
     help_en: >-
       Per-partition collection results. Each entry: id / system_uri / system /
       cpu / memory / storage / network.
+      Partition cpu / memory / storage summaries follow the top-level rules (2026-10-29 SA-03 — null when cores or capacities are unknown,
+      memory half-even with no 0 GB group, storage floored with the 0/null rule of storage.summary, manufacturer normalized like
+      cpu.manufacturer). BMC totals come only from that partition System's ProcessorSummary / MemorySummary. A partition network.summary is
+      not computed — cards and ports are not collected per partition, so nothing is inferred and it stays {groups: []}.
 
   "multi_node.managers[]":
     type: "object[]"
