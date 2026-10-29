@@ -2426,6 +2426,13 @@ def _normalize_dimm_label(raw_label):                                         # 
     return normalized
 
 
+# 일반 NIC · 포트(network.interfaces[] · network.ports[] · 파티션 NIC) 링크 값 (2026-10-29 SA-09).
+#   storage.hbas[] 는 이 집합을 쓰지 않는다 — _HBA_LINK_UP_VALUES / _HBA_LINK_DOWN_VALUES 가 따로 고정돼 있다.
+_LINK_UP_VALUES = frozenset(('linkup', 'up', 'connected'))
+_LINK_DOWN_VALUES = frozenset(('linkdown', 'down', 'nolink', 'disconnected', 'disabled', 'inactive', 'offline'))
+_LINK_EMPTY_VALUES = frozenset(('', 'none', 'unknown', 'null'))   # 값 없음 — unknown 이어도 notice 대상이 아니다
+
+
 def _normalize_link_status(value):
     """Normalize Redfish LinkStatus to standard enum.
 
@@ -2435,27 +2442,40 @@ def _normalize_link_status(value):
       - Cisco CIMC: 'Connected' / 'Disconnected' / null
       - Lenovo XCC: 'LinkUp' / 'LinkDown'
 
-    DMTF DSP8010 2026.1 대조 2026-06-08: Port.LinkStatus enum 정본은
-      ['LinkUp', 'Starting', 'Training', 'LinkDown', 'NoLink'] (Port.v1_19_0).
-      'Starting'/'Training' = 링크 협상 중(비작동) 전이 상태 → 기존 비작동
-      매핑(disabled/inactive/offline)과 동일하게 'down' 으로 정규화.
+    DMTF 대조: EthernetInterface.LinkStatus = LinkUp / NoLink / LinkDown, Port.LinkStatus = LinkUp / Starting / Training /
+      LinkDown / NoLink (Port.v1_19_0), NetworkPort.LinkStatus = Up / Down / Starting / Training (NetworkPort.v1_4_3).
+      2026-10-29 (SA-09, 사용자 의견): Starting · Training 은 링크를 협상하는 전이 상태라 링크가 아직 정해지지 않았다 — 종전(2026-06-08)
+      'down' 매핑을 'unknown' 으로 바꾼다(storage.infiniband 의 _normalize_ib_link_status 와 같은 규칙). Enabled · Active 는 링크 값이
+      아니라 State 값이라 up 으로 보지 않는다. 미인식 값도 원문을 그대로 내보내지 않고 'unknown' 이다 — 원문이 있는데 unknown 이 된
+      값은 _link_status_unmapped 로 골라 호출부가 섹션당 notice 1건으로 남긴다. storage.hbas 는 이 함수를 쓰지 않는다(_hba_link_status).
 
     Standard enum:
-      'up'      — link active
-      'down'    — link inactive (NoLink, LinkDown, Disconnected, Starting, Training)
-      'unknown' — null/unknown response
+      'up'      — link active (LinkUp, Up, Connected)
+      'down'    — link inactive (LinkDown, Down, NoLink, Disconnected, Disabled, Inactive, Offline)
+      'unknown' — 값 없음 · 전이 상태(Starting, Training) · 링크 값 아님(Enabled, Active) · 미인식 값
     """
     if value is None:
         return 'unknown'
     s = str(value).strip().lower()
-    if not s or s in ('none', 'unknown', 'null'):
-        return 'unknown'
-    if s in ('linkup', 'up', 'connected', 'enabled', 'active'):
+    if s in _LINK_UP_VALUES:
         return 'up'
-    if s in ('linkdown', 'down', 'nolink', 'disconnected', 'disabled',
-             'inactive', 'offline', 'starting', 'training'):
+    if s in _LINK_DOWN_VALUES:
         return 'down'
-    return s  # unknown vendor-specific value — preserve raw
+    return 'unknown'
+
+
+def _link_status_unmapped(value):
+    """원문이 있는데 _normalize_link_status 가 'unknown' 으로 둔 LinkStatus 원문 (Starting · Training · Enabled · Active · 미인식 값).
+
+    값이 없거나(None · 빈 값 · none · unknown · null) up/down 으로 정해지는 값이면 None — 2026-10-29 SA-09 notice 용.
+    """
+    if value is None:
+        return None
+    raw = str(value).strip()
+    low = raw.lower()
+    if low in _LINK_EMPTY_VALUES or low in _LINK_UP_VALUES or low in _LINK_DOWN_VALUES:
+        return None
+    return raw
 
 
 def _valid_iso_date(s):
@@ -4079,6 +4099,7 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         return [], errors
 
     nics = []
+    link_unmapped = []   # 2026-10-29 (SA-09): 원문이 있는데 unknown 이 된 NIC — 'Id=원문'
     for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
                                       'network', errors):
         uri = _safe(member, '@odata.id')
@@ -4107,16 +4128,24 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         # 같은 물리 NIC 이 data.network(대문자) vs network_adapters(소문자) 로 갈렸다. raw 가
         # colon-hex 라 .lower() 무손실.
         _nmac = _safe(ndata, 'MACAddress')
+        _nlink = _safe(ndata, 'LinkStatus')
+        _nraw = _link_status_unmapped(_nlink)
+        if _nraw is not None:
+            link_unmapped.append('%s=%s' % (_id_text(_safe(ndata, 'Id')) or _p(uri), _nraw))
         nics.append({
             'id': _safe(ndata, 'Id'), 'name': _safe(ndata, 'Name') or _safe(ndata, 'Id') or '',
             'mac': _nmac.lower() if isinstance(_nmac, str) else _nmac, 'speed_mbps': _safe_int(_safe(ndata, 'SpeedMbps')),  # Round 2 #18: mbps int 통일
             'mtu': _safe_int(_safe(ndata, 'MTUSize')),  # Round 6 #6: int 통일(마지막 수치 필드)
-            'link_status': _normalize_link_status(_safe(ndata, 'LinkStatus')),
+            'link_status': _normalize_link_status(_nlink),
             'health': _safe(ndata, 'Status', 'Health'),
             'ipv4': ipv4_addrs,
         })
         if ipv6_addrs:
             nics[-1]['ipv6'] = ipv6_addrs
+    # 2026-10-29 (SA-09): Starting · Training · Enabled · Active · 미인식 값은 unknown — 원문을 EthernetInterfaces 경로당 1건으로 남긴다
+    #   (파티션도 각 System 의 이 함수를 거치므로 System 마다 1건). _normalize_network_raw 의 재정규화는 멱등이라 notice 를 내지 않는다.
+    if link_unmapped:
+        _notice('network', '%s: NIC 링크 상태 값 미확정, unknown 으로 기록 (link_status) — %s' % (path, ', '.join(link_unmapped)))
     return nics, errors
 
 
@@ -4232,8 +4261,9 @@ def _normalize_ib_link_status(value):
 
     Port.LinkStatus(LinkUp / Starting / Training / LinkDown / NoLink — Port.v1_19_0) 와 NetworkPort.LinkStatus(Up / Down /
     Starting / Training — NetworkPort.v1_4_3) 를 up / down / unknown 으로 — 명확한 up 과 down 만 확정하고 중간 상태(Starting /
-    Training) · 없음 · 그 밖의 값은 unknown 이다. network.ports[].link_status 는 종전 _normalize_link_status 그대로(협상 중 = down)
-    라 같은 포트가 training 중이면 ports=down / infiniband=unknown 으로 갈릴 수 있다 (docs/contract/03-fields.md 6.3.3).
+    Training) · 없음 · 그 밖의 값은 unknown 이다. 2026-10-29 (SA-09)부터 network.ports[].link_status(_normalize_link_status)도
+    Starting · Training 을 unknown 으로 둬 같은 포트의 두 값이 갈리지 않는다 (docs/contract/03-fields.md 6.3.3). 그쪽만 Connected 를 up,
+    Disconnected · Disabled · Inactive · Offline 을 down 으로 더 받는다.
     """
     s = _str(value).strip().lower()
     if s in ('linkup', 'up'):
@@ -4479,9 +4509,13 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
 #   Connected 는 사전이 up 으로 적어 둔 기존 값이라 유지한다(표준 enum 밖 — 2026-10-28 미러 18대 · fixture 출현 0).
 #   Enabled · Active 는 표준 Port.LinkStatus 에서 링크 의미가 불명이라 down + '값 미확정' notice 다. OEM 의 포트별 필드가 실제 Link Up 을
 #   뜻한다는 근거(벤더 문서 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가 확인되면 _extract_oem_* 계열에서 따로 정규화한다
-#   (카드 단위 값은 대상이 아니다). network.ports[].link_status 는 이 집합을 쓰지 않는다(_normalize_link_status 그대로).
+#   (카드 단위 값은 대상이 아니다). network.ports[].link_status 는 이 집합을 쓰지 않는다(_normalize_link_status).
 #   source: https://redfish.dmtf.org/schemas/v1/Port.json · https://redfish.dmtf.org/schemas/v1/NetworkPort.json
 _HBA_LINK_UP_VALUES = frozenset(('linkup', 'up', 'connected'))
+# HBA 가 notice 없이 down 으로 적는 값 — 2026-10-28 의 down 목록을 HBA 전용으로 고정한다 (2026-10-29 SA-09). 일반 NIC · 포트가 Starting ·
+#   Training 을 unknown 으로 바꿔도 storage.hbas 의 값 · '값 미확정' notice 는 입력마다 종전과 같다(HBA up/down 정책 불변 — 사용자 지시).
+_HBA_LINK_DOWN_VALUES = frozenset(('linkdown', 'down', 'nolink', 'disconnected', 'disabled', 'inactive', 'offline',
+                                   'starting', 'training'))
 
 
 def _hba_link_status(pdata):
@@ -4491,9 +4525,10 @@ def _hba_link_status(pdata):
     "확인되지 않은 상태를 down 으로 적지 않는다" 였다. 2026-10-19 사용자 재결정: 값은 항상 들어가야 하고 up · down 둘만 존재한다 —
     링크 활성이 확인된 경우만 up 이고, 그 밖(키 없음 · 값 null · Unknown · 미인식 벤더 문자열 · LinkDown · NoLink · Starting · Training)은
     전부 down 이다. 2026-10-28 사용자 결정: "확인된 경우" 는 표준 링크 값(_HBA_LINK_UP_VALUES — LinkUp · Up · Connected)뿐이다.
-    네트워크 정규화가 up 으로 보는 Enabled · Active 는 HBA 에서 down 이다. 키 없음(_hba_link_missing)과 키는 있는데 HBA 값이 정해지지
-    않은 값(_hba_link_unresolved)은 호출부가 카드당 notice 로 남겨 "장비가 안 줘서 down" 과 "장비가 down 이라 해서 down" 을
-    diagnosis.details.notices 에서 가를 수 있게 한다. network.ports[].link_status 는 종전 _normalize_link_status 그대로다.
+    Enabled · Active 는 HBA 에서 down 이다(2026-10-28 당시 네트워크 정규화는 up, 2026-10-29 SA-09 부터 unknown). 키 없음(_hba_link_missing)과
+    키는 있는데 HBA 값이 정해지지 않은 값(_hba_link_unresolved)은 호출부가 카드당 notice 로 남겨 "장비가 안 줘서 down" 과 "장비가 down
+    이라 해서 down" 을 diagnosis.details.notices 에서 가를 수 있게 한다. network.ports[].link_status 는 _normalize_link_status 를 쓴다
+    (2026-10-29 SA-09 — Starting · Training 은 거기서 unknown, HBA 에서는 종전처럼 down).
     """
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return 'down'
@@ -4509,14 +4544,15 @@ def _hba_link_missing(pdata):
 def _hba_link_unresolved(pdata):
     """`LinkStatus` 키는 있는데 HBA 값이 표준으로 정해지지 않은 값의 원문. 그런 값이 아니면 None.
 
-    up/down 으로 정규화되지 않은 값(null · Unknown · 미인식 문자열)과, 2026-10-28 부터 네트워크 정규화로는 up 이지만
-    HBA up 값(_HBA_LINK_UP_VALUES)이 아닌 값(Enabled · Active)이다 — 둘 다 값은 down, 사실은 notice `링크 상태 값 미확정`.
+    HBA up 값(_HBA_LINK_UP_VALUES)도 HBA down 값(_HBA_LINK_DOWN_VALUES)도 아닌 값 — null · Unknown · 미인식 문자열과 Enabled · Active 다.
+    둘 다 값은 down, 사실은 notice `링크 상태 값 미확정`. 2026-10-29 (SA-09): 종전에는 _normalize_link_status 결과로 갈랐다 — 일반 매핑이
+    Starting · Training 을 unknown 으로 바꿔도 이 판정이 따라 바뀌지 않도록 HBA 전용 집합으로 고정한다(입력마다 결과는 종전과 같다).
     """
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return None
     raw = pdata.get('LinkStatus')
-    norm = _normalize_link_status(raw)
-    if norm == 'down' or (norm == 'up' and _hba_link_status(pdata) == 'up'):
+    s = '' if raw is None else str(raw).strip().lower()
+    if s in _HBA_LINK_DOWN_VALUES or (s in _HBA_LINK_UP_VALUES and _hba_link_status(pdata) == 'up'):
         return None
     return 'null' if raw is None else str(raw).strip()
 
@@ -4846,12 +4882,14 @@ def _pcie_port_link_condition(pcie_body, registries):
 
 
 def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                 username, password, timeout, verify_ssl, pcie_link_registries=None, mtu_out=None):
+                                 username, password, timeout, verify_ssl, pcie_link_registries=None, mtu_out=None,
+                                 link_out=None):
     """NetworkAdapter 1장 수집 — gather_network_adapters_chassis 의 카드 루프 본문을 그대로 뽑아낸 것 (2026-10-18, F3b).
 
     반환: 'ok' | 'fetch_failed'(카드 GET 실패 — 비차단 오류 기록) | 'skipped'(빈 슬롯 등 조용히 제외).
     out / errors / seen_ports / ib_idx_by_port 는 호출부의 것을 제자리에서 채운다. 예외는 밖으로 던지고 호출부가 카드 단위로
-    격리한다(이 카드의 부분 항목은 호출부가 되돌린다).
+    격리한다(이 카드의 부분 항목은 호출부가 되돌린다). link_out(2026-10-29 SA-09)에는 ports[] 에 들어간 포트 중 원문이 있는데
+    link_status 가 unknown 이 된 것을 'Card/Port=원문' 으로 더한다 — 호출부가 섹션당 notice 1건으로 남긴다(data 에는 넣지 않는다).
 
     요청 순서 · 산출은 종전 루프 본문과 같다 — 2026-10-18 에 더해진 것: 링크 상태 규칙(_hba_link_status — 2026-10-19 부터 up/down 둘뿐), WWPN 배제 규칙
     (_derive_port_wwpn), 짝 없는 FC 기능의 부모 포트 링크 상속(F1), 이름 없는 카드의 기능 목록 1회 조회(F4), Id 문자열 정규화(F3a).
@@ -5036,7 +5074,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                 port_protocol = _safe(pdata, 'PortProtocol')
                 link_tech = (_safe(pdata, 'LinkNetworkTechnology')
                              or _safe(pdata, 'ActiveLinkTechnology'))
-                # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화.
+                # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화 (2026-10-29 SA-09: Starting · Training · Enabled · Active · 미인식 = unknown).
                 normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
                 port_id = _safe(pdata, 'Id')
                 pid_s = _id_text(port_id)      # 2026-10-18 (F3a): 문자열 연산 전용 — 출력 port_id 는 raw
@@ -5140,6 +5178,9 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                     'health':                  _safe(pdata, 'Status', 'Health'),
                     'associated_address':      primary_addr,
                 }
+                _praw = _link_status_unmapped(_safe(pdata, 'LinkStatus'))
+                if _praw is not None and link_out is not None:
+                    link_out.append('%s/%s=%s' % (_id_text(adapter_id), pid_s, _praw))
                 out['ports'].append(port_info)
                 # 2026-04-29 fix B93: adapter level에 ports의 첫 active 메타 fold-in.
                 # FC/IB 포트의 WWPN/GUID 는 NIC mac 이 아니므로 fold-in 제외.
@@ -5379,21 +5420,25 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             items.append((origin, m))
 
     card_fail = 0   # 2026-10-18 (F7): 목록에는 있는데 읽지 못한 카드 수
+    link_unmapped = []   # 2026-10-29 (SA-09): 원문이 있는데 unknown 이 된 포트 — 'Card/Port=원문'
     for origin, member in _capped(items, 'network_adapters', errors):
         # 2026-10-18 (F3b): 카드 단위 예외 격리 — 응답 오염(dict/list Id · 비정상 타입)으로 한 카드가 예외를 내도 다른 카드의
         #   adapters · ports · fc_hbas 는 남긴다. 이 카드가 남긴 부분 항목은 되돌리고(스냅샷 길이로 절단) 비차단 오류 1건만 남긴다.
         #   종전에는 섹션 runner 가 예외를 잡아 네트워크 카드 섹션 전체를 None 으로 버렸다(storage.hbas · network.adapters 전부 []).
         snap = {k: len(v) for k, v in out.items()}
         ports_snap = set(seen_ports)
+        link_snap = len(link_unmapped)
         try:
             result = _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
                                                   username, password, timeout, verify_ssl,
-                                                  pcie_link_registries=pcie_link_registries, mtu_out=mtu_out)
+                                                  pcie_link_registries=pcie_link_registries, mtu_out=mtu_out,
+                                                  link_out=link_unmapped)
         except Exception as e:
             sys.stderr.write("[redfish_gather] network_adapters 카드 예외: %s\n%s\n"
                              % (type(e).__name__, traceback.format_exc(limit=3)))
             for k, n in snap.items():
                 del out[k][n:]
+            del link_unmapped[link_snap:]
             for key in [k for k, idx in ib_idx_by_port.items() if idx >= snap['infiniband']]:
                 del ib_idx_by_port[key]
             seen_ports.clear()
@@ -5410,6 +5455,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     if items and card_fail and not out['adapters'] and _is_404_only_error(errors):
         _notice('network_adapters', 'NetworkAdapters 목록 %d건 중 읽은 카드 0건(404 %d건), 네트워크 카드(FC HBA 포함) 정보 미수집'
                 % (len(items), card_fail))
+    # 2026-10-29 (SA-09): 포트 원문이 Starting · Training · Enabled · Active · 미인식 값이면 ports[].link_status 는 unknown — 섹션당 1건.
+    #   storage.hbas 의 값과 FC 포트 '값 미확정' notice(카드당)는 _hba_link_status · _hba_link_unresolved 가 따로 정하며 바뀌지 않는다.
+    if link_unmapped:
+        _notice('network_adapters', '네트워크 포트 링크 상태 값 미확정, unknown 으로 기록 (network.ports link_status) — %s'
+                % ', '.join(link_unmapped))
     return out, errors
 
 
@@ -7320,7 +7370,8 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     # 2026-10-27 (C2, 실측 iLO 7 DL380 Gen12 전원 Off 스냅샷: Storage 멤버 0 · DIMM 16/32 빈 슬롯 · PSU Absent · 센서 전부 0):
     # 전원 Off 는 관측 사실로만 1회 남긴다 — 섹션 status 는 바꾸지 않고(수집은 성공), 인과 해석은 계약 문서(03-fields 6.7)에 둔다.
     # 2026-10-28 (독립 검증 F-03, 사용자 결정): 원 이슈(03-storage-001)가 storage/network 신호 없음이라 문구에 '네트워크' 를 넣는다(실측 Off 호스트:
-    #   interfaces 4 unknown · 카드 ports 0). 조건 · section · 건수는 그대로다.
+    #   interfaces 4 link unknown · 카드 Ethernet 포트 4 link unknown — 2026-10-29 SA-13 정정, 종전 주석의 '카드 ports 0' 은 틀렸다).
+    #   조건 · section · 건수는 그대로다.
     if _str(bios_link.get('power_state')).strip().lower() == 'off':
         _notice('system', '호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
     # 2026-10-27 (C9 FIX 7): 구조 근거 firmware_links — 최종 firmware[].id 로 키잉. data 밖(모듈 최상위 firmware_links)으로 나가고

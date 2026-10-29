@@ -537,6 +537,12 @@
     #   ('13','14'…)에서 id-regex 로 도출 → 두 id 체계가 무관해 join 이 항상 실패(0 매치).
     #   port.associated_address(MAC)→소속 adapter 매핑(adp_mac_map)을 추가하고, id-regex 매칭
     #   실패({}) 시 nic_mac 으로 fallback join. id-regex 가 매치하던 vendor(Dell 등)는 불변(Additive).
+    # 2026-10-29 (SA-08 · SA-10 · SA-01 개수 원칙):
+    #   groups[].speed_mbps — 그룹 키의 속도 0 은 null 이다(사용자 결정 — Summary 만, interfaces[].speed_mbps 의 원본 0 은 그대로).
+    #     link down 이면 협상 속도가 없고, up · unknown 인데 0 이면 확인되지 않은 속도다. 모델 · 제조사 · 링크 종류가 같은 null 그룹과 합쳐진다.
+    #   primary_speed_mbps — is_primary NIC 의 속도. 그 값이 0 · null 이거나 대표 NIC 이 없으면 null(종전: 첫 link up NIC 의 속도).
+    #   port_count / adapter_count — 원천을 끝까지 읽었을 때만 정수(0 포함). 모듈의 collected 는 failed 를 뺀 목록이라 network /
+    #     network_adapters 가 거기 없으면(미지원 404 · 실패 · 일부 멤버 실패 · 미수집) null 이다.
     _rf_summary_network: >-
       {%- set ns = namespace(groups=[], seen={}, adp_map={}, adp_mac_map={}, port_lt={}, primary_sp=none, adp_lts={}) -%}
       {%- for a in (_rf_d_netad.adapters | default([])) -%}
@@ -568,9 +574,10 @@
       {%- for n in (_rf_norm_interfaces | default([])) -%}
         {%- set sp = n.speed_mbps | default(none) -%}
         {%- set link_up = (n.link_status | default('') | lower) in ['linkup','up'] -%}
-        {%- if link_up and ns.primary_sp is none and sp -%}
+        {%- if ((n.is_primary | default(false)) is sameas true) and ns.primary_sp is none and sp -%}
           {%- set ns.primary_sp = sp -%}
         {%- endif -%}
+        {%- set gsp = none if (sp is not none and sp == 0) else sp -%}
         {%- set nic_mac = (n.mac | default('') | string | upper | replace(':','') | replace('-','')) -%}
         {%- set adp_id = (n.id | default('') | regex_replace('-[0-9]+-[0-9]+$','') | regex_replace('-[0-9]+$','')) -%}
         {%- set adp = ns.adp_map[adp_id] | default({}) -%}
@@ -578,19 +585,20 @@
         {%- set md = adp.model | default(none) -%}
         {%- set mfr = adp.manufacturer | default(none) -%}
         {%- set lt = ns.port_lt.get(nic_mac, 'ethernet') -%}
-        {%- set key = (sp|string)~'|'~(md|string)~'|'~(mfr|string)~'|'~(lt|string) -%}
+        {%- set key = (gsp|string)~'|'~(md|string)~'|'~(mfr|string)~'|'~(lt|string) -%}
         {%- if key in ns.seen -%}
           {%- set idx = ns.seen[key] -%}
           {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
         {%- else -%}
           {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-          {%- set _ = ns.groups.append({'speed_mbps': sp, 'model': md, 'manufacturer': mfr, 'link_type': lt, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
+          {%- set _ = ns.groups.append({'speed_mbps': gsp, 'model': md, 'manufacturer': mfr, 'link_type': lt, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
         {%- endif -%}
       {%- endfor -%}
+      {%- set _col = (_rf_raw_collect.collected | default([])) | list -%}
       {{ {
         'groups': ns.groups,
-        'adapter_count': ns.adapter_count,
-        'port_count': (_rf_norm_interfaces | default([])) | length,
+        'adapter_count': (ns.adapter_count if 'network_adapters' in _col else none),
+        'port_count': (((_rf_norm_interfaces | default([])) | length) if 'network' in _col else none),
         'primary_speed_mbps': ns.primary_sp
       } }}
     # cycle-016 Phase M: firmware 의 category 분류 (id/name 기반 inference)
