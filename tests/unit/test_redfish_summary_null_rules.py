@@ -208,6 +208,8 @@ def _cpu_raw(cores, summary=None, failed=False):
     ([24], {}, True, None, None, (24, 24)),                                      # 목록을 다 못 읽음 + 요약 없음 → null
     ([24, None], {"count": 1, "core_count": 48}, False, 2, None, (None, None)),  # Count 1 < 목록 2 → 요약 신뢰 불가
     ([], {"count": 2, "core_count": 32}, False, 2, 32, None),                    # 목록이 빈 경로(BUG-13) — 종전처럼 요약
+    ([None, None], {}, False, 2, None, (None, None)),                            # 코어 모두 미상 + 요약 없음 → null (감사 3.7 C2)
+    ([None, None], {"count": 2, "core_count": 48}, False, 2, 48, (None, None)),  # 코어 모두 미상 → CoreCount(48 ≥ 0+2), 그룹은 null
 ])
 def test_cpu_counts_use_full_sum_or_trusted_summary_or_null(cores, summary, failed, sockets, total, group):
     ctx, frag = _normalize(_cpu_raw(cores, summary, failed))
@@ -240,6 +242,8 @@ def _mem_raw(total_mib, caps, ms_gib, failed=False):
     (None, [32768, 32768], 64, True, 65536, 64),             # 멤버를 못 읽음 + MemorySummary ≥ 아는 합
     (None, [32768, 32768], 32, True, None, None),            # MemorySummary < 아는 합 → 신뢰 불가
     (0, [], 512, False, 524288, 512),                        # DIMM 0개(종전 B-1 경로) → MemorySummary
+    (None, [None, None], None, False, None, None),           # 용량 모두 미상 + 요약 없음 → null (감사 3.7 M3, 종전 0)
+    (None, [None, None], 64, False, 65536, 64),              # 용량 모두 미상 + MemorySummary 64 GiB > 아는 합 0
 ])
 def test_memory_totals_use_full_sum_or_trusted_summary_or_null(total_mib, caps, ms_gib, failed, total_mb, grand):
     ctx, frag = _normalize(_mem_raw(total_mib, caps, ms_gib, failed))

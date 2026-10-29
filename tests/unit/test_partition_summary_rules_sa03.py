@@ -90,6 +90,8 @@ def _procs(cores, mfr="Intel(R) Corporation", model="Xeon Gold 6430"):
     ([24], {}, True, None, None),
     ([24, None], {"count": 1, "core_count": 48}, False, 2, None),
     ([], {"count": 2, "core_count": 32}, False, 2, 32),
+    ([None, None], {}, False, 2, None),                     # 코어 모두 미상 (감사 3.7 C2 — 종전 파티션은 그룹 0 · 0)
+    ([None, None], {"count": 2, "core_count": 48}, False, 2, 48),
 ])
 def test_partition_cpu_follows_top_level_rules(cores, summary, failed, sockets, total):
     procs = _procs(cores)
@@ -125,6 +127,8 @@ def _slots(caps):
     (0, [], 512, 524288, 512),
     (0, [], None, None, None),                    # DIMM 0개 + 요약 없음 → null (0 GB 아님)
     (None, [], None, None, None),
+    (None, [None, None], None, None, None),       # 용량 모두 미상 (감사 3.7 M3 — 종전 파티션 grand 0)
+    (None, [None, None], 64, 65536, 64),          # 용량 모두 미상 + MemorySummary 64 GiB > 아는 합 0
 ])
 def test_partition_memory_follows_top_level_rules(total_mib, caps, ms_gib, total_mb, grand):
     mem = {"total_mib": total_mib, "slots": _slots(caps)}
