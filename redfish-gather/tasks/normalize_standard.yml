@@ -687,7 +687,9 @@
       {%- endfor -%}
       {#- 2026-10-19 (A-3): 용량을 아는 PSU 가 하나도 없으면 total_capacity_w 는 null (0 은 "용량 0 W" 라는 거짓 값 — 실측 HPE CSUS 3200
           PSU 4개 전부 PowerCapacityWatts 미제공). 일부만 알면 부분 합을 두고 capacity_unknown_count 가 그 사실을 적는다.
-          consumed_capacity_pct 는 total_capacity_w 가 0 이거나 모르거나 소비전력을 모르면 null. redundant 는 종전처럼 설치 PSU 수 ≥ 2 (정책이 아니라 수량). -#}
+          consumed_capacity_pct 는 total_capacity_w 가 0 이거나 모르거나 소비전력을 모르면 null. redundant 는 종전처럼 설치 PSU 수 ≥ 2 (정책이 아니라 수량).
+          2026-10-29 (SA-06, 사용자 결정 — Redfish · ESXi 함께): 설치 PSU 가 0 이면 health_rollup 은 null 이다(집계할 PSU 가 없다 — 'Unknown' 은
+          PSU 는 설치돼 있으나 상태를 모두 모를 때만). ESXi 쪽 filter_plugins/power_summary.py 도 같은 규칙이다. -#}
       {%- set _cap_known = (ns.psu_total - ns.cap_unknown) > 0 -%}
       {%- set _consumed = ((_rf_d_power | default({})).power_control | default({})).power_consumed_watts | default(none) -%}
       {{ {
@@ -700,7 +702,7 @@
         'warning_count': ns.warning,
         'ok_count': ns.ok,
         'unknown_health_count': ns.unknown_health,
-        'health_rollup': ('Critical' if ns.critical > 0 else ('Warning' if ns.warning > 0 else ('OK' if ns.ok > 0 else 'Unknown'))),
+        'health_rollup': (none if ns.psu_total == 0 else ('Critical' if ns.critical > 0 else ('Warning' if ns.warning > 0 else ('OK' if ns.ok > 0 else 'Unknown')))),
         'consumed_watts': _consumed,
         'consumed_capacity_pct': (((_consumed | int) * 100 / ns.cap_total) | round(1)) if (_cap_known and ns.cap_total > 0 and _consumed is not none) else none
       } }}

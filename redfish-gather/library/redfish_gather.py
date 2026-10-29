@@ -84,8 +84,9 @@ def _safe_round_int(x, default=None):
 
     2026-06-16 감사 G1: 온도 reading 을 _safe_int 로 받으면 44.7031→44 / 38.86→38 /
     -68.75→-68 처럼 소수점 절삭(≤1° 오차)이 발생. round() 로 44.7→45 / 38.86→39 / -68.75→-69.
-    int 계약은 유지(타입 불변) — 절삭 대신 반올림만 교체. _safe_int 는 watt/capacity 등 다른
-    호출부에서 그대로 사용(회귀 0). 비-숫자/None/inf/nan → default.
+    int 계약은 유지(타입 불변) — 절삭 대신 반올림만 교체. 비-숫자/None/inf/nan → default.
+    2026-10-29 (SA-17, 사용자 결정): 전력 측정값(소비 · min/avg/max · PSU 입출력 · Telemetry 합계)도 이 함수다 — round() 는 half-even
+    (591.5 → 592, 592.5 → 592). 정격(PowerCapacityWatts 등)은 _safe_int 그대로다.
     """
     if x is None:
         return default
@@ -5604,7 +5605,8 @@ def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, ver
     경로가 없고, 장비가 'TotalPowerConsumedWatts' 를 TelemetryService MetricReport(Id 에 chassis id
     내장: Chassis<id>_TotalPowerConsumedWatts)로 노출한다. MetricReports 컬렉션을 순회해 이 chassis 의
     리포트를 찾아 MetricValue 반환. PSU InputPowerWatts 합(AC 입력, ~20% 높음)보다 장비 자신의 '소비'
-    정의(591.5W)에 충실. MetricValue 는 문자열("591.5") → _safe_num 으로 파싱.
+    정의(591.5W)에 충실. MetricValue 는 문자열("591.5") → _safe_num 으로 파싱 → 2026-10-29 (SA-17) 정수 반올림(_safe_round_int,
+    half-even — 591.5 → 592, 815.75 → 816; 종전 int() 절삭은 591 · 815).
 
     source (rule 96 R1-A): DMTF DSP0266 TelemetryService/MetricReport (MetricValues[].MetricId/MetricValue).
     Returns: int | None
@@ -5631,7 +5633,7 @@ def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, ver
             if _str(_safe(mv, 'MetricId')).strip().lower() == 'totalpowerconsumedwatts':
                 num = _safe_num(_safe(mv, 'MetricValue'))  # "591.5" → float → int
                 if num is not None:
-                    return _safe_int(num)
+                    return _safe_round_int(num)   # 2026-10-29 (SA-17): 절삭 대신 반올림
     return None
 
 
@@ -5705,11 +5707,12 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                 if metrics_link:
                     st_mm, mm, _e_mm = _get(bmc_ip, _p(metrics_link), username, password, timeout, verify_ssl)
                     if st_mm == 200 and isinstance(mm, dict):
-                        ipw = _safe_int(_safe(mm, 'InputPowerWatts', 'Reading'))
+                        # 2026-10-29 (SA-17): 측정값은 절삭(_safe_int) 대신 정수 반올림(_safe_round_int) — 정격(PowerCapacityWatts)은 그대로
+                        ipw = _safe_round_int(_safe(mm, 'InputPowerWatts', 'Reading'))
                         if ipw is not None:
                             psu_input_total += ipw
                             psu_input_seen = True
-                        opw = _safe_int(_safe(mm, 'OutputPowerWatts', 'Reading'))
+                        opw = _safe_round_int(_safe(mm, 'OutputPowerWatts', 'Reading'))
                         if opw is not None:
                             psu_output_total += opw
                             psu_output_seen = True
@@ -5738,7 +5741,10 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     # F05 (cycle 2026-05-01): DMTF 2020.4 EnvironmentMetrics fallback —
     # PowerSubsystem 신 schema는 system-level metric을 EnvironmentMetrics 로 분리.
     # source: redfish.dmtf.org/schemas/v1/EnvironmentMetrics.v1_3_0.json (2020.4)
-    # PowerWatts.Reading / ReadingRangeMin/Max 가 PowerControl 대응.
+    # PowerWatts.Reading 이 PowerControl.PowerConsumedWatts 에 대응한다.
+    # 2026-10-29 (SA-19): 종전 주석은 ReadingRangeMin/Max 도 PowerControl(min/max 소비전력)에 대응한다고 적었으나 틀렸다 — DMTF Sensor 의
+    #   ReadingRangeMin/Max 는 그 센서가 낼 수 있는 Reading 의 범위(측정 가능 범위)이지 관측한 최소/최대가 아니다. min/max_consumed_watts 는
+    #   이 경로에서 null 이다. source: https://redfish.dmtf.org/schemas/v1/Sensor.json (ReadingRangeMin · ReadingRangeMax)
     if power_control is not None:
         em_path = _p(chassis_uri) + '/EnvironmentMetrics'
         if _chassis_has_link(chassis_body, 'EnvironmentMetrics') is False:
@@ -5748,15 +5754,9 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
         if st_em == 200 and isinstance(em_data, dict):
             pw = em_data.get('PowerWatts') if isinstance(em_data.get('PowerWatts'), dict) else None
             if pw:
-                pc_consumed = _safe_int(pw.get('Reading'))
-                pc_min = _safe_int(pw.get('ReadingRangeMin'))
-                pc_max = _safe_int(pw.get('ReadingRangeMax'))
+                pc_consumed = _safe_round_int(pw.get('Reading'))   # 2026-10-29 (SA-17): 반올림
                 if pc_consumed is not None:
                     power_control['power_consumed_watts'] = pc_consumed
-                if pc_min is not None:
-                    power_control['min_consumed_watts'] = pc_min
-                if pc_max is not None:
-                    power_control['max_consumed_watts'] = pc_max
         # interval_in_min / avg_consumed_watts: EnvironmentMetrics 표준에 없음 — None 유지
         # CSUS-R14 (2026-06-15 실미러 검수): EnvironmentMetrics 부재 시 장비 자신의 권위 소비전력
         # (TelemetryService TotalPowerConsumedWatts)을 우선 사용. 표준 경로(EnvironmentMetrics) 보유 vendor 는 위에서 이미 채워져 미발동.
@@ -5880,7 +5880,7 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, c
         # 2026-10-27 (C10 05-power-002): 키가 있고 0 일 때만 관측 notice (Absent 슬롯은 제외 — 미장착은 입력이 없는 게 당연하다)
         if _str(psu_state).strip().lower() != 'absent':
             _psu_zero_input_notice(_safe(psu, 'Name'), _safe(psu, 'MemberId'),
-                                   _safe_int(psu.get('PowerInputWatts')) if 'PowerInputWatts' in psu else None,
+                                   _safe_round_int(psu.get('PowerInputWatts')) if 'PowerInputWatts' in psu else None,  # 2026-10-29 (SA-17)
                                    _safe_int(psu.get('LineInputVoltage')) if 'LineInputVoltage' in psu else None)
         psus.append({
             'name':             _safe(psu, 'Name'),
@@ -5916,12 +5916,14 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, c
     power_control = {
         # Round 1 #21: watt 필드는 int 로 통일 (BMC 가 문자열 '1500' 반환 시 타입 불일치 방지).
         # PowerSubsystem 경로와도 일관 (둘 다 int watts).
-        'power_consumed_watts':  _safe_int(_safe(pc0, 'PowerConsumedWatts')),
+        # 2026-10-29 (SA-17): 측정값(소비 · min/avg/max)은 절삭 대신 정수 반올림(_safe_round_int, half-even) — 정격(power_capacity_watts)은
+        #   _safe_int 그대로. 소수 문자열('412.6')은 종전 _safe_int 가 None 으로 버렸고 이제 413 이다.
+        'power_consumed_watts':  _safe_round_int(_safe(pc0, 'PowerConsumedWatts')),
         'power_capacity_watts':  pc_capacity,
         'interval_in_min':       _safe(pm, 'IntervalInMin'),
-        'min_consumed_watts':    _safe_int(_safe(pm, 'MinConsumedWatts')),
-        'avg_consumed_watts':    _safe_int(_safe(pm, 'AverageConsumedWatts')),
-        'max_consumed_watts':    _safe_int(_safe(pm, 'MaxConsumedWatts')),
+        'min_consumed_watts':    _safe_round_int(_safe(pm, 'MinConsumedWatts')),
+        'avg_consumed_watts':    _safe_round_int(_safe(pm, 'AverageConsumedWatts')),
+        'max_consumed_watts':    _safe_round_int(_safe(pm, 'MaxConsumedWatts')),
     } if pc0 else None
 
     return {'power_supplies': psus, 'power_control': power_control}, errors

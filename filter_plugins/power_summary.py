@@ -10,6 +10,8 @@ redfish-gather/tasks/normalize_standard.yml 의 `_rf_power_summary` Jinja 식과
   - 용량을 아는 PSU 가 하나도 없으면 total_capacity_w 는 None (0 은 "용량 0 W" 라는 거짓 값). 일부만 알면 부분 합.
   - consumed_capacity_pct 는 용량 합 > 0 이고 소비전력을 알 때만 (소수 1자리).
   - redundant 는 설치 PSU 수 >= 2 (수량이지 이중화 정책이 아니다).
+  - 설치 PSU 가 0 이면 health_rollup 은 None (2026-10-29 SA-06 사용자 결정 — Redfish 와 함께). 'Unknown' 은 PSU 는 있으나 상태를 모두
+    모를 때만이다.
 """
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
@@ -64,7 +66,10 @@ def power_summary(power):
         consumed_int = _as_int(consumed)
         if consumed_int is not None:
             pct = round(consumed_int * 100 / cap_total, 1)
-    rollup = 'Critical' if critical > 0 else ('Warning' if warning > 0 else ('OK' if ok > 0 else 'Unknown'))
+    if psu_total == 0:
+        rollup = None   # 2026-10-29 (SA-06): 집계할 PSU 가 없다
+    else:
+        rollup = 'Critical' if critical > 0 else ('Warning' if warning > 0 else ('OK' if ok > 0 else 'Unknown'))
     return {
         'psu_count': psu_total,
         'psu_active': psu_active,
