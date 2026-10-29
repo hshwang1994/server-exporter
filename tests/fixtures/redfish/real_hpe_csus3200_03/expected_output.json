@@ -2188,7 +2188,7 @@
     "errors": [],
     "fabrics": [
       {
-        "endpoint_count": 0,
+        "endpoint_count": null,
         "endpoints": [],
         "fabric_type": null,
         "health": "OK",
@@ -2328,7 +2328,7 @@
               {
                 "architecture": "x86",
                 "cores_per_socket": 16,
-                "manufacturer": "Intel(R) Corporation",
+                "manufacturer": "Intel",
                 "max_speed_mhz": 2900,
                 "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
                 "sockets": 4,

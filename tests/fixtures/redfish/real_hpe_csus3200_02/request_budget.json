@@ -2,7 +2,7 @@
   "generated": "2026-10-27",
   "baseline_sha": "5d8bbe21",
   "baseline_http_calls": 144,
-  "http_calls_budget": 130,
+  "http_calls_budget": 132,
   "note": "WP7 2026-10-27 (C5 · 결정 11 A안): 섀시 본문 navigation property gating — RackGroup/Rack1 의 Power·PowerSubsystem·Thermal·ThermalSubsystem(8) + r001u01 의 Power·Thermal·EnvironmentMetrics(각 ×2: system 경로·chassis_multi 경로) 요청 제거(-11 distinct / -14 total). 추가 요청 0",
   "path_set_delta": {
     "removed": [
@@ -18,13 +18,16 @@
       "Chassis/r001u01/Power x2",
       "Chassis/r001u01/Thermal x2"
     ],
-    "added": []
+    "added": [
+      "Chassis/r001u01/Drives x2"
+    ]
   },
   "expected_http_calls": [
     "Chassis x1",
     "Chassis/Rack1 x1",
     "Chassis/RackGroup x1",
     "Chassis/r001u01 x1",
+    "Chassis/r001u01/Drives x2",
     "Chassis/r001u01/Drives/DriveSlot1InPCIeSlot3Box1 x1",
     "Chassis/r001u01/Drives/DriveSlot2InPCIeSlot3Box1 x1",
     "Chassis/r001u01/Drives/DriveSlot3InPCIeSlot3Box1 x1",
@@ -151,5 +154,6 @@
     "UpdateService/FirmwareInventory/ComplexFW x1",
     "UpdateService/FirmwareInventory/Partition0_FW x1",
     "noauth:: x1"
-  ]
+  ],
+  "added_reason": "SA-12 2026-10-29 (섀시 드라이브 합집합): Storage 의 Links.Enclosures 섀시 본문 · 섀시가 광고한 Drives 컬렉션 GET — recording 미포함 경로(replay-miss 404). 실장비 응답은 미검증이며 Tier 1 미러 실응답으로만 확인 (tests/evidence/2026-10-29-redfish-summary-fix/replay_miss_ledger.json)"
 }

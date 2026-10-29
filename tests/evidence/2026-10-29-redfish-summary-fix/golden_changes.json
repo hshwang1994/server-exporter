@@ -1,0 +1,42 @@
+{
+ "_doc": [
+  "SA 수정(2026-10-29) golden 대장 — tests/fixtures/redfish/*/expected_output.json 중 값이 바뀌는 4세트의 경로 단위 변경 전수(12건). 이 밖의 golden 17세트(real_* 11 · 에뮬레이터/DMTF 6)와 경로는 바뀌지 않는다.",
+  "재생성 방법: 기존 recording.json 을 고치지 않고(Mock 에 없는 응답을 만들어 넣지 않는다) H.make_replayer + H.run_gather 로 재생해 GOLDEN_KEYS 를 capture_mirror_fixture.build 와 같은 형식으로 저장. 쓰기 전에 old→new 경로 diff 가 이 목록과 정확히 같아야 한다(다르면 중단).",
+  "측정 코드: 866d28d8 (fix 커밋 6개 뒤). 각 항목의 why 는 recording 원천 값으로 확인한 근거다. SA-12 의 새 GET 은 recording 에 없어 replay-miss 404 로 재생되므로 golden 불변은 SA-12 정확성의 근거가 아니다(replay_miss_ledger.json, MOCK_LIMITATION)."
+ ],
+ "measured_at_sha": "866d28d8",
+ "cases": {
+  "real_hpe_csus3200": [
+   {"path": ".data.power.power_control.power_consumed_watts", "old": 591, "new": 592, "sa": "SA-17",
+    "why": "TelemetryService/MetricReports/Chassisr001u01_TotalPowerConsumedWatts MetricValue \"591.5\" — 정수 반올림(half-even, 사용자 결정). 종전 int() 절삭 591"},
+   {"path": ".multi_node.chassis[2].power.power_control.power_consumed_watts", "old": 591, "new": 592, "sa": "SA-17",
+    "why": "같은 섀시 r001u01 의 같은 Telemetry 값(multi_node.chassis[] 경로)"},
+   {"path": ".multi_node.fabrics[0].endpoint_count", "old": 0, "new": null, "sa": "SA-01",
+    "why": "Fabrics/FlexGrid 본문에 Endpoints 키 없음 — 확인하지 못한 개수는 null, 목록 endpoints 는 [] 유지(사용자 결정)"},
+   {"path": ".multi_node.partitions[0].cpu.summary.groups[0].manufacturer", "old": "Intel(R) Corporation", "new": "Intel", "sa": "SA-03",
+    "why": "파티션 Processor.Manufacturer 원문 'Intel(R) Corporation' — top-level cpu summary 와 같은 FIX 2 표로 정규화"}
+  ],
+  "real_hpe_csus3200_01": [
+   {"path": ".multi_node.fabrics[0].endpoint_count", "old": 0, "new": null, "sa": "SA-01",
+    "why": "Fabrics/FlexGrid 본문에 Endpoints 키 없음"},
+   {"path": ".multi_node.partitions[0].cpu.summary.groups[0].manufacturer", "old": "Intel(R) Corporation", "new": "Intel", "sa": "SA-03",
+    "why": "CompositionService/ResourceBlocks/r001u01/Systems/1/Processors/* Manufacturer 'Intel(R) Corporation'"}
+  ],
+  "real_hpe_csus3200_02": [
+   {"path": ".data.power.power_control.power_consumed_watts", "old": 815, "new": 816, "sa": "SA-17",
+    "why": "TotalPowerConsumedWatts MetricValue \"815.75\" — 정수 반올림. 종전 절삭 815"},
+   {"path": ".multi_node.chassis[2].power.power_control.power_consumed_watts", "old": 815, "new": 816, "sa": "SA-17",
+    "why": "같은 섀시 r001u01 의 같은 Telemetry 값"},
+   {"path": ".multi_node.fabrics[0].endpoint_count", "old": 0, "new": null, "sa": "SA-01",
+    "why": "Fabrics/FlexGrid 본문에 Endpoints 키 없음"},
+   {"path": ".multi_node.partitions[0].cpu.summary.groups[0].manufacturer", "old": "Intel(R) Corporation", "new": "Intel", "sa": "SA-03",
+    "why": "파티션 Processor.Manufacturer 원문 'Intel(R) Corporation'"}
+  ],
+  "real_hpe_csus3200_03": [
+   {"path": ".multi_node.fabrics[0].endpoint_count", "old": 0, "new": null, "sa": "SA-01",
+    "why": "Fabrics/FlexGrid 본문에 Endpoints 키 없음"},
+   {"path": ".multi_node.partitions[0].cpu.summary.groups[0].manufacturer", "old": "Intel(R) Corporation", "new": "Intel", "sa": "SA-03",
+    "why": "파티션 Processor.Manufacturer 원문 'Intel(R) Corporation'. Telemetry \"867.0\" 은 정수라 소비전력 불변"}
+  ]
+ }
+}

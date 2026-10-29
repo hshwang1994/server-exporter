@@ -45,7 +45,7 @@
         "used_role": "primary",
         "fallback_used": false
       },
-      "baseline_origin": "실측 (2026-10-27 교체, 사용자 FIX 5). 용인 2차 Mock csus3200_01 — HPE Compute Scale-up Server 3200 · RMC 1.77.30-20260911_061319 · Redfish 1.19.0 · 캡처 2026-10-22 (tests/reference/redfish/mock2/csus3200_01.zip, sha256 7b239fa72998…) 을 HTTPS 미러로 재생해 실제 ansible-playbook(redfish-gather, adapter redfish_hpe_csus_3200, loc yi) 으로 수집한 최종 envelope (tests/evidence/2026-10-27-redfish-mock2-impl/tier1-after-WP11/csus3200_01/gather_output.json, build mirror-replay-wp11-after). 수정 2곳: 재생 서버 주소 127.0.0.1 → 장비 BMC IP (ip · correlation.host_ip). 그 밖의 값은 재생 산출 그대로다. 재생 한계: 실장비 401/복구 경로 · 서버 측 상태 변화는 재현되지 않는다(Tier 1 README). 종전(2026-05-29 ~ 2026-10-27) 합성본은 git 이력에만 남긴다.",
+      "baseline_origin": "실측 (2026-10-27 교체, 사용자 FIX 5 · 2026-10-29 같은 방법으로 재생성 — Summary 정합성 수정 SA-01 · SA-03 반영). 용인 2차 Mock csus3200_01 — HPE Compute Scale-up Server 3200 · RMC 1.77.30-20260911_061319 · Redfish 1.19.0 · 캡처 2026-10-22 (tests/reference/redfish/mock2/csus3200_01.zip, sha256 7b239fa72998…) 을 HTTPS 미러로 재생해 실제 ansible-playbook(redfish-gather, adapter redfish_hpe_csus_3200, loc yi) 으로 수집한 최종 envelope (tests/evidence/2026-10-29-redfish-summary-fix/tier1-after/csus3200_01/gather_output.json, build sa-after-866d28d8). 수정 2곳: 재생 서버 주소 127.0.0.1 → 장비 BMC IP (ip · correlation.host_ip). 그 밖의 값은 재생 산출 그대로다. 2026-10-27 본 대비 값 변경 2건: multi_node.fabrics[0].endpoint_count 0 → null(SA-01 — 원천 FlexGrid 에 Endpoints 키 없음) · multi_node.partitions[0].cpu.summary.groups[0].manufacturer 'Intel(R) Corporation' → 'Intel'(SA-03 — FIX 2 표). 재생 한계: 실장비 401/복구 경로 · 서버 측 상태 변화는 재현되지 않는다(Tier 1 README). 종전(2026-05-29 ~ 2026-10-27) 합성본은 git 이력에만 남긴다.",
       "account_service": {},
       "multi_node_layout": "rmc_primary",
       "notices": [
@@ -71,9 +71,9 @@
     }
   },
   "meta": {
-    "started_at": "2026-10-27T06:44:13.945514Z",
-    "finished_at": "2026-10-27T06:44:32.026156Z",
-    "duration_ms": 17936,
+    "started_at": "2026-10-29T01:07:24.884008Z",
+    "finished_at": "2026-10-29T01:07:44.700443Z",
+    "duration_ms": 19678,
     "adapter_id": "redfish_hpe_csus_3200",
     "adapter_version": null,
     "ansible_version": "2.20.7"
@@ -2206,7 +2206,7 @@
               "groups": [
                 {
                   "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
-                  "manufacturer": "Intel(R) Corporation",
+                  "manufacturer": "Intel",
                   "max_speed_mhz": 2900,
                   "architecture": "x86",
                   "sockets": 4,
@@ -3831,7 +3831,7 @@
           "state": "Enabled",
           "health": "OK",
           "switch_count": 2,
-          "endpoint_count": 0,
+          "endpoint_count": null,
           "switches": [
             {
               "id": "r001u01_HARP0",

@@ -6,11 +6,12 @@ schema/baseline_v1/hpe_csus_3200_baseline.json 은 2026-05-29 ~ 2026-10-27 동�
 (3 파티션 · 4 manager, FABRICATED MOCK)이었다. 2026-10-27 FIX 5 로 용인 2차 Mock csus3200_01(RMC 1.77.30)
 을 HTTPS 미러 재생 + 실제 ansible-playbook 으로 수집한 최종 envelope 로 교체했다 — 출처와 수정 2곳(재생 주소
 127.0.0.1 → BMC IP)은 diagnosis.details.baseline_origin 에 적혀 있다. 파일 이름은 이력상 유지한다(내용은 실측 가드).
+2026-10-29 Summary 정합성 수정(SA-01 · SA-03) 뒤 같은 방법으로 다시 만들었다(값 변경 2건 — baseline_origin).
 
 가드(기대값은 2차 Mock 실측에서 손으로 적었다 — 코드 출력 스냅샷이 아니다):
 - summary 카운트 == 실제 list 길이, representative_partition == partitions[0]
 - 실 구조 1 partition / 1 manager(RMC primary) / 3 chassis(RackGroup · Rack1 · r001u01), layout rmc_primary
-- composition 1 block(count 는 null — FIX 6) / fabrics 1(FlexGrid, switch 2 · endpoint 0)
+- composition 1 block(count 는 null — FIX 6) / fabrics 1(FlexGrid, switch 2 · endpoint 개수 null — Endpoints 링크 없음, SA-01)
 - origin 이 실측 표기(mock 아님), 시리얼이 MOCK 접두가 아님, 디스크 4 · FC HBA 4 == FC 포트 4(개수 정합)
 - sections.system not_supported + hostname 발행(FIX 4), cpu.logical_threads 부재(FIX 1)
 """
@@ -93,7 +94,8 @@ def test_composition_and_fabric_shape(csus):
     fab = mn["fabrics"][0]
     assert fab["id"] == "FlexGrid"
     assert fab["switch_count"] == len(fab["switches"]) == 2
-    assert fab["endpoint_count"] == len(fab["endpoints"]) == 0
+    # SA-01 (2026-10-29): 원천 Fabrics/FlexGrid 본문에 Endpoints 링크가 없다 — 확인하지 못한 개수는 null, 목록은 [] 유지(사용자 결정)
+    assert fab["endpoint_count"] is None and fab["endpoints"] == []
     assert [s["id"] for s in fab["switches"]] == ["r001u01_HARP0", "r001u01_HARP1"]
 
 

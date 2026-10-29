@@ -611,7 +611,7 @@
         "max_consumed_watts": null,
         "min_consumed_watts": null,
         "power_capacity_watts": null,
-        "power_consumed_watts": 815
+        "power_consumed_watts": 816
       },
       "power_supplies": [
         {
@@ -1362,7 +1362,7 @@
             "max_consumed_watts": null,
             "min_consumed_watts": null,
             "power_capacity_watts": null,
-            "power_consumed_watts": 815
+            "power_consumed_watts": 816
           },
           "power_supplies": [
             {
@@ -1899,7 +1899,7 @@
     "errors": [],
     "fabrics": [
       {
-        "endpoint_count": 0,
+        "endpoint_count": null,
         "endpoints": [],
         "fabric_type": null,
         "health": "OK",
@@ -2039,7 +2039,7 @@
               {
                 "architecture": "x86",
                 "cores_per_socket": 28,
-                "manufacturer": "Intel(R) Corporation",
+                "manufacturer": "Intel",
                 "max_speed_mhz": 2000,
                 "model": "Intel(R) Xeon(R) Platinum 8450H Processor",
                 "sockets": 4,

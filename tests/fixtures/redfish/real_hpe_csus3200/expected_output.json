@@ -606,7 +606,7 @@
         "max_consumed_watts": null,
         "min_consumed_watts": null,
         "power_capacity_watts": null,
-        "power_consumed_watts": 591
+        "power_consumed_watts": 592
       },
       "power_supplies": [
         {
@@ -1295,7 +1295,7 @@
             "max_consumed_watts": null,
             "min_consumed_watts": null,
             "power_capacity_watts": null,
-            "power_consumed_watts": 591
+            "power_consumed_watts": 592
           },
           "power_supplies": [
             {
@@ -1832,7 +1832,7 @@
     "errors": [],
     "fabrics": [
       {
-        "endpoint_count": 0,
+        "endpoint_count": null,
         "endpoints": [],
         "fabric_type": null,
         "health": "OK",
@@ -1973,7 +1973,7 @@
               {
                 "architecture": "x86",
                 "cores_per_socket": 8,
-                "manufacturer": "Intel(R) Corporation",
+                "manufacturer": "Intel",
                 "max_speed_mhz": 3700,
                 "model": "Intel(R) Xeon(R) Gold 6434H Processor",
                 "sockets": 4,
