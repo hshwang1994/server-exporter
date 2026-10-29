@@ -248,8 +248,10 @@ def test_dl380_fill_result_is_unchanged(name):
 
 
 @pytest.mark.parametrize("name,unknown", [
-    ("real_hpe_csus3200_01", 8), ("real_hpe_csus3200_02", 4), ("real_hpe_csus3200_03", 8),   # 같은 MAC 포트 없음
-    ("real_hpe_dl380_gen12_03", 4),                                                          # 전원 Off — 포트 0
+    # 2026-10-29 SA-13 정정 — 종전 설명 "같은 MAC 포트 없음" · "포트 0" 은 틀렸다. 같은 MAC 을 첫 주소로 가진 포트가 NIC 마다 있지만
+    # 그 포트 본문에 LinkStatus 키가 없어(recording 실측) 포트도 unknown 이다 — 채울 값이 없다(기대값은 종전 그대로).
+    ("real_hpe_csus3200_01", 8), ("real_hpe_csus3200_02", 4), ("real_hpe_csus3200_03", 8),   # 같은 MAC 포트 있음 · 포트 LinkStatus 없음
+    ("real_hpe_dl380_gen12_03", 4),                                                          # 전원 Off — Ethernet 포트 4개 · 전부 LinkStatus 없음
     ("real_lenovo_sr650", 1),                                                                # ToManager
     ("real_hpe_dl380_gen12_04", 0), ("real_dell_r740", 0),
 ])
@@ -261,20 +263,25 @@ def test_hosts_without_port_link_signal_keep_unknown(name, unknown):
 def _summary(name, interfaces):
     env = NativeEnvironment()
     env.filters["regex_replace"] = lambda s, pat, rep="": re.sub(pat, rep, "" if s is None else str(s))
-    return env.from_string(SUMMARY_TPL).render(_rf_d_netad=_golden(name)["data"]["network_adapters"], _rf_norm_interfaces=interfaces)
+    g = _golden(name)      # 모듈 출력 그대로가 _rf_raw_collect — collected 로 port_count · adapter_count 의 null/정수를 가른다 (2026-10-29)
+    return env.from_string(SUMMARY_TPL).render(_rf_d_netad=g["data"]["network_adapters"], _rf_norm_interfaces=interfaces, _rf_raw_collect=g)
 
 
+# 2026-10-29 (SA-08, 사용자 결정): Summary 그룹 키의 speed 0 은 null — link down NIC 의 원본 0(interfaces[].speed_mbps)은 그대로 둔다.
 @pytest.mark.parametrize("name,groups", [
-    ("real_lenovo_sr650_v4_01", [(None, 1, 0), (0, 2, 0), (25600, 2, 2)]),
-    ("real_lenovo_sr650_v4_02", [(None, 1, 0), (0, 2, 0), (25600, 1, 1), (25600, 1, 0)]),   # 마지막 그룹 = NIC6 (unknown)
+    ("real_lenovo_sr650_v4_01", [(None, 1, 0), (None, 2, 0), (25600, 2, 2)]),
+    ("real_lenovo_sr650_v4_02", [(None, 1, 0), (None, 2, 0), (25600, 1, 1), (25600, 1, 0)]),   # 마지막 그룹 = NIC6 (unknown)
     ("real_lenovo_sr650_v4_03", [(None, 1, 0), (25600, 4, 4), (25600, 6, 6)]),
-    ("real_lenovo_sr650_v4_04", [(None, 1, 0), (0, 2, 0), (25600, 1, 1), (25600, 1, 0)]),   # 마지막 그룹 = NIC4 (unknown)
+    ("real_lenovo_sr650_v4_04", [(None, 1, 0), (None, 2, 0), (25600, 1, 1), (25600, 1, 0)]),   # 마지막 그룹 = NIC4 (unknown)
 ])
 def test_xcc3_network_summary_counts_filled_links(name, groups):
     b, _ = _bundle_for(name)
     s = _summary(name, b["interfaces"])
     assert [(x["speed_mbps"], x["quantity"], x["link_up_count"]) for x in s["groups"]] == groups
     assert s["primary_speed_mbps"] == 25600
+    zero = [i for i in b["interfaces"] if i["speed_mbps"] == 0]
+    assert len(zero) == (0 if name == "real_lenovo_sr650_v4_03" else 2)          # 상세의 원본 0 은 남는다
+    assert {i["link_status"] for i in zero} <= {"down"}
 
 
 # ── (i)(ii) 사용자 3차 지시 — XCC3 FC 포트 수집 · 장치 없는 장비의 빈 목록 ──────────────────────────────────────────────────

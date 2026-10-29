@@ -65,12 +65,13 @@ class TestCsusSingleServer:
         s = _render(_set_fact("compute group summaries")["_rf_power_summary"], _rf_d_power=csus["data"]["power"])
         assert s["psu_count"] == 4 and s["capacity_unknown_count"] == 4
         assert s["total_capacity_w"] is None and s["consumed_capacity_pct"] is None
-        assert s["consumed_watts"] == 591
+        assert s["consumed_watts"] == 592, "TotalPowerConsumedWatts '591.5' — 2026-10-29 (SA-17) 정수 반올림(종전 절삭 591)"
 
     def test_network_summary_does_not_count_fc_hba_cards(self, csus):
         netad = csus["data"]["network_adapters"]
         assert len(netad["fc_hbas"]) == 4 and len(netad["adapters"]) == 2, "HBA 4 · FC 카드 2 (불변)"
-        s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[])
+        # _rf_raw_collect = 모듈 출력 그대로 — network · network_adapters 를 수집했으므로 개수는 정수(2026-10-29: 미수집이면 null)
+        s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[], _rf_raw_collect=csus)
         assert s["adapter_count"] == 0 and s["port_count"] == 0
 
     def test_empty_storage_container_dropped_and_firmware_supplemented(self, csus):
@@ -92,5 +93,6 @@ def test_other_vendors_power_and_adapter_count_unchanged_semantics(case):
     assert s["total_capacity_w"] == sum(p["power_capacity_w"] for p in power["power_supplies"] if p.get("power_capacity_w") is not None)
     netad = result["data"]["network_adapters"]
     fc_only = {h["adapter_id"] for h in netad["fc_hbas"]} - {p["adapter_id"] for p in netad["ports"] if p.get("port_type") == "Ethernet"}
-    s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[])
+    assert "network_adapters" in result["collected"]
+    s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[], _rf_raw_collect=result)
     assert s["adapter_count"] == len(netad["adapters"]) - len(fc_only)

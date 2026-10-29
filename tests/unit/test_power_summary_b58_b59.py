@@ -26,9 +26,13 @@ def build_summary(power_data: dict) -> dict:
     """Mirror of redfish-gather/tasks/normalize_standard.yml :: _rf_power_summary.
 
     Implements B58 (critical_count + health_rollup) + B59 (capacity_unknown_count).
+    2026-10-29: D-07(State=Absent 슬롯은 설치 PSU 가 아니다 — 템플릿은 2026-10-10 부터 뺀다, 이 미러만 빠져 있었다)과
+    SA-06(설치 PSU 0 → health_rollup None, 사용자 결정)을 템플릿과 같게 맞춘다.
     """
     psus = []
     for psu in (power_data.get("PowerSupplies") or []):
+        if ((psu.get("Status") or {}).get("State") or "").strip().lower() == "absent":
+            continue
         cap = psu.get("PowerCapacityWatts")
         # Mirror redfish_gather.py InputRanges fallback (Cisco quirk)
         if cap is None:
@@ -51,7 +55,9 @@ def build_summary(power_data: dict) -> dict:
     warning = sum(1 for p in psus if (p["health"] or "").strip().lower() == "warning")
     ok = sum(1 for p in psus if (p["health"] or "").strip().lower() == "ok")
     unknown_h = psu_total - critical - warning - ok
-    if critical > 0:
+    if psu_total == 0:
+        rollup = None          # 2026-10-29 (SA-06): 집계할 설치 PSU 가 없다 — 'Unknown' 은 설치 PSU 의 상태를 모두 모를 때만
+    elif critical > 0:
         rollup = "Critical"
     elif warning > 0:
         rollup = "Warning"
@@ -177,16 +183,53 @@ class TestA3UnknownCapacityIsNull:
 
     def test_real_template_matches_mirror_for_all_unknown(self):
         """운영 템플릿(_rf_power_summary) 자체도 같은 답을 낸다 — 미러와 템플릿의 drift 가드."""
-        import ast
-        import jinja2
-        import yaml
-        norm = REPO / "redfish-gather" / "tasks" / "normalize_standard.yml"
-        tpl = None
-        for t in yaml.safe_load(norm.read_text(encoding="utf-8")):
-            sf = t.get("ansible.builtin.set_fact") or {}
-            if "_rf_power_summary" in sf:
-                tpl = sf["_rf_power_summary"]
         psus = [{"name": f"PSU{i}", "power_capacity_w": None, "health": "OK", "state": "Enabled"} for i in range(4)]
-        out = ast.literal_eval(jinja2.Environment().from_string(tpl).render(
-            _rf_d_power={"power_supplies": psus, "power_control": {"power_consumed_watts": 591}}).strip())
+        out = _template_summary(psus, 591)
         assert out["total_capacity_w"] is None and out["consumed_capacity_pct"] is None and out["consumed_watts"] == 591
+
+
+def _template_summary(psus, consumed):
+    """운영 템플릿 redfish-gather/tasks/normalize_standard.yml :: _rf_power_summary 를 그대로 렌더한다."""
+    import ast
+    import jinja2
+    import yaml
+    norm = REPO / "redfish-gather" / "tasks" / "normalize_standard.yml"
+    tpl = None
+    for t in yaml.safe_load(norm.read_text(encoding="utf-8")):
+        sf = t.get("ansible.builtin.set_fact") or {}
+        if "_rf_power_summary" in sf:
+            tpl = sf["_rf_power_summary"]
+    return ast.literal_eval(jinja2.Environment().from_string(tpl).render(
+        _rf_d_power={"power_supplies": psus, "power_control": {"power_consumed_watts": consumed}}).strip())
+
+
+def _raw_psu(state, health, cap=800):
+    return {"Name": "PSU", "PowerCapacityWatts": cap, "Status": {k: v for k, v in (("State", state), ("Health", health)) if v is not None}}
+
+
+# --------------------------------------------------------------------------- #
+# SA-06 (2026-10-29, 사용자 결정 — Redfish · ESXi 함께): 설치 PSU 가 0 이면 health_rollup 은 null                 #
+# --------------------------------------------------------------------------- #
+
+SA06_CASES = {
+    "no_psu":            ([], None, 0),
+    "all_absent":        ([_raw_psu("Absent", "Warning"), _raw_psu("Absent", "Warning")], None, 0),   # 실측 dl380_gen12_03 모양
+    "health_unreported": ([_raw_psu("Enabled", None), _raw_psu("Enabled", None)], "Unknown", 2),       # Cisco 모양 — 'Unknown' 유지
+    "absent_slot_ignored": ([_raw_psu("Enabled", "OK"), _raw_psu("Absent", "Warning")], "OK", 1),
+}
+
+
+class TestSA06NoInstalledPsu:
+    @pytest.mark.parametrize("case", sorted(SA06_CASES))
+    def test_rollup_and_count(self, case):
+        raw, rollup, count = SA06_CASES[case]
+        s = build_summary({"PowerSupplies": raw, "PowerControl": [{"PowerConsumedWatts": 300}]})
+        assert (s["health_rollup"], s["psu_count"], s["redundant"]) == (rollup, count, count >= 2)
+
+    @pytest.mark.parametrize("case", sorted(SA06_CASES))
+    def test_real_template_matches_mirror(self, case):
+        """미러와 운영 템플릿이 12키 전부 같은 값을 낸다 — 한쪽만 바꾸면 여기서 막힌다."""
+        raw, _, _ = SA06_CASES[case]
+        psus = [{"name": r["Name"], "power_capacity_w": r["PowerCapacityWatts"],
+                 "health": r["Status"].get("Health"), "state": r["Status"].get("State")} for r in raw]
+        assert _template_summary(psus, 300) == build_summary({"PowerSupplies": raw, "PowerControl": [{"PowerConsumedWatts": 300}]})

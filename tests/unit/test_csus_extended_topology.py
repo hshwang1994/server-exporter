@@ -404,7 +404,8 @@ def test_topology_full_includes_all_new_components(monkeypatch) -> None:
 
 def test_topology_without_new_links_is_backward_compatible(monkeypatch) -> None:
     """ServiceRoot 에 Fabrics/CompositionService 링크 없음 (= 기존 CSUS 시나리오) →
-    composition None / fabrics None / summary 카운트 0. 13 vendor / 기존 동작 영향 0."""
+    composition None / fabrics None / summary 카운트 null (2026-10-29 SA-02 — 링크가 없으면 개수를 확인하지 못한 것이다. 종전 0).
+    13 vendor / 기존 동작 영향 0."""
     _patch(monkeypatch)
     sr = {
         "Systems":  {"@odata.id": "/redfish/v1/Systems"},
@@ -415,8 +416,8 @@ def test_topology_without_new_links_is_backward_compatible(monkeypatch) -> None:
         "10.0.0.1", "hpe", sr, *CREDS, manager_layout="rmc_primary")
     assert result["composition"] is None
     assert result["fabrics"] is None
-    assert result["summary"]["resource_block_count"] == 0
-    assert result["summary"]["fabric_count"] == 0
+    assert result["summary"]["resource_block_count"] is None
+    assert result["summary"]["fabric_count"] is None
     # 기존 수집은 그대로
     assert result["summary"]["partition_count"] == 2
     # chassis thermal / partition boot 은 여전히 수집됨 (sub-resource 레벨)
@@ -544,4 +545,4 @@ def test_composition_malformed_200_enabled_none(monkeypatch) -> None:
     comp, errs = rg.gather_composition_service("10.0.0.1", _full_service_root(), *CREDS)
     assert comp is not None
     assert comp["enabled"] is None
-    assert comp["resource_block_count"] == 0
+    assert comp["resource_block_count"] is None   # 2026-10-29 (SA-02): ResourceBlocks 링크 없는 본문 — 개수 미확인 (종전 0)

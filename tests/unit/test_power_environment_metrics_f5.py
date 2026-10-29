@@ -50,7 +50,11 @@ def _make_get_mock(routes: dict):
 
 
 def test_power_subsystem_with_environment_metrics(monkeypatch):
-    """PowerSubsystem 200 + EnvironmentMetrics 200 → power_consumed_watts 채움."""
+    """PowerSubsystem 200 + EnvironmentMetrics 200 → power_consumed_watts 채움.
+
+    2026-10-29 (SA-19): PowerWatts.ReadingRangeMin/Max 는 DMTF Sensor 의 "측정 가능 범위" 다 — 관측한 최소 · 최대 소비전력이 아니다.
+    min/max_consumed_watts 에 쓰지 않는다(종전 350/480 → null). consumed 412 는 그대로다.
+    """
     routes = {
         'PowerSubsystem/PowerSupplies/0': (200, {
             'Name': 'PSU0',
@@ -77,8 +81,8 @@ def test_power_subsystem_with_environment_metrics(monkeypatch):
     assert data['power_supplies'][0]['power_capacity_w'] == 800
     pc = data['power_control']
     assert pc['power_consumed_watts'] == 412
-    assert pc['min_consumed_watts'] == 350
-    assert pc['max_consumed_watts'] == 480
+    assert pc['min_consumed_watts'] is None     # ReadingRangeMin 350 은 범위값
+    assert pc['max_consumed_watts'] is None     # ReadingRangeMax 480 은 범위값
     assert pc['power_capacity_watts'] == 800   # PSU 합산
     assert pc['interval_in_min'] is None       # EnvironmentMetrics 표준에 없음
     assert pc['avg_consumed_watts'] is None    # EnvironmentMetrics 표준에 없음

@@ -1,0 +1,326 @@
+{
+ "_doc": [
+  "SA-12 (2026-10-29) replay-miss 대장. golden recording 이 있는 사례마다, 재생 중 recording 에 없는 GET 경로(emulator_harness._REPLAY_MISS — 404 + 'replay-miss: path not in recording')를 적는다.",
+  "pre_existing = 기준 104bcaf0 에서도 나던 miss(SA-12 와 무관, 종전부터 golden 이 이 404 를 전제로 만들어졌다). sa12 = SA-12 섀시 드라이브 합집합이 새로 부르는 경로.",
+  "pytest 의 이 404 는 장비 응답이 아니다 — 판정은 MOCK_LIMITATION 이고 golden 불변을 SA-12 정확성의 근거로 쓰지 않는다. 실응답은 tier1 열(Tier 1 미러 접근 로그)로만 확인했다.",
+  "tier1.class: MIRROR_REAL = 미러 트리에 실응답 있음(note tree). NO_MIRROR = 대응 미러 없음 → 실응답 미검증. 실장비 응답은 어느 쪽도 검증하지 않았다.",
+  "tests/integration/test_sa12_replay_miss_inventory.py 가 실제 miss 집합이 pre_existing ∪ sa12 와 정확히 같은지 본다 — 대장에 없는 새 미기록 GET 은 실패한다."
+ ],
+ "base_sha": "104bcaf0",
+ "measured_at_sha": "866d28d8",
+ "cases": {
+  "dmtf_rackmount1": {
+   "pre_existing": [
+    "Chassis/1U/NetworkAdapters",
+    "Chassis/1U/Thermal",
+    "Chassis/1U/ThermalSubsystem",
+    "Managers/BMC/NetworkProtocol",
+    "Systems/437XR1138R2/Bios",
+    "Systems/437XR1138R2/NetworkAdapters",
+    "Systems/437XR1138R2/NetworkInterfaces",
+    "Systems/437XR1138R2/Storage"
+   ],
+   "sa12": []
+  },
+  "hpe_emulator_dl325_gen10plus_fc": {
+   "pre_existing": [
+    "Chassis/1/Thermal",
+    "Chassis/1/ThermalSubsystem",
+    "Managers/1/DateTime",
+    "Managers/1/NetworkProtocol",
+    "systems/1/bios"
+   ],
+   "sa12": [
+    {
+     "path": "Chassis/DE00A000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": null,
+      "class": "NO_MIRROR",
+      "detail": "HPE iLO Redfish Interface Emulator 캡처(README) — 대응 미러가 없어 실응답 미검증"
+     }
+    }
+   ]
+  },
+  "hpe_emulator_dl360": {
+   "pre_existing": [
+    "Chassis/1/Thermal",
+    "Chassis/1/ThermalSubsystem",
+    "Managers/1/DateTime",
+    "Managers/1/NetworkProtocol",
+    "systems/1/bios"
+   ],
+   "sa12": [
+    {
+     "path": "Chassis/DE00A000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": null,
+      "class": "NO_MIRROR",
+      "detail": "HPE iLO Redfish Interface Emulator 캡처(README) — 대응 미러가 없어 실응답 미검증"
+     }
+    }
+   ]
+  },
+  "hpe_emulator_dl365_gen10plus": {
+   "pre_existing": [
+    "Chassis/1/Thermal",
+    "Chassis/1/ThermalSubsystem",
+    "Managers/1/DateTime",
+    "Managers/1/NetworkProtocol",
+    "systems/1/bios"
+   ],
+   "sa12": [
+    {
+     "path": "Chassis/DE042000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": null,
+      "class": "NO_MIRROR",
+      "detail": "HPE iLO Redfish Interface Emulator 캡처(README) — 대응 미러가 없어 실응답 미검증"
+     }
+    }
+   ]
+  },
+  "hpe_emulator_dl380a": {
+   "pre_existing": [
+    "Chassis/1/Thermal",
+    "Chassis/1/ThermalSubsystem",
+    "Managers/1/DateTime",
+    "Managers/1/NetworkProtocol",
+    "systems/1/bios"
+   ],
+   "sa12": [
+    {
+     "path": "Chassis/DE00A000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": null,
+      "class": "NO_MIRROR",
+      "detail": "HPE iLO Redfish Interface Emulator 캡처(README) — 대응 미러가 없어 실응답 미검증"
+     }
+    },
+    {
+     "path": "Chassis/DE00B000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": null,
+      "class": "NO_MIRROR",
+      "detail": "HPE iLO Redfish Interface Emulator 캡처(README) — 대응 미러가 없어 실응답 미검증"
+     }
+    }
+   ]
+  },
+  "hpe_emulator_dl380a_gen12": {
+   "pre_existing": [
+    "Chassis/1/Thermal",
+    "Chassis/1/ThermalSubsystem",
+    "Managers/1/DateTime",
+    "Managers/1/NetworkProtocol",
+    "systems/1/bios"
+   ],
+   "sa12": []
+  },
+  "real_dell_r740": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "r1_DELL_R740_01",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 본문은 Drives 컬렉션을 광고하지 않고 Links.Drives 4건이 Storage 와 같은 URI — 추가 GET · 추가 드라이브 0"
+     }
+    }
+   ]
+  },
+  "real_hpe_csus3200": {
+   "pre_existing": [],
+   "sa12": []
+  },
+  "real_hpe_csus3200_01": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/r001u01/Drives",
+     "why": "System 섀시 본문이 광고한 Drives 컬렉션",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "csus3200_01",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 컬렉션 멤버 4건이 Storage 와 같은 URI — 추가 드라이브 0. pytest 는 이 404 를 캐시하지 않아 두 번 요청한다(top-level · 파티션 storage)"
+     }
+    }
+   ]
+  },
+  "real_hpe_csus3200_02": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/r001u01/Drives",
+     "why": "System 섀시 본문이 광고한 Drives 컬렉션",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "csus3200_02",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 컬렉션 멤버 4건이 Storage 와 같은 URI — 추가 드라이브 0. pytest 는 이 404 를 캐시하지 않아 두 번 요청한다(top-level · 파티션 storage)"
+     }
+    }
+   ]
+  },
+  "real_hpe_csus3200_03": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/r001u01/Drives",
+     "why": "System 섀시 본문이 광고한 Drives 컬렉션",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "csus3200_03",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 컬렉션 멤버 4건이 Storage 와 같은 URI — 추가 드라이브 0. pytest 는 이 404 를 캐시하지 않아 두 번 요청한다(top-level · 파티션 storage)"
+     }
+    }
+   ]
+  },
+  "real_hpe_dl380": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/DE00B000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "r1_HPE_DL380_01",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 본문 200 뒤 Chassis/DE00B000/Drives(멤버 8건, Storage 와 같은 URI)도 GET — 추가 드라이브 0. pytest 는 본문이 replay-miss 라 /Drives GET 이 없다"
+     }
+    }
+   ]
+  },
+  "real_hpe_dl380_gen12_01": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/DE00B000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "dl380_gen12_01",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 본문 200 뒤 Chassis/DE00B000/Drives(멤버 8건, Storage 와 같은 URI)도 GET — 추가 드라이브 0. pytest 는 본문이 replay-miss 라 /Drives GET 이 없다"
+     }
+    }
+   ]
+  },
+  "real_hpe_dl380_gen12_02": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/DE00B000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "dl380_gen12_02",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 본문 200 뒤 Chassis/DE00B000/Drives(멤버 8건, Storage 와 같은 URI)도 GET — 추가 드라이브 0. pytest 는 본문이 replay-miss 라 /Drives GET 이 없다"
+     }
+    }
+   ]
+  },
+  "real_hpe_dl380_gen12_03": {
+   "pre_existing": [],
+   "sa12": []
+  },
+  "real_hpe_dl380_gen12_04": {
+   "pre_existing": [],
+   "sa12": [
+    {
+     "path": "Chassis/DE00B000",
+     "why": "Storage 본문 Links.Enclosures 의 섀시 본문 — 그 섀시가 광고한 Drives 컬렉션 · Links.Drives 를 찾는 GET",
+     "pytest": "MOCK_LIMITATION",
+     "tier1": {
+      "label": "dl380_gen12_04",
+      "status": [
+       200
+      ],
+      "note": [
+       "tree"
+      ],
+      "class": "MIRROR_REAL",
+      "detail": "미러 본문 200 뒤 Chassis/DE00B000/Drives(멤버 8건, Storage 와 같은 URI)도 GET — 추가 드라이브 0. pytest 는 본문이 replay-miss 라 /Drives GET 이 없다"
+     }
+    }
+   ]
+  },
+  "real_lenovo_sr650": {
+   "pre_existing": [],
+   "sa12": []
+  },
+  "real_lenovo_sr650_v4_01": {
+   "pre_existing": [],
+   "sa12": []
+  },
+  "real_lenovo_sr650_v4_02": {
+   "pre_existing": [],
+   "sa12": []
+  },
+  "real_lenovo_sr650_v4_03": {
+   "pre_existing": [],
+   "sa12": []
+  },
+  "real_lenovo_sr650_v4_04": {
+   "pre_existing": [],
+   "sa12": []
+  }
+ }
+}

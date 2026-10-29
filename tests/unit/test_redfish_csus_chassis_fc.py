@@ -280,8 +280,8 @@ def test_synthetic_fused_card_ethernet_linkup_never_lifts_the_fc_port(monkeypatc
 def test_synthetic_four_fc_ports_are_judged_one_by_one(monkeypatch):
     """사례 7 (합성 — 실장비 Up 근거 아님): 한 카드 4포트 LinkUp · LinkDown · 키 없음 · Enabled → up · down · down · down.
 
-    미제공 · 미확정 notice 에는 해당 포트만 적힌다. network ports 는 네트워크 정규화 그대로라 Enabled 포트가 up 으로 남는다
-    (HBA 정책을 네트워크에 쓰지 않는다 — 2026-10-28 사용자 결정. 같은 포트가 두 곳에서 다르게 보이는 것은 의도이며 실측 출현 0).
+    미제공 · 미확정 notice 에는 해당 포트만 적힌다. network ports 는 네트워크 정규화를 따른다 — 2026-10-29 (SA-09) 부터 Enabled 는 링크 값이
+    아니라 unknown 이고(종전 up) 원문은 network_adapters notice 1건으로 남는다. HBA 값 · '값 미확정' notice 는 종전 그대로다(HBA 정책 불변).
     """
     out, msgs = _gather_synthetic(monkeypatch, _synthetic_card("FC7", [
         ("1", _fc_port(1, LinkStatus="LinkUp")), ("2", _fc_port(2, LinkStatus="LinkDown")),
@@ -289,9 +289,11 @@ def test_synthetic_four_fc_ports_are_judged_one_by_one(monkeypatch):
     assert [(h["port_id"], h["link_status"]) for h in out["fc_hbas"]] == [("1", "up"), ("2", "down"), ("3", "down"), ("4", "down")]
     assert [m for m in msgs if "링크 상태 미제공" in m] == [
         "네트워크 카드 FC7: FC 포트 3 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)"]
-    assert [m for m in msgs if "링크 상태 값 미확정" in m] == [
+    assert [m for m in msgs if "링크 상태 값 미확정" in m and "storage.hbas" in m] == [
         "네트워크 카드 FC7: FC 포트 4=Enabled 링크 상태 값 미확정, down 으로 기록 (storage.hbas link_status)"]
-    assert {p["port_id"]: p["link_status"] for p in out["ports"]} == {"1": "up", "2": "down", "3": "unknown", "4": "up"}
+    assert [m for m in msgs if "network.ports link_status" in m] == [
+        "네트워크 포트 링크 상태 값 미확정, unknown 으로 기록 (network.ports link_status) — FC7/4=Enabled"]
+    assert {p["port_id"]: p["link_status"] for p in out["ports"]} == {"1": "up", "2": "down", "3": "unknown", "4": "unknown"}
 
 
 # ── 2. 섀시 링크 gating — 요청 수 ────────────────────────────────────────────────────────────────────────────────────────

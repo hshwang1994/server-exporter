@@ -338,12 +338,18 @@ def test_partition_storage_normalized_to_canonical_shape() -> None:
 
 
 def test_partition_storage_normalize_empty_raw() -> None:
-    """빈/None raw → 빈 canonical (graceful — 404 partition storage)."""
+    """빈/None raw → 빈 canonical (graceful — 404 partition storage).
+
+    2026-10-29 (SA-07): 드라이브 목록 원천을 읽었다는 근거가 없으면 grand_total_gb 는 null(종전 0) — 0 은 원천을 읽었고 비었을 때(확인한 0)만.
+    """
     for raw in ({}, None, {"controllers": [], "volumes": []}):
         out = rg._normalize_storage_raw(raw)
         assert out["controllers"] == []
         assert out["physical_disks"] == []
-        assert out["summary"] == {"groups": [], "grand_total_gb": 0}
+        assert out["summary"] == {"groups": [], "grand_total_gb": None}
+    seen_empty = rg._normalize_storage_raw({"controllers": [], "volumes": []}, inventory={"enumerated": True, "incomplete": False})
+    assert seen_empty["summary"] == {"groups": [], "grand_total_gb": 0}
+    assert "inventory" not in seen_empty and "_inventory" not in seen_empty
 
 
 def test_partition_network_normalized_to_dict() -> None:

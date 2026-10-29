@@ -497,7 +497,10 @@ def test_fc_associated_address_is_wwpn_not_wwnn(monkeypatch):
 # ── CSUS-R14: power_consumed from TelemetryService TotalPowerConsumedWatts ────
 
 def test_power_consumed_prefers_telemetry(monkeypatch):
-    """EnvironmentMetrics 부재 시 장비 권위 TelemetryService TotalPowerConsumedWatts(591) 우선 (PSU 입력합 아님)."""
+    """EnvironmentMetrics 부재 시 장비 권위 TelemetryService TotalPowerConsumedWatts 우선 (PSU 입력합 아님).
+
+    2026-10-29 (SA-17, 사용자 결정): 원천 "591.5" 는 정수 반올림(half-even)으로 592 다 — 종전 int() 절삭은 591 이었다.
+    """
     PS = "Chassis/r001u01/PowerSubsystem"; U = "/redfish/v1/" + PS
     _patch(monkeypatch, {
         PS: (200, {"PowerSupplies": {"@odata.id": U + "/PowerSupplies"}}, None),
@@ -513,7 +516,7 @@ def test_power_consumed_prefers_telemetry(monkeypatch):
             "MetricValues": [{"MetricId": "TotalPowerConsumedWatts", "MetricValue": "591.5"}]}, None),
     })
     out, errs = rg.gather_power("ip", "/redfish/v1/Chassis/r001u01", *CREDS)
-    assert out["power_control"]["power_consumed_watts"] == 591, "TelemetryService 권위값 우선(PSU 199 아님)"
+    assert out["power_control"]["power_consumed_watts"] == 592, "TelemetryService 권위값 우선(PSU 199 아님) · 591.5 → 592"
 
 
 # ── CSUS-R15: _network_meta 내부 임시키 multi_node 누설 차단 ──────────────────

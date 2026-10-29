@@ -113,13 +113,20 @@ def test_normalize_cpu_clock_leaves():
 
 
 # ── FIX 1 (2026-10-27, 사용자 결정 — 2차 Mock 02-cpu-001/002/006): Redfish 는 cpu.logical_threads 를 내지 않는다 ──────────────
+def _cpu_leaf(key, cpus, system, failed=()):
+    """2026-10-29 (SA-04): sockets · cores_physical 은 앞 태스크의 _rf_cpu_basis 가 정한다 — 그 식을 먼저 렌더한다."""
+    ctx = {"_rf_d_cpus": cpus, "_rf_d_system": system, "_rf_raw_collect": {"failed_sections": list(failed)}}
+    ctx["_rf_cpu_basis"] = _render(_set_fact_var("_rf_cpu_basis"), **ctx)
+    return _render(_fragment()["cpu"][key], **ctx)
+
+
 def test_redfish_cpu_fragment_has_no_logical_threads_and_keeps_sockets_cores():
     cpu = _fragment()["cpu"]
     assert "logical_threads" not in cpu, "Redfish cpu.logical_threads 는 2026-10-27 FIX 1 로 제거 — OS/ESXi 채널 값만 쓴다"
     cpus = [{"total_cores": 22, "total_threads": 22}, {"total_cores": 22, "total_threads": 22}]
-    assert _render(cpu["sockets"], _rf_d_cpus=cpus, _rf_d_system={}) == 2
-    assert _render(cpu["cores_physical"], _rf_d_cpus=cpus, _rf_d_system={}) == 44
-    assert _render(cpu["cores_physical"], _rf_d_cpus=[], _rf_d_system={"cpu_summary": {"core_count": 64}}) == 64, "BUG-13 요약 폴백은 그대로"
+    assert _cpu_leaf("sockets", cpus, {}) == 2
+    assert _cpu_leaf("cores_physical", cpus, {}) == 44
+    assert _cpu_leaf("cores_physical", [], {"cpu_summary": {"core_count": 64}}) == 64, "BUG-13 요약 폴백은 그대로"
 
 
 def test_no_adapter_declares_the_removed_cores_flag():
