@@ -20,6 +20,8 @@
     _rf_fw_links:  "{{ _rf_raw_collect.firmware_links | default({}) }}"
     # 2026-10-27 (C8 03-network-007): 모듈 최상위 ndf_mtu_by_mac — MAC(대문자 hex) → NDF Ethernet.MTUSize. interfaces[].mtu 가 null 일 때만 채운다.
     _rf_ndf_mtu:   "{{ _rf_raw_collect.ndf_mtu_by_mac | default({}) }}"
+    # 2026-10-29 (SA-07): 모듈 최상위 storage_inventory — 드라이브 목록 근거 {enumerated, incomplete}. storage.summary.grand_total_gb 의 null · 0 판정용
+    _rf_storage_inv: "{{ _rf_raw_collect.storage_inventory | default({}) }}"
   no_log: true
 
 # 2026-04-29 fix B01: ProcessorType=='CPU' 필터링 — Dell r760 Tesla T4 같은 GPU/Accelerator/FPGA/DSP가
@@ -379,6 +381,48 @@
       {{ n }}
   no_log: true
 
+# ── 2026-10-29 (SA-07): storage 디스크 합계의 근거 ────────────────────────────────────
+# 전원 상태는 판정에 쓰지 않는다 — 드라이브 목록 원천의 구조만 본다(모듈 storage_inventory, data 밖 aux).
+#   enumerated : 원천을 하나 이상 읽었다 — Storage 멤버 Drives 배열(빈 배열 포함) · SimpleStorage Devices 배열 · SmartStorage PhysicalDrives
+#                컬렉션 · 섀시 Drives 컬렉션 · 섀시 Links.Drives 배열. 디스크 항목이 있으면 원천을 읽은 것이다.
+#   incomplete : 원천이나 원천이 가리킨 멤버(Storage 멤버 · 드라이브)를 다 읽지 못했다(가리킨 것의 404 포함). 선택 링크(섀시 본문 ·
+#                섀시 Drives 컬렉션)의 404 는 미제공이라 세지 않고, 볼륨 · 컨트롤러 정보 · PCIe 식별 실패도 디스크 합과 무관해 세지 않는다.
+# grand_total_gb: storage 를 수집하지 않았거나(collected · failed 어디에도 없음) · 원천을 하나도 읽지 못했거나(못 봄) · 미완결이면
+#   null(확정 불가). 원천을 읽었고 비었으면 0(확인한 0). 그 밖은 합(내림 — 용량을 모르는 디스크는 종전처럼 그룹 · 합에서 뺀다).
+- name: "redfish | normalize_standard | storage 합계 근거 (SA-07)"
+  ansible.builtin.set_fact:
+    _rf_storage_basis: >-
+      {%- set _inv = _rf_storage_inv | default({}, true) -%}
+      {%- set _disks = _rf_norm_physical_disks | default([]) -%}
+      {%- set _attempted = ('storage' in (_rf_raw_collect.collected | default([])))
+                           or ('storage' in (_rf_raw_collect.failed_sections | default([]))) -%}
+      {%- set _enum = ((_inv.enumerated | default(false)) is sameas true) or ((_disks | length) > 0) -%}
+      {%- set _incomplete = (_inv.incomplete | default(false)) is sameas true -%}
+      {{ {
+        'attempted': _attempted,
+        'enumerated': _enum,
+        'incomplete': _incomplete,
+        'countable': _attempted and _enum and (not _incomplete)
+      } }}
+  no_log: true
+
+# 위 근거로 grand_total_gb 가 null 이면 그 사실을 notice 로 남긴다(관측만 — 원인 해석 없음). 수집하지 않은 섹션은 섹션 상태가 말한다.
+- name: "redfish | normalize_standard | storage 합계 notice (SA-07)"
+  ansible.builtin.set_fact:
+    _rf_norm_notices: >-
+      {%- set n = (_rf_norm_notices | default([])) | list -%}
+      {%- set sb = _rf_storage_basis -%}
+      {%- if sb.attempted and not sb.countable -%}
+        {%- if not sb.enumerated -%}
+          {%- set why = '드라이브 목록 원천(Storage Drives · 섀시 Drives 등)을 하나도 읽지 못함 — 디스크 0개를 확인할 근거가 없음' -%}
+        {%- else -%}
+          {%- set why = '드라이브 목록을 다 읽지 못함 — 부분 합을 쓰지 않음' -%}
+        {%- endif -%}
+        {%- set _ = n.append({'section': 'storage', 'message': (why ~ ': summary.grand_total_gb = null')}) -%}
+      {%- endif -%}
+      {{ n }}
+  no_log: true
+
 # ── P3 (cycle 2026-04-28): Group Summary 계산 ────────────────────────────────
 # Memory / Disk / CPU / Network 의 단위용량 × 수량 × 그룹총량 + 전체 총량 형식.
 # Fragment 철학 (rule 22): 각 gather 가 자기 섹션 안의 summary 만 채운다.
@@ -481,7 +525,9 @@
           {%- set ns.total = ns.total + cap_gb -%}
         {%- endif -%}
       {%- endfor -%}
-      {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
+      {#- 2026-10-29 (SA-07 · SA-11): GiB 는 3채널 모두 내림(사용자 결정 — half-even 아님). 합은 _rf_storage_basis.countable 일 때만 쓰고
+          아니면 null(못 봄 · 미완결) — 원천을 읽었고 비었으면 0(확인한 0). 전원 상태는 판정에 쓰지 않는다. -#}
+      {{ {'groups': ns.groups, 'grand_total_gb': (ns.total if _rf_storage_basis.countable else none)} }}
     # cycle-016 Phase M: network.summary 강화 — adapter_count / port_count / primary_speed_mbps 추가
     # 2026-04-29 lenovo-critical-review: link_type 정규화 — NetworkAdapter ports 의 PortType
     # (Ethernet/FibreChannel/InfiniBand) 을 mac 기반 매칭. 미매칭/PortType 빈값 시 'ethernet'

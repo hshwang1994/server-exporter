@@ -3321,18 +3321,26 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     return {'total_mib': total_mib, 'slots': slots}, errors
 
 
-def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl):
-    """SimpleStorage 경로 — 플랫 디바이스 목록 (구형 BMC 호환)."""
+def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl, inv=None):
+    """SimpleStorage 경로 — 플랫 디바이스 목록 (구형 BMC 호환).
+
+    2026-10-29 (SA-07): inv(dict)를 주면 Devices 배열(빈 배열 포함)을 읽은 멤버로 'enumerated', 읽지 못한 멤버로 'incomplete' 를 적는다.
+    """
     controllers = []
     errors = []
+    no_uri = 0
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
+            no_uri += 1
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
             errors.append(_err('storage', f'SimpleStorage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
+        if isinstance(_safe(sdata, 'Devices'), list):
+            _inv_set(inv, 'enumerated')
         drives = []
         for dev in _dicts(_safe(sdata, 'Devices')):  # Round 4 #1: 비-list Devices 방어
             cap_int = _safe_int(_safe(dev, 'CapacityBytes'))
@@ -3352,6 +3360,9 @@ def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_
             'id': _safe(sdata, 'Id'), 'name': _safe(sdata, 'Name'),
             'health': _safe(sdata, 'Status', 'Health'), 'drives': drives,
         })
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 SimpleStorage 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return controllers, errors
 
 
@@ -3426,17 +3437,36 @@ def _drive_wwn(ddata):
     return None
 
 
-def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl):
-    """Drives 추출 — Empty Bay 필터링 + 정규화."""
+def _inv_set(inv, key):
+    """드라이브 목록 근거 표식 (2026-10-29 SA-07) — inv(dict)가 없으면(종전 호출부) 아무것도 하지 않는다."""
+    if isinstance(inv, dict):
+        inv[key] = True
+
+
+def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl, inv=None):
+    """Drives 추출 — Empty Bay 필터링 + 정규화.
+
+    2026-10-29 (SA-07): inv(dict)를 주면 드라이브 목록 근거를 적는다 — Drives 가 배열이면(빈 배열 포함) 'enumerated',
+    가리킨 드라이브를 읽지 못했으면(@odata.id 없음 · 조회 실패(404 포함 — 가리킨 것을 못 읽음) · 상한 절단) 'incomplete'.
+    Empty Bay(Q-09)는 읽고 거른 것이라 미완결이 아니다. inv 를 주지 않으면 종전과 같다.
+    """
     drives = []
     errors = []
-    for d_member in _capped(_safe(sdata, 'Drives') or [], 'storage', errors):
+    raw = _safe(sdata, 'Drives')
+    if isinstance(raw, list):
+        _inv_set(inv, 'enumerated')
+        if len(raw) > MAX_COLLECTION_MEMBERS:
+            _inv_set(inv, 'incomplete')
+    no_uri = 0
+    for d_member in _capped(raw or [], 'storage', errors):
         d_uri = _safe(d_member, '@odata.id')
         if not d_uri:
+            no_uri += 1
             continue
         dst, ddata, derr = _get(bmc_ip, _p(d_uri), username, password, timeout, verify_ssl)
         if derr or dst != 200:
             errors.append(_err('storage', f'Drive {d_uri} 실패: {derr or dst}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
         # Q-09: HPE Empty Bay 필터 — CapacityBytes가 없거나 Name에 "Empty" 포함 시 스킵
         drive_name = _str(_safe(ddata, 'Name'))  # Round 11 #1: 분리형 string-method 방어
@@ -3467,6 +3497,9 @@ def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_s
         _wwn = _drive_wwn(ddata)
         if _wwn:
             drives[-1]['wwn'] = _wwn
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 Drive 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return drives, errors
 
 
@@ -3564,27 +3597,42 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
     return volumes, errors
 
 
-def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None):
+def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None,
+                             inv=None, refs=None):
     """Storage 정규경로 — 컨트롤러 → 드라이브 → 볼륨 계층.
 
     2026-10-19 (A-8): StorageControllers/Controllers 가 없고 드라이브가 있는 멤버는 섀시 PCIeDevices 에서 컨트롤러 정체를 찾는다
     (_identify_controller_from_pcie — 드라이브 위치 ⊂ PCIe 슬롯 위치). chassis_uris 가 없으면 종전과 같다.
+    2026-10-29 (SA-07 · SA-12): inv 에 드라이브 목록 근거(멤버 Drives 배열 · 읽지 못한 멤버)를 적고, refs 에 Storage 가 가리킨 드라이브
+    @odata.id(조회 실패 · Empty Bay 포함)와 Links.Enclosures 섀시를 모은다 — _chassis_drives_union 이 쓴다. 이미 받은 본문이라 요청은 늘지 않는다.
     """
     controllers = []
     volumes = []
     errors = []
     pcie_cache = None   # 섀시 PCIeDevices 는 멤버마다 다시 읽지 않는다
+    no_uri = 0
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
+            no_uri += 1
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
             errors.append(_err('storage', f'Storage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
+        if isinstance(refs, dict):
+            for _enc in _dicts(_safe(sdata, 'Links', 'Enclosures')):
+                _eu = _safe(_enc, '@odata.id')
+                if isinstance(_eu, str) and _eu:
+                    refs['enclosures'].append(_eu)
+            for _dm in _dicts(_safe(sdata, 'Drives')):
+                _du = _safe(_dm, '@odata.id')
+                if isinstance(_du, str) and _du:
+                    refs['drive_uris'].add(_p(_du))
         ctrl_info, c_errs = _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout, verify_ssl)
         errors.extend(c_errs)
-        drives, d_errs = _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl)
+        drives, d_errs = _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl, inv)
         errors.extend(d_errs)
         # name 우선순위: controller_name (실제 하드웨어 모델) → Storage 객체 Name fallback.
         # 실측 (Lenovo XCC SR650 V2): 컨트롤러 식별 정보 손실 차단.
@@ -3608,10 +3656,13 @@ def _gather_standard_storage(bmc_ip, members, username, password, timeout, verif
         vols, v_errs = _extract_storage_volumes(sdata, _safe(sdata, 'Id'), bmc_ip, username, password, timeout, verify_ssl)
         volumes.extend(vols)
         errors.extend(v_errs)
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 Storage 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return controllers, volumes, errors
 
 
-def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):    # nosec rule12-r1
+def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, inv=None):    # nosec rule12-r1
     """HPE iLO4 SmartStorage legacy path (cycle 2026-05-07 M-I1 — Additive).
 
     iLO4 (Gen8/Gen9 pre-iLO5) 펌웨어는 표준 `/Systems/{id}/Storage` 미도입,
@@ -3624,6 +3675,8 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
     Returns: (controllers: list, volumes: list, errors: list) — gather_standard_storage 와
              동일한 envelope shape (controllers / volumes / health / drives).
     실측 fixture: tests/fixtures/redfish/hpe_ilo4/ (Round 14 web sources).
+    2026-10-29 (SA-07): inv 를 주면 PhysicalDrives 컬렉션(200)을 읽은 컨트롤러로 'enumerated', 컨트롤러 · 디스크 경로를 다 읽지 못하면
+    'incomplete' 를 적는다. 종전부터 errors 를 남기지 않던 PhysicalDrives 실패는 그대로 errors 없이 두고(섹션 상태 불변) notice 로 남긴다.
     """
     base = _p(system_uri) + '/SmartStorage'
     st, ss_root, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
@@ -3633,6 +3686,7 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
         return [], [], errors
 
     controllers = []
+    unread = 0   # 2026-10-29 (SA-07): errors 를 남기지 않는 디스크 경로 실패 수(@odata.id 없음 · PhysicalDrives 컬렉션 · 멤버)
     # ArrayControllers (RAID) + HostBusAdapters (HBA pass-through) 둘 다 시도
     for coll_key in ('ArrayControllers', 'HostBusAdapters'):
         coll_link = _safe(ss_root, coll_key, '@odata.id')
@@ -3641,15 +3695,19 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
         cst, coll, cerr = _get(bmc_ip, _p(coll_link), username, password, timeout, verify_ssl)
         if cerr or cst != 200:
             errors.append(_err('storage', f'SmartStorage.{coll_key} 실패: {cerr or cst}'))
+            _inv_set(inv, 'incomplete')
             continue
+        cwalk = {}
         for member in _collection_members(bmc_ip, _p(coll_link), coll, username, password, timeout,
-                                          verify_ssl, 'storage', errors):
+                                          verify_ssl, 'storage', errors, state_out=cwalk):
             ctrl_uri = _safe(member, '@odata.id')
             if not ctrl_uri:
+                unread += 1
                 continue
             ctrl_st, ctrl_data, ctrl_err = _get(bmc_ip, _p(ctrl_uri), username, password, timeout, verify_ssl)
             if ctrl_err or ctrl_st != 200:
                 errors.append(_err('storage', f'SmartStorage controller {ctrl_uri} 실패: {ctrl_err or ctrl_st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                _inv_set(inv, 'incomplete')
                 continue
             # PhysicalDrives 컬렉션 (iLO4 SmartStorage 구조)
             drives = []
@@ -3657,13 +3715,17 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
             if pd_link:
                 pst, pcoll, _perr = _get(bmc_ip, _p(pd_link), username, password, timeout, verify_ssl)
                 if pst == 200:
+                    _inv_set(inv, 'enumerated')
+                    pwalk = {}
                     for pd_m in _collection_members(bmc_ip, _p(pd_link), pcoll, username, password,
-                                                    timeout, verify_ssl, 'storage', errors):
+                                                    timeout, verify_ssl, 'storage', errors, state_out=pwalk):
                         pd_uri = _safe(pd_m, '@odata.id')
                         if not pd_uri:
+                            unread += 1
                             continue
                         pdst, pddata, _pderr = _get(bmc_ip, _p(pd_uri), username, password, timeout, verify_ssl)
                         if pdst != 200:
+                            unread += 1
                             continue
                         # iLO4 SmartStorage 단위 정정 (Round 1 #10/11/20): CapacityGB 는 십진 GB,
                         # CapacityMiB 는 이진 MiB. 둘을 혼동해 capacity_gb 에 MiB 값을 그대로 넣어
@@ -3691,6 +3753,10 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                             'capacity_gb':    capacity_gb,
                             'health':         _safe(pddata, 'Status', 'Health'),
                         })
+                    if not pwalk.get('complete'):
+                        _inv_set(inv, 'incomplete')
+                else:
+                    unread += 1
             ctrl_id = _safe(ctrl_data, 'Id')
             controllers.append({
                 'id':                      ctrl_id,
@@ -3704,6 +3770,11 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                 'controller_manufacturer': _safe(ctrl_data, 'Manufacturer') or 'HPE',  # nosec rule12-r1 — SmartStorage path 은 HPE OEM legacy spec 직접 의존
                 'controller_health':       _safe(ctrl_data, 'Status', 'Health'),
             })
+        if not cwalk.get('complete'):
+            _inv_set(inv, 'incomplete')
+    if unread and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'SmartStorage 디스크 경로 {unread}건을 읽지 못함 — 디스크 합계 미산출')
     # SmartStorage 는 logical volume (LogicalDrives) 별도 경로 — iLO4 fixture 부재로
     # 본 cycle 은 controllers + drives 만 (Additive — 향후 lab fixture 추가 시 보강)
     return controllers, [], errors
@@ -3814,61 +3885,137 @@ def _identify_controller_from_pcie(ctrl_entry, sdata, pcie_devices, bmc_ip, user
     return True
 
 
-def _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl):
-    """Storage 에 드라이브가 0건이면 System 이 연결한 섀시의 `Drives` 컬렉션을 본다 (2026-10-19, A-10).
+def _chassis_drives_union(bmc_ip, chassis_uris, refs, controllers, username, password, timeout, verify_ssl, inv=None):
+    """Storage 가 가리킨 드라이브에 섀시가 광고한 드라이브를 합집합으로 더한다 (2026-10-29 SA-12 — 종전 A-10 _chassis_drives_fallback).
 
-    DMTF Chassis.Drives 는 그 섀시에 물리적으로 든 드라이브다. 실측 HPE CSUS 3200 4노드는 Storage/1.Drives 와 같은 목록(0 또는 2건)이라 결과가
-    바뀌지 않지만, Storage 컨테이너가 드라이브를 가리키지 않는 펌웨어에서 디스크가 통째로 빠지는 것을 막는다. 섀시 단위 컨테이너
-    (id=`Chassis.<id>`, name=`<Chassis.Name> Drives`)로 담고 notice 를 남긴다. 드라이브를 가진 벤더는 호출되지 않는다(요청 0건).
+    DMTF Chassis.Drives · Chassis.Links.Drives 는 그 섀시에 물리적으로 든 드라이브다. 대상 섀시 = System 이 연결한 섀시(chassis_uris)
+    ∪ Storage 멤버의 Links.Enclosures(refs['enclosures']). 섀시 본문이 **광고한** `Drives` 컬렉션과 `Links.Drives` 만 따른다 — 광고가
+    없으면 GET 하지 않는다(경로 조립 없음). 중복은 @odata.id 로 먼저 지운다 — Storage 가 이미 가리킨 URI(refs['drive_uris'] — 조회 실패 ·
+    Empty Bay 포함)는 다시 읽지 않는다. 새로 읽은 드라이브는 SerialNumber 가 Storage 드라이브와 같으면 같은 디스크로 본다. Serial 이 없어
+    같은지 판정할 수 없는 섀시 전용 드라이브는 Storage 에 드라이브가 있으면 더하지 않는다 — 중복 합산도 누락도 확정할 수 없으므로
+    notice 를 남기고 합계를 미산출(inv['incomplete'])로 둔다. Storage 가 드라이브를 하나도 가리키지 않으면 종전 A-10 처럼 그대로 쓴다.
+    Storage 에 없던 드라이브만 섀시 단위 컨테이너(id=`Chassis.<id>`, name=`<Chassis.Name> Drives`)로 담고 notice 를 남긴다.
+    섀시 본문 · Drives 컬렉션의 404 는 "미제공" 으로 조용히 넘긴다 — 실행 중에는 404 의 출처(장비 응답 · 재생 기록 누락)를 가를 수 없다.
+    그 밖의 실패는 비차단 오류이며 드라이브 목록이 미완결이다. 실측 18대 미러는 섀시 쪽 참조가 모두 Storage 와 같은 URI 다(추가 0건).
     """
-    controllers, errors = [], []
-    for cu in _capped([u for u in (chassis_uris or []) if isinstance(u, str) and u], 'storage', errors):
+    controllers_out, errors = [], []
+    refs = refs if isinstance(refs, dict) else {}
+    known_serials, had_drives = set(), False
+    for c in (controllers or []):
+        for d in ((c.get('drives') or []) if isinstance(c, dict) else []):
+            if isinstance(d, dict):
+                had_drives = True
+                sn = _str(d.get('serial')).strip().upper()
+                if sn:
+                    known_serials.add(sn)
+    seen = set(refs.get('drive_uris') or ())
+    targets, tseen = [], set()
+    for u in list(chassis_uris or []) + list(refs.get('enclosures') or []):
+        if isinstance(u, str) and u and _p(u) not in tseen:
+            tseen.add(_p(u))
+            targets.append(u)
+    no_uri, excluded = 0, 0
+    for cu in _capped(targets, 'storage', errors):
         st, cdata, cerr = _get(bmc_ip, _p(cu), username, password, timeout, verify_ssl)
         if cerr or st != 200 or not isinstance(cdata, dict):
             if st != 404:
                 errors.append(_err('storage', f'Chassis {cu} 실패: {cerr or st}', _extended_info(cdata),
                                    code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                _inv_set(inv, 'incomplete')
             continue
+        members = []
         link = _safe(cdata, 'Drives', '@odata.id')
-        if not isinstance(link, str) or not link:
+        if isinstance(link, str) and link:
+            st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+            if err2 or st2 != 200 or not isinstance(coll, dict):
+                if st2 != 404:
+                    errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
+                                       code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    _inv_set(inv, 'incomplete')
+            else:
+                walk = {}
+                members.extend(_collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl,
+                                                   'storage', errors, state_out=walk))
+                _inv_set(inv, 'enumerated')
+                if not walk.get('complete'):
+                    _inv_set(inv, 'incomplete')
+        linked = _safe(cdata, 'Links', 'Drives')
+        if isinstance(linked, list):
+            members.extend(linked)
+            _inv_set(inv, 'enumerated')
+        new = []
+        for m in members:
+            du = _safe(m, '@odata.id')
+            if not isinstance(du, str) or not du:
+                no_uri += 1
+                continue
+            if _p(du) in seen:
+                continue
+            seen.add(_p(du))
+            new.append({'@odata.id': du})
+        if not new:
             continue
-        st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
-        if err2 or st2 != 200 or not isinstance(coll, dict):
-            if st2 != 404:
-                errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
-                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
-            continue
-        members = _collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl, 'storage', errors)
-        if not members:
-            continue
-        drives, d_errs = _extract_storage_drives({'Drives': members}, bmc_ip, username, password, timeout, verify_ssl)
+        drives, d_errs = _extract_storage_drives({'Drives': new}, bmc_ip, username, password, timeout, verify_ssl, inv)
         errors.extend(d_errs)
-        if not drives:
+        kept = []
+        for d in drives:
+            sn = _str(d.get('serial')).strip().upper()
+            if sn:
+                if sn in known_serials:
+                    continue
+                known_serials.add(sn)
+            elif had_drives:
+                excluded += 1
+                continue
+            kept.append(d)
+        if not kept:
             continue
         cid = _id_text(_safe(cdata, 'Id')) or _p(cu).rstrip('/').rsplit('/', 1)[-1]
-        controllers.append({
+        controllers_out.append({
             'id':     'Chassis.%s' % cid,
             'name':   '%s Drives' % (_strip_or_none(_safe(cdata, 'Name')) or cid),
             'health': _safe(cdata, 'Status', 'Health') or _safe(cdata, 'Status', 'HealthRollup'),
-            'drives': drives,
+            'drives': kept,
         })
-        _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(drives)))
-    return controllers, errors
+        if had_drives:
+            _notice('storage', '섀시 %s 의 드라이브 %d건 — Storage 가 가리키지 않아 추가' % (cid, len(kept)))
+        else:
+            _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(kept)))
+    if no_uri:
+        _inv_set(inv, 'incomplete')
+        _notice('storage', '@odata.id 없는 섀시 Drive 멤버 %d개 — 읽지 못함, 디스크 합계 미산출' % no_uri)
+    if excluded:
+        _inv_set(inv, 'incomplete')
+        _notice('storage', 'SerialNumber 없는 섀시 전용 드라이브 %d건 — Storage 드라이브와 같은지 판정할 수 없어 더하지 않음, '
+                           '디스크 합계 미산출' % excluded)
+    return controllers_out, errors
 
 
-def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None):
+def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None, inventory_out=None):
     """Storage 진입 — Storage → SimpleStorage → SmartStorage fallback dispatcher.
 
     cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4) fallback chain 추가 — Additive.
     기존 Storage / SimpleStorage 분기 변경 0. SmartStorage 는 iLO4 legacy path 라
     표준 / SimpleStorage 둘 다 404 일 때만 시도.
 
-    2026-10-19 (chassis_uris — System 이 연결한 섀시, 선택): 표준 경로에서 (A-8) 컨트롤러 정보 없는 Storage 멤버의 정체를 섀시 PCIeDevices 로,
-    (A-10) 드라이브가 0건이면 섀시 Drives 컬렉션으로 보충한다. 둘 다 "정보가 없을 때만" 발동해 컨트롤러 정보·드라이브를 주는 벤더는 요청 0건 증가.
+    2026-10-19 (chassis_uris — System 이 연결한 섀시, 선택): 표준 경로에서 (A-8) 컨트롤러 정보 없는 Storage 멤버의 정체를 섀시 PCIeDevices 로
+    찾는다 — 컨트롤러 정보를 주는 벤더는 요청 0건 증가.
+    2026-10-29 (SA-12): 표준 경로는 Storage 가 가리킨 드라이브에 섀시(chassis_uris ∪ Storage Links.Enclosures)가 광고한 드라이브를 늘
+    합집합으로 더한다(_chassis_drives_union — 종전 A-10 은 Storage 드라이브 0건일 때만). 광고한 링크만 따르며 그만큼 요청이 늘 수 있다.
+    SimpleStorage · SmartStorage 경로는 합집합을 하지 않는다(종전과 같다).
+    2026-10-29 (SA-07): inventory_out(dict)을 주면 끝에서 드라이브 목록 근거 {'enumerated', 'incomplete'} 를 적는다 — normalize 가
+    storage.summary.grand_total_gb 의 null(못 봄 · 미완결)과 0(확인한 0)을 가른다. 전원 상태는 쓰지 않는다. 예외로 끝나면 적지 않는다.
     """
     path = _p(system_uri) + '/Storage'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
     errors = []
+    inv = {'enumerated': False, 'incomplete': False}
+    refs = {'enclosures': [], 'drive_uris': set()}
+
+    def _done(val):
+        if isinstance(inventory_out, dict):
+            inventory_out.update(inv)
+        return val, errors
 
     # Storage 실패 시 SimpleStorage fallback (구형 BMC 호환)
     use_simple = False
@@ -3885,20 +4032,23 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, 
             # cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4 OEM legacy) fallback —
             # 표준/SimpleStorage 모두 404 시 HPE 구 path 시도 (Additive).
             ctrls, vols, smart_errors = _gather_smart_storage(
-                bmc_ip, system_uri, username, password, timeout, verify_ssl
+                bmc_ip, system_uri, username, password, timeout, verify_ssl, inv
             )
             if ctrls:
                 # 2026-08-12 (H11): 성공한 fallback — errors 아님 (위 SimpleStorage 와 동일 사유)
                 _notice('storage', 'Storage/SimpleStorage 미지원, SmartStorage (HPE OEM legacy) fallback 사용')  # nosec rule12-r1 — SmartStorage OEM path spec
                 errors.extend(smart_errors)
-                return {'controllers': ctrls, 'volumes': vols}, errors
+                return _done({'controllers': ctrls, 'volumes': vols})
             errors.append(_err('storage', f'Storage/SimpleStorage/SmartStorage 모두 실패: {err or st}'))
-            return {'controllers': [], 'volumes': []}, errors
+            return _done({'controllers': [], 'volumes': []})
 
+    walk = {}
     members = _collection_members(bmc_ip, (simple_path if use_simple else path), coll, username,
-                                  password, timeout, verify_ssl, 'storage', errors)
+                                  password, timeout, verify_ssl, 'storage', errors, state_out=walk)
+    if not walk.get('complete'):
+        inv['incomplete'] = True   # 2026-10-29 (SA-07): Storage · SimpleStorage 컬렉션을 끝까지 온전히 읽지 못함
     if use_simple:
-        controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl)
+        controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl, inv)
         errors.extend(sub_errors)
         # 2026-08-12: fallback **사용 사실**은 notice 지만, fallback 이 200 을 주고도
         #   결과가 비면 그건 성공이 아니다. errors 가 비면 _make_section_runner 가
@@ -3906,16 +4056,17 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, 
         if not controllers and not errors:
             errors.append(_err('storage',
                                'SimpleStorage 경로가 응답했지만 디스크 정보가 비어 있음'))
-        return {'controllers': controllers, 'volumes': []}, errors
+        return _done({'controllers': controllers, 'volumes': []})
     controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl,
-                                                                chassis_uris=chassis_uris)
+                                                                chassis_uris=chassis_uris, inv=inv, refs=refs)
     errors.extend(sub_errors)
-    # 2026-10-19 (A-10): Storage 가 드라이브를 하나도 가리키지 않으면 섀시 Drives 컬렉션으로 보충 (실측 CSUS 는 같은 목록 — 결과 불변)
-    if chassis_uris and not any((c.get('drives') if isinstance(c, dict) else None) for c in controllers):
-        extra_ctrls, extra_errs = _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl)
+    # 2026-10-29 (SA-12): 섀시가 광고한 드라이브를 늘 합집합으로 — 종전 A-10(Storage 드라이브 0건일 때만)을 대신한다
+    if chassis_uris or refs['enclosures']:
+        extra_ctrls, extra_errs = _chassis_drives_union(bmc_ip, chassis_uris, refs, controllers,
+                                                        username, password, timeout, verify_ssl, inv)
         controllers.extend(extra_ctrls)
         errors.extend(extra_errs)
-    return {'controllers': controllers, 'volumes': volumes}, errors
+    return _done({'controllers': controllers, 'volumes': volumes})
 
 
 def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -6213,11 +6364,14 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     return out
 
 
-def _summarize_partition_disks(physical_disks):
+def _summarize_partition_disks(physical_disks, inventory=None):
     """physical_disks[] → storage.summary {groups, grand_total_gb} (per-partition).
 
     top-level normalize_standard.yml 의 _rf_summary_storage 와 동일 grouping 규칙
     (단위용량 × media × protocol × model). cycle 2026-05-29.
+    2026-10-29 (SA-07 · SA-03): grand_total_gb 도 top-level 과 같은 규칙이다 — 드라이브 목록 원천을 읽지 못했거나(inventory.enumerated 가
+    아니고 디스크도 없음) · 미완결이면(inventory.incomplete) None, 원천을 읽었고 비었으면 0(확인한 0), 그 밖은 합(GiB 내림 — 3채널 공통,
+    용량을 모르는 디스크는 종전처럼 그룹 · 합에서 뺀다). inventory 가 없으면(종전 호출부) 디스크가 있을 때만 원천을 읽은 것으로 본다.
     """
     groups, seen, total = [], {}, 0
     for d in (physical_disks or []):
@@ -6236,16 +6390,20 @@ def _summarize_partition_disks(physical_disks):
             groups.append({'unit_capacity_gb': cap_gb, 'model': md, 'media_type': mt,
                            'protocol': pr, 'quantity': 1, 'group_total_gb': cap_gb})
         total += cap_gb
-    return {'groups': groups, 'grand_total_gb': total}
+    inv = inventory if isinstance(inventory, dict) else {}
+    enumerated = inv.get('enumerated') is True or bool(physical_disks)
+    countable = enumerated and inv.get('incomplete') is not True
+    return {'groups': groups, 'grand_total_gb': total if countable else None}
 
 
-def _normalize_storage_raw(raw):
+def _normalize_storage_raw(raw, inventory=None):
     """raw gather_storage {controllers, volumes} → canonical storage section.
 
     cycle 2026-05-29: multi_node.partitions[].storage 가 raw 로 노출되던 문제 해소.
     top-level normalize_standard.yml(Ansible) 과 동일 canonical shape 를 Python 에서 생성
     (multi_node 전용 parallel — 두 경로 모두 같은 schema 보장). hbas/infiniband 는 chassis
     레벨 NetworkAdapter 소관이라 partition storage 에는 빈 list (Additive 자리만 유지).
+    2026-10-29 (SA-07): inventory — gather_storage(inventory_out=) 의 드라이브 목록 근거. summary.grand_total_gb 판정에만 쓴다(출력에 넣지 않음).
     """
     raw = raw if isinstance(raw, dict) else {}
     controllers_out, physical, seen = [], [], set()
@@ -6297,7 +6455,7 @@ def _normalize_storage_raw(raw):
     return {
         'filesystems': [], 'physical_disks': physical, 'datastores': [],
         'controllers': controllers_out, 'logical_volumes': logical,
-        'summary': _summarize_partition_disks(physical),
+        'summary': _summarize_partition_disks(physical, inventory),
         'hbas': [], 'infiniband': [],
     }
 
@@ -6518,7 +6676,9 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
         sys_data, sys_errs = gather_system(bmc_ip, m['uri'], vendor, *creds, part_chassis, product_hint)
         cpu_data, cpu_errs = gather_processors(bmc_ip, m['uri'], *creds)
         mem_data, mem_errs = gather_memory(bmc_ip, m['uri'], *creds)
-        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None)  # 2026-10-19 A-8/A-10 동일 적용
+        part_inv = {}   # 2026-10-29 (SA-07): 그 partition 의 드라이브 목록 근거 — summary.grand_total_gb 판정용(출력에 나가지 않음)
+        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None,
+                                            inventory_out=part_inv)  # 2026-10-19 A-8 · 2026-10-29 SA-12 동일 적용
         net_data, net_errs = gather_network(bmc_ip, m['uri'], *creds)
         # cycle 2026-06-09: per-partition boot order (설명 모델 "부팅 순서").
         boot_data, boot_errs = gather_boot(bmc_ip, m['uri'], *creds)
@@ -6531,7 +6691,7 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
             #     → normalize 누락 (top-level 과 shape 불일치 + network 가 list).
             'cpu':        _normalize_cpu_raw(cpu_data, sys_data, bool(cpu_errs)),   # 2026-10-29 (SA-03): 그 partition 의 요약 · 오류로 판정
             'memory':     _normalize_memory_raw(mem_data, sys_data),
-            'storage':    _normalize_storage_raw(sto_data),
+            'storage':    _normalize_storage_raw(sto_data, part_inv),
             'network':    _normalize_network_raw(net_data),
             # cycle 2026-06-09: boot order (Additive — Boot 미노출 시 {}).
             'boot':       boot_data,
@@ -7097,7 +7257,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     collected / failed / unsupported 에는 넣지 않는다 — 11 섹션·status 계약 불변.
 
     2026-10-19 (CSUS 단일 서버 정합 · 수집 범위 보완 — 전부 "정보가 없을 때만" 발동):
-      - storage 에 System 의 섀시 목록을 넘긴다 (A-8 PCIe 컨트롤러 식별 · A-10 섀시 Drives 폴백).
+      - storage 에 System 의 섀시 목록을 넘긴다 (A-8 PCIe 컨트롤러 식별 · 2026-10-29 SA-12 섀시 Drives 합집합 — 종전 A-10 폴백).
       - power/thermal 은 System 이 연결한 섀시 전체(2개 이상일 때 합산 — A-11). 1개면 종전과 같은 호출.
       - firmware_scope == 'complex_only' (adapter vendor_notes.firmware_inventory_scope) 면 PCIe 장치 · PSU 펌웨어를 firmware[] 에 보충 (A-9).
     """
@@ -7113,19 +7273,21 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
     eff_chassis_uri = sys_chassis[0] if sys_chassis else chassis_uri
     extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]
-    # 2026-10-19: storage(A-8/A-10) · firmware 보충(A-9) 이 보는 "System 의 섀시" — Links.Chassis 전체, 없으면 종전 default 1개
+    # 2026-10-19: storage(A-8 · SA-12 합집합) · firmware 보충(A-9) 이 보는 "System 의 섀시" — Links.Chassis 전체, 없으면 종전 default 1개
     sys_chassis_all = sys_chassis or ([eff_chassis_uri] if eff_chassis_uri else [])
     # system 수집이 ComputerSystem 응답의 Bios 링크를 여기에 기록한다 (재조회 없음).
     bios_link = {}
     # 2026-10-27 (C9): 구조 근거 수집용 out dict — bmc 는 Manager.Links.ActiveSoftwareImage, firmware 는 멤버 RelatedItem(/Bios). 요청 0.
     bmc_links, fw_links_by_key = {}, {}
     fw_release_dates, ndf_mtu = {}, {}   # 2026-10-27 (C8): FirmwareInventory ReleaseDate(dedup key) · NDF MTU(MAC) — data 밖 내부 근거
+    storage_inv = {}   # 2026-10-29 (SA-07): 드라이브 목록 근거 {enumerated, incomplete} — data 밖(aux), normalize 가 grand_total_gb 판정에 쓴다
     sections = {
         'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
         'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout, links_out=bmc_links),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
-        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all),
+        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all,
+                                   inventory_out=storage_inv),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
         'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds, links_out=fw_links_by_key,
                                    dates_out=fw_release_dates),
@@ -7183,6 +7345,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     if aux_out is not None:
         aux_out['firmware_links'] = _fw_links_final
         aux_out['ndf_mtu_by_mac'] = ndf_mtu
+        aux_out['storage_inventory'] = storage_inv
     return sections
 
 
@@ -9961,6 +10124,8 @@ def main():
         firmware_links=aux.get('firmware_links') or {},
         # 2026-10-27 (C8 03-network-007): NDF Ethernet.MTUSize(MAC 별) — normalize 가 interfaces[].mtu 가 null 인 NIC 만 채운다. data 밖.
         ndf_mtu_by_mac=aux.get('ndf_mtu_by_mac') or {},
+        # 2026-10-29 (SA-07): 드라이브 목록 근거 {enumerated, incomplete} — normalize 가 storage.summary.grand_total_gb 의 null · 0 을 가른다. data 밖.
+        storage_inventory=aux.get('storage_inventory') or {},
         # 2026-10-03 (P2): 모듈 내부 관측값 — envelope 13 필드에는 들어가지 않는다 (normalize 가 뽑지 않음).
         cache=cache_stats(),
     )
