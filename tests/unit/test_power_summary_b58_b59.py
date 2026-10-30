@@ -233,3 +233,41 @@ class TestSA06NoInstalledPsu:
         psus = [{"name": r["Name"], "power_capacity_w": r["PowerCapacityWatts"],
                  "health": r["Status"].get("Health"), "state": r["Status"].get("State")} for r in raw]
         assert _template_summary(psus, 300) == build_summary({"PowerSupplies": raw, "PowerControl": [{"PowerConsumedWatts": 300}]})
+
+
+# --------------------------------------------------------------------------- #
+# 2026-10-31 (Summary 감사 부록 A · S14): 위 B58 · B59 · A-3 사례는 미러(build_summary)로만 돌았다.            #
+# 같은 입력으로 운영 템플릿을 렌더해 12키가 전부 같은지 본다 — 같으면 위 단정이 운영 템플릿에도 그대로 성립한다.     #
+# --------------------------------------------------------------------------- #
+
+def _module_shape(power_data: dict):
+    """raw Power 를 모듈 출력 모양(power_supplies[] · 소비전력)으로 바꾼다. Absent 슬롯은 남긴다 — 빼는 것은 템플릿이다."""
+    psus = []
+    for psu in (power_data.get("PowerSupplies") or []):
+        cap = psu.get("PowerCapacityWatts")
+        if cap is None:  # InputRanges 폴백은 모듈 쪽 규칙(build_summary 와 같은 변환)
+            ranges = psu.get("InputRanges") or []
+            if isinstance(ranges, list) and ranges and isinstance(ranges[0], dict) and ranges[0].get("OutputWattage") is not None:
+                cap = int(ranges[0]["OutputWattage"])
+        st = psu.get("Status") or {}
+        psus.append({"name": psu.get("Name"), "power_capacity_w": cap, "health": st.get("Health"), "state": st.get("State")})
+    pc_list = power_data.get("PowerControl") or []
+    pc0 = pc_list[0] if isinstance(pc_list, list) and pc_list and isinstance(pc_list[0], dict) else {}
+    return psus, pc0.get("PowerConsumedWatts")
+
+
+_EARLIER_INPUTS = {
+    "a3_all_unknown": {"PowerSupplies": [{"Name": f"PSU{i}", "PowerCapacityWatts": None, "Status": {"Health": "OK", "State": "Enabled"}}
+                                         for i in range(4)],
+                       "PowerControl": [{"PowerConsumedWatts": 591}]},
+    "a3_partial": {"PowerSupplies": [{"Name": "PSU0", "PowerCapacityWatts": 800, "Status": {"Health": "OK", "State": "Enabled"}},
+                                     {"Name": "PSU1", "PowerCapacityWatts": None, "Status": {"Health": "OK", "State": "Enabled"}}],
+                   "PowerControl": [{"PowerConsumedWatts": 400}]},
+}
+
+
+@pytest.mark.parametrize("case", ["hpe-dl380", "lenovo-sr650", "cisco-c220", *sorted(_EARLIER_INPUTS)])
+def test_earlier_cases_render_the_same_in_the_real_template(case):
+    power = _EARLIER_INPUTS[case] if case in _EARLIER_INPUTS else load_power(case)
+    psus, consumed = _module_shape(power)
+    assert _template_summary(psus, consumed) == build_summary(power)
