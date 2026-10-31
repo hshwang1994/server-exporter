@@ -95,3 +95,15 @@
 
 - `_normalize_link_status`(모듈 네트워크 정규화) · HBA 판정 · 요청 경로(새 HTTP 요청 0) · golden · baseline · envelope 13 필드 · 키 · enum 집합.
 - 호출자 영향: SR650 V4 의 `link_status` · `is_primary` · `summary` 값이 바뀐다(shape 변경 0). 사전 `network.interfaces[].link_status` · `docs/contract/03-fields.md` 6.4 · decision-log 2026-10-28 에 규칙을 적었다.
+
+## 7. 2026-10-29 정정 (Summary 감사 SA-13)
+
+원문(3절 · 6절)은 2026-10-28 기록으로 그대로 두고 여기서 정정한다. 출력 · 기대값 변화는 0이다. 작성: AI(Claude), 브랜치 `fix/redfish-mock2-summary-20261028`.
+
+| 위치 | 원문 | 정정 | 근거 |
+|---|---|---|---|
+| 3절 "그 밖 14 label" 문단 | CSUS 8 · 4 · 8(2차)과 1차 CSUS 03 · 04 의 8 · 8 은 "같은 MAC 포트가 없어 `unknown`" | NIC 마다 같은 MAC 을 첫 주소(`AssociatedMACAddresses[0]`)로 가진 포트가 **있다**. 그 포트 본문에 `LinkStatus` 키가 없어 포트도 `unknown` 이고, 그래서 채울 값이 없다. 결과(`unknown`)는 같다 | 2026-10-29 Tier 1 봉투(`tests/evidence/2026-10-29-redfish-summary-fix/tier1-after`): unknown NIC 8 · 4 · 8 · 8 · 8 개 모두 같은 MAC 포트가 있고 그 포트 link 는 전부 `unknown`. 미러 원문 csus3200_02 `Chassis/r001u01/NetworkAdapters/PCIeCard1` · `PCIeCard9` 의 `Ports/*` 4개에 `LinkStatus` 없음 |
+| 6절 "바꾸지 않은 것" | `_normalize_link_status` 불변 | 2026-10-28 시점에는 맞다. 2026-10-29 SA-09 에서 일반 NIC · 포트 매핑이 바뀌었다: Starting · Training(전이 상태) · Enabled · Active(링크 값 아님) · 미인식 값 → `unknown` + notice. HBA 판정(`storage.hbas[]`)은 바꾸지 않았다(HBA 전용 down 상수) | 커밋 `92d03169`. 이 문서의 보충 20건(up 14 · down 6)은 18 미러에서 그대로다(2026-10-29 Tier 1 · A/B/C 비교의 CM 36건 중 V4 20건) |
+
+- 같은 오기가 있던 코드 주석(`redfish_gather.py` 전원 Off notice 옆 "카드 ports 0")과 시험 설명(`tests/unit/test_redfish_xcc3_shape.py` "같은 MAC 포트 없음" · "포트 0")은 각각 커밋 `92d03169` · `9b34e1d7` 에서 정정했다.
+- dl380_gen12_03 문장("같은 MAC 포트 4개가 있으나 포트 link 가 `unknown`")은 원래 맞았다.

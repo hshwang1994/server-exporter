@@ -1,0 +1,49 @@
+{
+ "exposure": {
+  "disks_present": 2,
+  "disks_present_raw": 2,
+  "disks_absent_empty_bay": 0,
+  "disk_paths_present": [
+   "Chassis/r001u01/Drives/DriveSlot1InPCIeSlot3Box1",
+   "Chassis/r001u01/Drives/DriveSlot2InPCIeSlot3Box1"
+  ],
+  "simple_storage_used": false,
+  "fc_ports": 8,
+  "fc_port_paths": [
+   "Chassis/r001u01/NetworkAdapters/PCIeCard10/Ports/PCIeCard10Port1",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard10/Ports/PCIeCard10Port2",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard15/Ports/PCIeCard15Port1",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard15/Ports/PCIeCard15Port2",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard2/Ports/PCIeCard2Port1",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard2/Ports/PCIeCard2Port2",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard7/Ports/PCIeCard7Port1",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard7/Ports/PCIeCard7Port2"
+  ],
+  "ethernet_ports": 12,
+  "orphan_fc_ndf": [],
+  "host_fc_in_ethernet": [],
+  "power_state": {
+   "Systems/Capabilities": null,
+   "Systems/Partition0": "On"
+  },
+  "storage_collection_members": {
+   "Systems/Partition0/Storage": 1
+  }
+ },
+ "collected": {
+  "disks": 2,
+  "disks_unique": 2,
+  "fc_hbas": 8,
+  "fc_ports": 8,
+  "layer": "envelope"
+ },
+ "verdict": {
+  "pass": true,
+  "notes": [
+   "DISKS_MATCH",
+   "FC_MATCH"
+  ],
+  "unexplained": []
+ },
+ "label": "r1_HPE_CSUS3200_03"
+}

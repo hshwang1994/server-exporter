@@ -1,0 +1,38 @@
+{
+ "exposure": {
+  "disks_present": 0,
+  "disks_present_raw": 0,
+  "disks_absent_empty_bay": 0,
+  "disk_paths_present": [],
+  "simple_storage_used": false,
+  "fc_ports": 0,
+  "fc_port_paths": [],
+  "ethernet_ports": 4,
+  "orphan_fc_ndf": [],
+  "host_fc_in_ethernet": [],
+  "power_state": {
+   "Systems/1": "Off"
+  },
+  "storage_collection_members": {
+   "Systems/1/Storage": 0
+  }
+ },
+ "collected": {
+  "disks": 0,
+  "disks_unique": 0,
+  "fc_hbas": 0,
+  "fc_ports": 0,
+  "layer": "envelope"
+ },
+ "verdict": {
+  "pass": true,
+  "notes": [
+   "DISKS_MATCH",
+   "POWER_OFF_NOT_EXPOSED",
+   "FC_MATCH",
+   "NO_FC_EXPOSED"
+  ],
+  "unexplained": []
+ },
+ "label": "dl380_gen12_03"
+}

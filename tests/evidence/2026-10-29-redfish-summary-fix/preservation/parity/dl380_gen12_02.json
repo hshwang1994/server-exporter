@@ -1,0 +1,46 @@
+{
+ "exposure": {
+  "disks_present": 4,
+  "disks_present_raw": 4,
+  "disks_absent_empty_bay": 4,
+  "disk_paths_present": [
+   "Chassis/DE00B000/Drives/0",
+   "Chassis/DE00B000/Drives/1",
+   "Chassis/DE00B000/Drives/2",
+   "Chassis/DE00B000/Drives/3"
+  ],
+  "simple_storage_used": false,
+  "fc_ports": 4,
+  "fc_port_paths": [
+   "Chassis/1/NetworkAdapters/DE041000/Ports/1",
+   "Chassis/1/NetworkAdapters/DE041000/Ports/2",
+   "Chassis/1/NetworkAdapters/DE044000/Ports/1",
+   "Chassis/1/NetworkAdapters/DE044000/Ports/2"
+  ],
+  "ethernet_ports": 8,
+  "orphan_fc_ndf": [],
+  "host_fc_in_ethernet": [],
+  "power_state": {
+   "Systems/1": "On"
+  },
+  "storage_collection_members": {
+   "Systems/1/Storage": 1
+  }
+ },
+ "collected": {
+  "disks": 4,
+  "disks_unique": 4,
+  "fc_hbas": 4,
+  "fc_ports": 4,
+  "layer": "envelope"
+ },
+ "verdict": {
+  "pass": true,
+  "notes": [
+   "DISKS_MATCH",
+   "FC_MATCH"
+  ],
+  "unexplained": []
+ },
+ "label": "dl380_gen12_02"
+}

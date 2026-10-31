@@ -1,0 +1,50 @@
+{
+ "exposure": {
+  "disks_present": 2,
+  "disks_present_raw": 2,
+  "disks_absent_empty_bay": 0,
+  "disk_paths_present": [
+   "Systems/1/Storage/controller_slot3/Drives/drive_bay_0",
+   "Systems/1/Storage/controller_slot3/Drives/drive_bay_1"
+  ],
+  "simple_storage_used": false,
+  "fc_ports": 4,
+  "fc_port_paths": [
+   "Chassis/1/NetworkAdapters/slot5_0x4c0000/Ports/1",
+   "Chassis/1/NetworkAdapters/slot5_0x4c0000/Ports/2",
+   "Chassis/1/NetworkAdapters/slot6_0xa70000/Ports/1",
+   "Chassis/1/NetworkAdapters/slot6_0xa70000/Ports/2"
+  ],
+  "ethernet_ports": 10,
+  "orphan_fc_ndf": [],
+  "host_fc_in_ethernet": [
+   "Systems/1/EthernetInterfaces/NIC5",
+   "Systems/1/EthernetInterfaces/NIC6",
+   "Systems/1/EthernetInterfaces/NIC7",
+   "Systems/1/EthernetInterfaces/NIC8"
+  ],
+  "power_state": {
+   "Systems/1": "On"
+  },
+  "storage_collection_members": {
+   "Systems/1/Storage": 1
+  }
+ },
+ "collected": {
+  "disks": 2,
+  "disks_unique": 2,
+  "fc_hbas": 4,
+  "fc_ports": 4,
+  "layer": "envelope"
+ },
+ "verdict": {
+  "pass": true,
+  "notes": [
+   "DISKS_MATCH",
+   "FC_MATCH",
+   "FC_IN_HOST_ETHERNET:4"
+  ],
+  "unexplained": []
+ },
+ "label": "sr650_v4_03"
+}

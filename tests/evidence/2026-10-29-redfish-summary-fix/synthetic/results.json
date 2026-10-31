@@ -1,0 +1,941 @@
+{
+ "expected_sha256": "88e1b69a37682a407083524cf21c1f07e7e76eb6841a4fd7807fea59f6e3cc35",
+ "results": [
+  {
+   "base": [
+    {
+     "check": "data.multi_node.composition",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.resource_block_count",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "csus3200_01",
+   "case": "syn_csus_nocomp",
+   "defect_reproduced_on_base": true,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "status",
+     "expected": "success",
+     "got": "\"success\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.composition",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.resource_block_count",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.fabric_count",
+     "expected": 1,
+     "got": "1",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.partition_count",
+     "expected": 1,
+     "got": "1",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no GET CompositionService",
+     "got": [],
+     "verdict": "PASS"
+    }
+   ],
+   "sa": [
+    "SA-02"
+   ],
+   "verdict": "PASS"
+  },
+  {
+   "base": [
+    {
+     "check": "data.multi_node.fabrics",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.fabric_count",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "csus3200_01",
+   "case": "syn_csus_nofab",
+   "defect_reproduced_on_base": true,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "status",
+     "expected": "success",
+     "got": "\"success\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.fabrics",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.fabric_count",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.resource_block_count",
+     "expected": 1,
+     "got": "1",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.partition_count",
+     "expected": 1,
+     "got": "1",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.manager_count",
+     "expected": 1,
+     "got": "1",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.multi_node.summary.chassis_count",
+     "expected": 3,
+     "got": "3",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no GET Fabrics",
+     "got": [],
+     "verdict": "PASS"
+    }
+   ],
+   "sa": [
+    "SA-02"
+   ],
+   "verdict": "PASS"
+  },
+  {
+   "base": [
+    {
+     "check": "data.network.interfaces[id=NIC.Slot.3-1-1].link_status",
+     "expected": "up",
+     "got": "\"up\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.ports[associated_address=b0:26:28:7f:43:20].link_status",
+     "expected": "down",
+     "got": "\"down\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.ports[associated_address=b0:26:28:7f:33:50].link_status",
+     "expected": "linkflapping",
+     "got": "\"linkflapping\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no notice[network] ~ 링크 상태 값 미확정",
+     "got": "0 hit(s)",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no notice[network_adapters] ~ 링크 상태 값 미확정",
+     "got": "0 hit(s)",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "r1_DELL_R740_01",
+   "case": "syn_dell_links",
+   "defect_reproduced_on_base": true,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "status",
+     "expected": "success",
+     "got": "\"success\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.interfaces[id=NIC.Slot.3-1-1].link_status",
+     "expected": "unknown",
+     "got": "\"unknown\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.interfaces[id=NIC.Slot.3-1-1].speed_mbps",
+     "expected": 10000,
+     "got": "10000",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.ports[associated_address=b0:26:28:7f:43:20].link_status",
+     "expected": "unknown",
+     "got": "\"unknown\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.ports[associated_address=b0:26:28:7f:33:50].link_status",
+     "expected": "unknown",
+     "got": "\"unknown\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.interfaces[id=NIC.Slot.5-1-1].link_status",
+     "expected": "down",
+     "got": "\"down\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.summary.primary_speed_mbps",
+     "expected": 10000,
+     "got": "10000",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.summary.groups",
+     "expected": [
+      {
+       "link_type": "ethernet",
+       "link_up_count": 0,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM GbE 4P 5720-t rNDC",
+       "quantity": 4,
+       "speed_mbps": null
+      },
+      {
+       "link_type": "ethernet",
+       "link_up_count": 1,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM 10GbE 2P 57412S Adptr",
+       "quantity": 2,
+       "speed_mbps": 10000
+      },
+      {
+       "link_type": "ethernet",
+       "link_up_count": 0,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM 10GbE 2P 57412S Adptr",
+       "quantity": 6,
+       "speed_mbps": null
+      }
+     ],
+     "got": "[{\"link_type\": \"ethernet\", \"link_up_count\": 0, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM GbE 4P 5720-t rNDC\", \"quantity\": 4, \"speed_mbps\": null}, {\"link_type\": \"ethernet\", \"link_up_count\": 1, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM 10GbE 2P 57412S Adptr\", \"quantity\": 2, \"speed_mbps\": 10000}, {\"link_type\": \"ethernet\", \"link_up_count\": 0, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM 10GbE 2P 57412S Adptr\", \"quantity\": 6, \"speed_mbps\": null}]",
+     "verdict": "PASS"
+    },
+    {
+     "check": "notice[network] ⊇ ['NIC 링크 상태 값 미확정', 'Enabled']",
+     "got": "Systems/System.Embedded.1/EthernetInterfaces: NIC 링크 상태 값 미확정, unknown 으로 기록 (link_status) — NIC.Slot.3-1-1=Enabled",
+     "verdict": "PASS"
+    },
+    {
+     "check": "notice[network_adapters] ⊇ ['네트워크 포트 링크 상태 값 미확정', 'Training', 'LinkFlapping']",
+     "got": "네트워크 포트 링크 상태 값 미확정, unknown 으로 기록 (network.ports link_status) — NIC.Slot.3/NIC.Slot.3-1=Training, NIC.Slot.5/NIC.Slot.5-1=LinkFlapping",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.storage.hbas == 수정 전 미러 출력",
+     "got": "same",
+     "verdict": "PASS"
+    }
+   ],
+   "sa": [
+    "SA-09"
+   ],
+   "verdict": "PASS"
+  },
+  {
+   "base": [
+    {
+     "check": "data.network.summary.primary_speed_mbps",
+     "expected": 10000,
+     "got": "10000",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.summary.groups",
+     "expected": [
+      {
+       "link_type": "ethernet",
+       "link_up_count": 0,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM GbE 4P 5720-t rNDC",
+       "quantity": 4,
+       "speed_mbps": 0
+      },
+      {
+       "link_type": "ethernet",
+       "link_up_count": 1,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM 10GbE 2P 57412S Adptr",
+       "quantity": 7,
+       "speed_mbps": 0
+      },
+      {
+       "link_type": "ethernet",
+       "link_up_count": 1,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM 10GbE 2P 57412S Adptr",
+       "quantity": 1,
+       "speed_mbps": 10000
+      }
+     ],
+     "got": "[{\"link_type\": \"ethernet\", \"link_up_count\": 0, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM GbE 4P 5720-t rNDC\", \"quantity\": 4, \"speed_mbps\": 0}, {\"link_type\": \"ethernet\", \"link_up_count\": 1, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM 10GbE 2P 57412S Adptr\", \"quantity\": 7, \"speed_mbps\": 0}, {\"link_type\": \"ethernet\", \"link_up_count\": 1, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM 10GbE 2P 57412S Adptr\", \"quantity\": 1, \"speed_mbps\": 10000}]",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "r1_DELL_R740_01",
+   "case": "syn_dell_primary",
+   "defect_reproduced_on_base": true,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "status",
+     "expected": "success",
+     "got": "\"success\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.interfaces[id=NIC.Slot.2-1-1].is_primary",
+     "expected": true,
+     "got": "true",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.interfaces[id=NIC.Slot.2-1-1].speed_mbps",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.summary.primary_speed_mbps",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.network.summary.groups",
+     "expected": [
+      {
+       "link_type": "ethernet",
+       "link_up_count": 0,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM GbE 4P 5720-t rNDC",
+       "quantity": 4,
+       "speed_mbps": null
+      },
+      {
+       "link_type": "ethernet",
+       "link_up_count": 1,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM 10GbE 2P 57412S Adptr",
+       "quantity": 7,
+       "speed_mbps": null
+      },
+      {
+       "link_type": "ethernet",
+       "link_up_count": 1,
+       "manufacturer": "Broadcom Inc. and subsidiaries",
+       "model": "BRCM 10GbE 2P 57412S Adptr",
+       "quantity": 1,
+       "speed_mbps": 10000
+      }
+     ],
+     "got": "[{\"link_type\": \"ethernet\", \"link_up_count\": 0, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM GbE 4P 5720-t rNDC\", \"quantity\": 4, \"speed_mbps\": null}, {\"link_type\": \"ethernet\", \"link_up_count\": 1, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM 10GbE 2P 57412S Adptr\", \"quantity\": 7, \"speed_mbps\": null}, {\"link_type\": \"ethernet\", \"link_up_count\": 1, \"manufacturer\": \"Broadcom Inc. and subsidiaries\", \"model\": \"BRCM 10GbE 2P 57412S Adptr\", \"quantity\": 1, \"speed_mbps\": 10000}]",
+     "verdict": "PASS"
+    }
+   ],
+   "sa": [
+    "SA-10",
+    "SA-08"
+   ],
+   "verdict": "PASS"
+  },
+  {
+   "base": [
+    {
+     "check": "len(data.storage.physical_disks)",
+     "expected": 2,
+     "got": "2",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.storage.summary.grand_total_gb",
+     "expected": 2980,
+     "got": "2980",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no notice[storage] ~ Storage 가 가리키지 않아 추가",
+     "got": "0 hit(s)",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "dl380_gen12_02",
+   "case": "syn_dl380_partial_link",
+   "defect_reproduced_on_base": true,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "status",
+     "expected": "success",
+     "got": "\"success\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "len(data.storage.physical_disks)",
+     "expected": 4,
+     "got": "4",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.storage.summary.grand_total_gb",
+     "expected": 5960,
+     "got": "5960",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.storage.summary.groups",
+     "expected": [
+      {
+       "group_total_gb": 2980,
+       "media_type": "SSD",
+       "model": "MO001600PZWSH",
+       "protocol": "SAS",
+       "quantity": 2,
+       "unit_capacity_gb": 1490
+      },
+      {
+       "group_total_gb": 2980,
+       "media_type": "SSD",
+       "model": "MO001600PYHRE",
+       "protocol": "SAS",
+       "quantity": 2,
+       "unit_capacity_gb": 1490
+      }
+     ],
+     "got": "[{\"group_total_gb\": 2980, \"media_type\": \"SSD\", \"model\": \"MO001600PZWSH\", \"protocol\": \"SAS\", \"quantity\": 2, \"unit_capacity_gb\": 1490}, {\"group_total_gb\": 2980, \"media_type\": \"SSD\", \"model\": \"MO001600PYHRE\", \"protocol\": \"SAS\", \"quantity\": 2, \"unit_capacity_gb\": 1490}]",
+     "verdict": "PASS"
+    },
+    {
+     "check": "notice[storage] ⊇ ['섀시 DE00B000 의 드라이브 2건', 'Storage 가 가리키지 않아 추가']",
+     "got": "섀시 DE00B000 의 드라이브 2건 — Storage 가 가리키지 않아 추가",
+     "verdict": "PASS"
+    },
+    {
+     "check": "GET Chassis/DE00B000/Drives (미러 실응답)",
+     "got": [
+      "tree"
+     ],
+     "verdict": "PASS"
+    },
+    {
+     "check": "GET Chassis/DE00B000/Drives/2 (미러 실응답)",
+     "got": [
+      "tree"
+     ],
+     "verdict": "PASS"
+    },
+    {
+     "check": "GET Chassis/DE00B000/Drives/3 (미러 실응답)",
+     "got": [
+      "tree"
+     ],
+     "verdict": "PASS"
+    }
+   ],
+   "sa": [
+    "SA-12"
+   ],
+   "verdict": "PASS"
+  },
+  {
+   "base": [
+    {
+     "check": "수정 전 미러 출력 대비 차이 ⊆ ['data.system.power_state', 'diagnosis.details.notices']",
+     "got": {
+      "diff_paths": [
+       "data.hardware.power_state",
+       "diagnosis.details.notices[1].message",
+       "diagnosis.details.notices[1].section"
+      ],
+      "outside_allow": [
+       "data.hardware.power_state"
+      ]
+     },
+     "verdict": "FAIL"
+    },
+    {
+     "check": "data.storage.summary.grand_total_gb",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "dl380_gen12_03",
+   "case": "syn_g12_03_on",
+   "defect_reproduced_on_base": false,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "len(data.storage.physical_disks)",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.storage.summary.grand_total_gb",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.summary.health_rollup",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no notice[system] ~ 호스트 전원 Off 관측",
+     "got": "0 hit(s)",
+     "verdict": "PASS"
+    },
+    {
+     "check": "수정 전 미러 출력 대비 차이 ⊆ ['data.system.power_state', 'diagnosis.details.notices']",
+     "got": {
+      "diff_paths": [
+       "data.hardware.power_state",
+       "diagnosis.details.notices[1].message",
+       "diagnosis.details.notices[1].section",
+       "diagnosis.details.notices[2].message",
+       "diagnosis.details.notices[2].section"
+      ],
+      "outside_allow": [
+       "data.hardware.power_state"
+      ]
+     },
+     "verdict": "FAIL"
+    }
+   ],
+   "sa": [
+    "SA-07"
+   ],
+   "verdict": "FAIL"
+  },
+  {
+   "base": [
+    {
+     "check": "data.power.power_control.power_consumed_watts",
+     "expected": 521,
+     "got": "521",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.min_consumed_watts",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.max_consumed_watts",
+     "expected": 2000,
+     "got": "2000",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.summary.consumed_watts",
+     "expected": 521,
+     "got": "521",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "dl380_gen12_01",
+   "case": "syn_g12_psub_range",
+   "defect_reproduced_on_base": true,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "status",
+     "expected": "success",
+     "got": "\"success\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.power_consumed_watts",
+     "expected": 522,
+     "got": "522",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.min_consumed_watts",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.max_consumed_watts",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.avg_consumed_watts",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.interval_in_min",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.power_control.power_capacity_watts",
+     "expected": 3200,
+     "got": "3200",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.summary.consumed_watts",
+     "expected": 522,
+     "got": "522",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.power.summary.consumed_capacity_pct",
+     "expected": 16.3,
+     "got": "16.3",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no GET Chassis/1/Power",
+     "got": [],
+     "verdict": "PASS"
+    },
+    {
+     "check": "GET Chassis/1/PowerSubsystem",
+     "got": [
+      "tree"
+     ],
+     "verdict": "PASS"
+    },
+    {
+     "check": "GET Chassis/1/EnvironmentMetrics",
+     "got": [
+      "tree"
+     ],
+     "verdict": "PASS"
+    }
+   ],
+   "sa": [
+    "SA-19",
+    "SA-17"
+   ],
+   "verdict": "PASS"
+  },
+  {
+   "base": [
+    {
+     "check": "수정 전 미러 출력 대비 차이 ⊆ ['data.system.power_state', 'data.multi_node.partitions[0].system.power_state', 'diagnosis.details.notices']",
+     "got": {
+      "diff_paths": [
+       "data.hardware.power_state",
+       "data.multi_node.partitions[0].system.power_state",
+       "diagnosis.details.notices[3].message",
+       "diagnosis.details.notices[3].section"
+      ],
+      "outside_allow": [
+       "data.hardware.power_state"
+      ]
+     },
+     "verdict": "FAIL"
+    },
+    {
+     "check": "data.storage.summary.grand_total_gb",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "r1_HPE_CSUS3200_01",
+   "case": "syn_r1csus01_off",
+   "defect_reproduced_on_base": false,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "len(data.storage.physical_disks)",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.storage.summary.grand_total_gb",
+     "expected": 0,
+     "got": "0",
+     "verdict": "PASS"
+    },
+    {
+     "check": "notice[system] ⊇ ['호스트 전원 Off 관측']",
+     "got": "호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음",
+     "verdict": "PASS"
+    },
+    {
+     "check": "수정 전 미러 출력 대비 차이 ⊆ ['data.system.power_state', 'data.multi_node.partitions[0].system.power_state', 'diagnosis.details.notices']",
+     "got": {
+      "diff_paths": [
+       "data.hardware.power_state",
+       "data.multi_node.partitions[0].system.power_state",
+       "diagnosis.details.notices[3].message",
+       "diagnosis.details.notices[3].section"
+      ],
+      "outside_allow": [
+       "data.hardware.power_state"
+      ]
+     },
+     "verdict": "FAIL"
+    }
+   ],
+   "sa": [
+    "SA-07"
+   ],
+   "verdict": "FAIL"
+  },
+  {
+   "base": [
+    {
+     "check": "data.cpu.sockets",
+     "expected": 2,
+     "got": "2",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.cores_physical",
+     "expected": 32,
+     "got": "32",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.summary.groups[0].total_cores",
+     "expected": 32,
+     "got": "32",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.summary.groups[0].cores_per_socket",
+     "expected": 16,
+     "got": "16",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.memory.total_mb",
+     "expected": 131072,
+     "got": "131072",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.memory.summary.grand_total_gb",
+     "expected": 64,
+     "got": "64",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no notice[cpu] ~ 부분 합을 쓰지 않음",
+     "got": "0 hit(s)",
+     "verdict": "PASS"
+    },
+    {
+     "check": "no notice[memory] ~ 부분 합을 쓰지 않음",
+     "got": "0 hit(s)",
+     "verdict": "PASS"
+    }
+   ],
+   "base_label": "sr650_v4_01",
+   "case": "syn_v4_partial",
+   "defect_reproduced_on_base": true,
+   "extra": [
+    {
+     "errors_base": 0,
+     "errors_head": 0,
+     "status_base": "success",
+     "status_head": "success"
+    }
+   ],
+   "head": [
+    {
+     "check": "status",
+     "expected": "success",
+     "got": "\"success\"",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.sockets",
+     "expected": 2,
+     "got": "2",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.cores_physical",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "len(data.cpu.summary.groups)",
+     "expected": 1,
+     "got": "1",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.summary.groups[0].sockets",
+     "expected": 2,
+     "got": "2",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.summary.groups[0].total_cores",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.cpu.summary.groups[0].cores_per_socket",
+     "expected": null,
+     "got": "null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.memory.total_mb",
+     "expected": 131072,
+     "got": "131072",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.memory.installed_mb",
+     "expected": 131072,
+     "got": "131072",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.memory.summary.grand_total_gb",
+     "expected": 128,
+     "got": "128",
+     "verdict": "PASS"
+    },
+    {
+     "check": "data.memory.summary.groups",
+     "expected": [
+      {
+       "group_total_gb": 64,
+       "manufacturer": "Micron Technology",
+       "part_number": "MTC40F2046S1RC64BD2 MWFF",
+       "quantity": 1,
+       "speed_mhz": 6400,
+       "type": "DDR5",
+       "unit_capacity_gb": 64
+      }
+     ],
+     "got": "[{\"group_total_gb\": 64, \"manufacturer\": \"Micron Technology\", \"part_number\": \"MTC40F2046S1RC64BD2 MWFF\", \"quantity\": 1, \"speed_mhz\": 6400, \"type\": \"DDR5\", \"unit_capacity_gb\": 64}]",
+     "verdict": "PASS"
+    },
+    {
+     "check": "notice[cpu] ⊇ ['코어 수(TotalCores) 미상 CPU 1개', '부분 합을 쓰지 않음', 'cores_physical = null']",
+     "got": "코어 수(TotalCores) 미상 CPU 1개(그 모델 그룹의 total_cores · cores_per_socket = null) — 부분 합을 쓰지 않음: cores_physical = null",
+     "verdict": "PASS"
+    },
+    {
+     "check": "notice[memory] ⊇ ['CapacityMiB 미상 DIMM 1개', '부분 합을 쓰지 않음', '= MemorySummary.TotalSystemMemoryGiB 128']",
+     "got": "DIMM 합계를 확정하지 못함 (용량 CapacityMiB 미상 DIMM 1개) — 부분 합을 쓰지 않음: total_mb · installed_mb · summary.grand_total_gb = MemorySummary.TotalSystemMemoryGiB 128",
+     "verdict": "PASS"
+    },
+    {
+     "check": "notice[memory] ⊇ ['CapacityMiB 부재 DIMM 1/2']",
+     "got": "CapacityMiB 부재 DIMM 1/2 — 합계 미산출(slot 은 보존)",
+     "verdict": "PASS"
+    }
+   ],
+   "sa": [
+    "SA-04",
+    "SA-05"
+   ],
+   "verdict": "PASS"
+  }
+ ]
+}

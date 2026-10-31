@@ -1,0 +1,16 @@
+{"label": "csus3200_01", "path": "Chassis/r001u01/Drives", "status": 200, "note": "tree", "members": 4, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "csus3200_02", "path": "Chassis/r001u01/Drives", "status": 200, "note": "tree", "members": 4, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "csus3200_03", "path": "Chassis/r001u01/Drives", "status": 200, "note": "tree", "members": 4, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "dl380_gen12_01", "path": "Chassis/DE00B000", "status": 200, "note": "tree", "members": null, "links_drives": 0, "has_drives_link": true, "class": "MIRROR_REAL"}
+{"label": "dl380_gen12_01", "path": "Chassis/DE00B000/Drives", "status": 200, "note": "tree", "members": 8, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "dl380_gen12_02", "path": "Chassis/DE00B000", "status": 200, "note": "tree", "members": null, "links_drives": 0, "has_drives_link": true, "class": "MIRROR_REAL"}
+{"label": "dl380_gen12_02", "path": "Chassis/DE00B000/Drives", "status": 200, "note": "tree", "members": 8, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "dl380_gen12_04", "path": "Chassis/DE00B000", "status": 200, "note": "tree", "members": null, "links_drives": 0, "has_drives_link": true, "class": "MIRROR_REAL"}
+{"label": "dl380_gen12_04", "path": "Chassis/DE00B000/Drives", "status": 200, "note": "tree", "members": 8, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "r1_DELL_R740_01", "path": "Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1", "status": 200, "note": "tree", "members": null, "links_drives": 4, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "r1_HPE_CSUS3200_01", "path": "Chassis/r001u01/Drives", "status": 200, "note": "tree", "members": 0, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "r1_HPE_CSUS3200_02", "path": "Chassis/r001u01/Drives", "status": 200, "note": "tree", "members": 0, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "r1_HPE_CSUS3200_03", "path": "Chassis/r001u01/Drives", "status": 200, "note": "tree", "members": 2, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "r1_HPE_CSUS3200_04", "path": "Chassis/r001u01/Drives", "status": 200, "note": "tree", "members": 2, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}
+{"label": "r1_HPE_DL380_01", "path": "Chassis/DE00B000", "status": 200, "note": "tree", "members": null, "links_drives": 0, "has_drives_link": true, "class": "MIRROR_REAL"}
+{"label": "r1_HPE_DL380_01", "path": "Chassis/DE00B000/Drives", "status": 200, "note": "tree", "members": 8, "links_drives": 0, "has_drives_link": false, "class": "MIRROR_REAL"}

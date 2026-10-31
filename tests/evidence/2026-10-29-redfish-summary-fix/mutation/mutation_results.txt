@@ -1,0 +1,47 @@
+Mutation check — 2026-10-29, code at 866d28d8 (fix commits 1-6), tests = commit-7 working tree.
+Method: each line reverts one SA fix by an exactly-once replace in one file, runs the listed pytest files in a fresh process,
+restores the original bytes (sha256 verified). KILLED = pytest exit != 0. Counts show a partial failure (not a parse error).
+
+mutate.py (redfish_gather.py)
+KILLED   SA-17 telemetry truncation (revert _safe_round_int at the telemetry site) :: 5 failed, 44 passed
+KILLED   SA-17 helper truncates :: 15 failed, 34 passed
+KILLED   SA-09 Starting/Training back to down for NIC/ports :: 4 failed, 52 passed
+KILLED   SA-09 Enabled/Active back to up for NIC/ports :: 3 failed, 53 passed
+KILLED   SA-09 HBA-only down set loses Starting/Training (HBA policy must not move) :: 4 failed, 52 passed
+KILLED   SA-12 union only when Storage has no drives (old A-10) :: 23 failed, 15 passed
+
+mutate2.py (redfish_gather.py · normalize_standard.yml · filter_plugins/power_summary.py)
+KILLED   SA-05 module: unread DIMM keeps the partial sum :: 5 failed, 40 passed
+KILLED   SA-01 fabric endpoint_count back to len([]) :: 2 failed, 20 passed
+KILLED   SA-02 fabric_count back to 0 when not confirmed :: 2 failed, 20 passed
+KILLED   SA-01 manager_count without the completeness check :: 2 failed, 20 passed
+KILLED   SA-03 partition CPU manufacturer not canonicalised :: 17 failed, 32 passed
+KILLED   SA-03 partition DIMM GiB floored again :: 2 failed, 47 passed
+KILLED   SA-03 partition MemorySummary used without the check :: 2 failed, 47 passed
+KILLED   SA-19 EnvironmentMetrics ReadingRange back into min/max :: 1 failed, 4 passed
+KILLED   SA-04 cores_physical uses the partial core sum :: 9 failed, 36 passed
+KILLED   SA-04 sockets uses the partial list length :: 5 failed, 40 passed
+KILLED   SA-04 group total_cores is a partial sum :: 4 failed, 41 passed
+KILLED   SA-05 memory grand uses the partial DIMM sum :: 8 failed, 37 passed
+KILLED   SA-05 MemorySummary used without the check :: 3 failed, 42 passed
+KILLED   SA-07 storage grand sums regardless of the drive-list basis :: 7 failed, 38 passed
+KILLED   SA-07 empty but never-enumerated storage counts as 0 :: 3 failed, 42 passed
+KILLED   SA-08 group key keeps speed 0 :: 5 failed, 94 passed
+KILLED   SA-10 primary speed back to the first link-up NIC :: 4 failed, 41 passed
+KILLED   SA-01 adapter_count 0 when network_adapters not read :: 3 failed, 42 passed
+KILLED   SA-01 port_count 0 when network not read :: 2 failed, 43 passed
+KILLED   SA-06 Redfish rollup 'Unknown' with no installed PSU :: 2 failed, 15 passed
+KILLED   SA-06 ESXi rollup 'Unknown' with no PSU sensor :: 5 failed, 34 passed
+KILLED   B2 SA-07 module: unread drive member does not mark the list incomplete :: 2 failed, 58 passed
+KILLED   B2 SA-02 composition resource_block_count back to len() :: 5 failed, 17 passed
+KILLED   B2 SA-03 partition storage grand ignores the drive-list basis :: 5 failed, 44 passed
+KILLED   B2 SA-07 module: empty Storage Drives array is not a drive-list source :: 1 failed, 61 passed
+  (first run: SURVIVED — no test isolated "Storage Drives: [] alone = confirmed 0"; added
+   test_storage_empty_drives_array_alone_decides_zero_vs_null, then KILLED)
+
+Gap found and closed during this check: module-level SA-05 (DIMM member 500/404/no @odata.id) and module-level SA-04
+(Processor member 500) had only template-level tests — added replay tests on real_hpe_dl380_gen12_01
+(test_memory_module_* · test_cpu_module_unread_processor_is_not_counted_as_total). At 104bcaf0 the same DIMM-500
+mutation gave total_mib 1474560 (15 x 96 GiB partial sum); memory failed / status partial were already the case.
+
+Total: 31 mutations, 31 KILLED (one after adding the missing test).

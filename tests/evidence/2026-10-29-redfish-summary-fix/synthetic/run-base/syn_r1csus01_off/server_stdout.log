@@ -1,0 +1,1 @@
+READY {"mirror": "/root/se_syn_20261029/syn_r1csus01_off", "keys": 490, "raw": 0, "hang": [], "realm": "Basic realm=\"redfish\"", "noauth_root": true, "statuses": {"200": 490}, "load_s": 0.2, "pid": 5005}
