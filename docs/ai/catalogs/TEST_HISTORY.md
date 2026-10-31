@@ -14,7 +14,8 @@
 | A/B/C 독립 비교 | head PASS 666 · CM 36 · FAIL 0(두 번 실행 바이트 같음) / base PASS 642 · CM 36 · FAIL 24 |
 | 변이 | 31/31 KILLED |
 | 보존 | 개수 정합 18/18(2026-10-28 `_parity.md` 와 제목 줄만 다름) · 판별기 대조(불일치 69) · 132칸 · 처분 재집계(73) = 2026-10-28 산출과 sha256 같음 · LinkStatus 값 분포 2026-10-28 과 같음 · CSUS 7대 PCIe 카드 49개 링크 조건 모두 LinkUp |
-| Tier 0 · 최종 pytest | [WIP] 하네스 커밋 뒤 HEAD 에서 실행 — 결과는 다음 기록 커밋에서 이 행을 바꾼다 |
+| 정적(HEAD = 커밋 11 `90f9c0eb`, Windows, 2026-10-31) | Jinja 전체 컴파일(`pre_commit_jinja_compile_check.py --all --blocking`, self-test 5/5) · namespace 검사(`normalize_standard.yml`) 통과 · `verify_no_plaintext_secret.py --base 104bcaf0` 변경 427건 평문 0 · 변경 YAML/JSON 251 파싱 · 변경 Python 33 컴파일 오류 0 · `verify_harness_consistency.py` · `check_project_map_drift.py` 통과. yamllint 는 미설치 · 저장소 설정 없음 — YAML 파싱으로 대신했다 |
+| Tier 0 ci_gate(HEAD = 커밋 11 `90f9c0eb`, 2026-10-31) | Linux 공식 등가(WSL ext4 새 clone · 격리 venv Python 3.12.3 · ansible-core 2.20.3 · pytest 9.2.0 · `env -i` · pwsh 없음 · `Jenkinsfile_ci` Gate 명령) `RESULT: PASS` rc 0 — pytest 6504 passed · 183 skipped · 5 xfailed / integration 563 passed · 4 skipped · 1 deselected · JUnit failures 0 · errors 0 · corpus 20/20 MATCH · schema 정합(sections 11 · 사전 경로 264) · syntax-check 3 채널. Windows 작업 트리(`core.autocrlf=true`, ansible 없음) `RESULT: PARTIAL` rc 2 — 단계 FAIL 0, syntax-check 건너뜀(설계상) · pytest 6642 passed · 45 skipped · 5 xfailed / integration 540 passed · 6 skipped · 1 deselected · JUnit failures 0 · errors 0. 두 실행은 겹치지 않게 차례로 돌렸다. **공식 runner NOT_RUN** (`tests/evidence/2026-10-29-redfish-summary-fix/tier0/` · handoff 7절) |
 | 훅 우회 | 커밋 9(`0bc68f71`)는 additive-only 훅이 종전의 틀린 help 문장 삭제를 막아 `ADDITIVE_SKIP_NEW_CYCLE=1` 로 그 훅만 건너뛰었다 — `--no-verify` 미사용, 다른 훅은 모두 실행 |
 
 ## 2026-10-28 — 독립 검증 결함 정정 브랜치 재측정 (이 세션 자기 측정 · 독립 재검증 전)

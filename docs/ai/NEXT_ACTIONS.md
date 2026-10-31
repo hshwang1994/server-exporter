@@ -18,8 +18,8 @@
 - [ ] **[LOW / 확인] 감사 S 번호 정의** — S3 · S4 · S5 · S7 · S8 · S11 · S12 · S13 · S21 은 감사 폴더 어디에도 없다(`audit_case_test_map.md` 0절).
 - [ ] **[LOW / 선택] `tests/unit/test_power_summary_b58_b59.py` 복사 구현 정리** — 운영 템플릿 동치 시험(`543a1794`)이 drift 를 잡으므로 복사본 제거는 선택.
 - [ ] **[HOLD] 아래 2026-10-28 절의 HOLD 3건** — 03-network-002 잔여 2 NIC(HOLD-a) · 05-thermal-003 (b)(HOLD-b) · 03-storage-001 (b)(HOLD-c). 이번 범위 밖, 그대로.
-- [ ] **[LOW / 환경] Windows 실행 주의** — (1) pytest 묶음 · Tier 0 gate 를 겹쳐 돌리면 메모리 부족으로 중단된다(2026-10-28 과 같음) — 한 번에 하나씩. (2) `tests/unit/test_linux_hba_ib_markers.py::test_rate_parsing_keeps_decimal_and_nulls_when_not_active`(Git `sh.exe` 하위 실행)가 Windows 에서 가끔 멈췄다 — 변경과 무관, 그 파일만 다시 돌리면 통과. 원인 미조사.
-- [ ] **[LOW / 정리] 이 세션 임시물** — WSL `/root/se_syn_20261029`(합성 사본) · WSL `~/se-fix-20261029`(Tier 0 clone) · scratchpad worktree(`wt_base` · `wt_c5` · `wt_c6`).
+- [ ] **[LOW / 환경] Windows 실행 주의** — (1) pytest 묶음 · Tier 0 gate 를 겹쳐 돌리면 메모리 부족으로 중단된다(2026-10-28 과 같음) — 한 번에 하나씩. (2) `tests/unit/test_linux_hba_ib_markers.py::test_rate_parsing_keeps_decimal_and_nulls_when_not_active`(Git `sh.exe` 하위 실행)가 Windows 에서 가끔 멈췄다 — 변경과 무관, 그 파일만 다시 돌리면 통과. 2026-10-31 Windows gate 에서는 11개 경우 모두 통과(가장 긴 경우 7.8 s). 원인 미조사.
+- [x] **[DONE 2026-10-31] 이 세션 임시물 정리** — scratchpad worktree(`wt_base` · `wt_c5` · `wt_c6`) · WSL `~/se-fix-20261029`(Tier 0 clone) · WSL `/root/se_syn_20261029`(합성 사본)를 지웠다. WSL venv `~/venv-se-ci-20261028` 은 Tier 0 재실행용으로 남겼다. 감사 폴더 `se-indep-20261027` · `se-indep-20261028` 과 그 worktree 3개는 건드리지 않았다.
 
 ## Redfish 2차 Mock 독립 검증 결함 정정 (2026-10-28) — 남은 항목
 
