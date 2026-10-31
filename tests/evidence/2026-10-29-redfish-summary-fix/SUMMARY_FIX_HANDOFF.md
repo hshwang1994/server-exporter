@@ -203,9 +203,9 @@ python -I -X utf8 -B $D/mutation/mutate.py ; python -I -X utf8 -B $D/mutation/mu
 
 [TODO] 커밋 11(harness) 뒤 HEAD 에서 돌리고 이 절을 커밋 12 에서 채운다. 공식 Runner(`clovirone-server-gather-ci`)는 `*/main` 전용이라 이 브랜치로 돌릴 수 없다 — "로컬 Linux 등가 gate" 로만 보고하고 공식 Runner CI PASS 로 쓰지 않는다.
 
-## 8. Plan 문구와 실측이 다른 곳
+## 8. Plan 문구와 실측 · 구현이 다른 곳
 
-Plan 은 저장소 밖(사용자 승인본)이라 고치지 않고 여기에 적는다. 저장소 문서에는 실측값만 넣었다.
+Plan 은 저장소 밖(사용자 승인본)이라 고치지 않고 여기에 적는다. 저장소 문서에는 실측값만 넣었다. 뒤쪽 6행은 Plan 의 세부와 다르게 구현한 곳이다(의도는 같다).
 
 | Plan 문구 | 실측 | 근거 |
 |---|---|---|
@@ -216,6 +216,12 @@ Plan 은 저장소 밖(사용자 승인본)이라 고치지 않고 여기에 적
 | 10절: 합성 `syn_v4_links`(sr650_v4_02) | `syn_dell_links`(r1_DELL_R740_01)로 만들었다. 같은 값(NIC `Enabled` · 포트 `Training` · `LinkFlapping`)을 NIC 자체 `LinkStatus` 와 카드 `NetworkPorts` 가 함께 있는 미러에 넣었다 | `synthetic/expected.json` |
 | 14절: 커밋 11개 | 테스트 커밋 2개(`b2fd9c0d` · `543a1794`)와 Tier 0 기록 커밋이 더 있다 | 2절 |
 | 15절 조건 4: "합성 사례 전부 PASS (사전 기록한 기대값 기준)" | **등록 기준으로는 충족하지 못했다(7/9).** FAIL 2는 기대값 경로 오기이며 정오표 · 사후 점검(9/9)을 남겼다. 받아들일지는 검증자 · 사용자 판단이다(10절 질문 2) | `synthetic/ERRATUM.md` |
+| 8절 SA-07: 드라이브 목록 신호를 storage 반환 dict 의 내부 키 `_inventory` 로 넘긴다 | `gather_storage(..., inventory_out=<dict>)` 출력 인자로 넘긴다. top-level 은 `aux_out['storage_inventory']`, 파티션은 `_normalize_storage_raw(sto_data, part_inv)` 로 간다. storage dict 에 비어 있지 않은 내부 키가 생기면 섹션 runner 의 빈 결과 판정(`_is_empty_result` — 404 만 난 빈 결과를 미지원으로 분류)이 깨지기 때문이다. 판정 의미와 출력은 Plan 과 같다 | RG `gather_storage` docstring |
+| 3절 SA-07: incomplete 대상 목록(섀시는 `Drives` 컬렉션만 적음) | 섀시 본문(System 섀시 · `Links.Enclosures`)의 404 아닌 실패도 incomplete + errors[] 로 센다. 본문이 드라이브 목록 경로 위에 있기 때문이다. 404 는 미제공 | RG `_chassis_drives_union` |
+| 3절 SA-09: network notice 섹션당 1건 | NIC 은 EthernetInterfaces 경로당 1건(섹션 `network` — 다중 System 이면 System 마다 1건), 포트는 NetworkAdapters 수집 1회당 1건(섹션 `network_adapters`) | RG `gather_network` · `gather_network_adapters` 끝 |
+| 3절 SA-17: 절삭 → 반올림 | 부수 효과: legacy `PowerControl` 측정값이 소수 문자열('412.6')이면 종전 `_safe_int` 는 None 으로 버렸고 이제 413 이다. 18대 Tier 1 · golden 대장에서 None → 수 변화는 0 | RG `gather_power` 주석 |
+| 9절 SA-17 예시(golden 소비전력 2건) | `data.multi_node.chassis[].power.power_control.power_consumed_watts` 도 같은 값으로 바뀐다(3.1절 — 3대 × 3경로) | `tier1/explained.md` |
+| (Plan · 감사에 없음) 용량 미상 디스크 | 구현 중 "용량 미상 디스크가 있으면 grand null" 규칙을 넣었다가 되돌렸다. 승인 범위 밖이고, 기존 계약 시험 `tests/unit/test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped`(용량 0 · None 디스크는 그룹 · 합에서 뺀다)를 깨기 때문이다. 현행대로 그 디스크를 빼고 합한다. 18대 Tier 1 봉투의 디스크 52개(파티션 포함) 중 용량 미상 0개. 정책 질문은 9절 | 커밋 4 |
 
 ## 9. 남은 것
 
@@ -228,6 +234,7 @@ Plan 은 저장소 밖(사용자 승인본)이라 고치지 않고 여기에 적
 | SA-07 실장비 | [MOCK_LIMITATION] | 다른 벤더가 전원 Off 에서 내는 드라이브 목록 원천. `Drives: []` 를 주는 BMC 는 "확인한 0" 으로 처리되는 한계, 디스크 없는 장비가 원천을 전혀 노출하지 않으면 null |
 | SA-09 · SA-17 실장비 | [MOCK_LIMITATION] | Starting · Training 을 실제로 내는 장비(18대 관측 0) · Telemetry 정밀도 |
 | `power.summary.psu_count` 신호 | [TODO] | PSU 목록만 노출되지 않은 경우를 가를 신호가 없다 — 별도 설계 |
+| 용량 미상 디스크가 섞인 storage 합계 | [TODO / 사용자 결정] | 현행은 그 디스크를 빼고 합한다. 일부만 확인한 합이 전체 합처럼 보일 수 있어 이번 원칙과 어긋난다. 선택지: (1) 현행 유지 + 문서화 (2) Redfish 에서 null + notice(SA-04 · 05 와 같은 방식 — 기존 계약 시험 기대값이 바뀐다). 18대 영향 0 |
 | OS · ESXi storage 미관측 정책 | [TODO] | SA-07 은 Redfish 만 바꿨다(OS · ESXi 는 수집 실패면 섹션 failed). 같은 구분이 필요한지 사용자 결정 |
 | S22 중복 제거 키 구분자(NS `name~model~serial`) | [TODO] | 감사도 NOT_RUN · 낮은 위험. 별도 수정 |
 | `test_power_summary_b58_b59.py` 복사 구현 | [INFO] 남겨 둠 | 모든 입력에서 운영 템플릿과 12키 동치를 단정하므로 drift 는 잡힌다(`543a1794`). 복사본 제거는 선택 |
