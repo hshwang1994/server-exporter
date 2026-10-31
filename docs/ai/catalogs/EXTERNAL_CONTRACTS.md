@@ -2,6 +2,18 @@
 
 > 외부 시스템 (Redfish / IPMI / SSH / WinRM / vSphere) 계약 카탈로그. rule 28 #11 측정 대상 (TTL 90일). rule 96 origin 주석 정본.
 
+## 일자: 2026-10-29 — DMTF Sensor `ReadingRange` · Chassis `Drives` / Storage `Links.Enclosures` · LinkStatus 전이 값 · System 요약값 (Summary 정합성 수정)
+
+> 정본: `tests/evidence/2026-10-29-redfish-summary-fix/`(SUMMARY_FIX_HANDOFF · tier1/new_get_sources.jsonl · replay_miss_ledger.json · preservation/linkstatus_values.md) · `docs/contract/03-fields.md` · `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`. 실측: 2차 Mock 11대 + 1차 7대 미러(실장비 캡처본 — 실장비 실시간 검증 아님).
+
+| 계약 | 정본 | server-exporter 적용 |
+|---|---|---|
+| DMTF `Sensor.ReadingRangeMin` · `ReadingRangeMax`(EnvironmentMetrics `PowerWatts`) | 센서가 잴 수 있는 범위다 — 관측한 최소 · 최대가 아니다(source: https://redfish.dmtf.org/schemas/v1/Sensor.json) | SA-19: min/max 소비전력으로 쓰지 않는다(null). `Reading` 만 소비전력 후보. 18 미러는 legacy `Power` 경로라 출력 영향 0 |
+| DMTF `Chassis.Drives` · `Chassis.Links.Drives` · `Storage.Links.Enclosures` | 섀시가 담은 드라이브 컬렉션 · 드라이브 링크, Storage 가 연결한 enclosure 섀시(source: https://redfish.dmtf.org/schemas/v1/Chassis.json · https://redfish.dmtf.org/schemas/v1/Storage.json). 18 미러 실측: CSUS `Chassis/r001u01/Drives` 200(멤버 4 · 4 · 4 · 2 · 2 · 0 · 0) · DL380 `Chassis/DE00B000` 200 → `/Drives` 멤버 8 · R740 `Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1` 200(`Drives` 미광고 · `Links.Drives` 4) — 전부 Storage 가 가리킨 것과 같은 URI | SA-12: Storage 가 가리킨 드라이브 ∪ 섀시가 광고한 드라이브(중복 `@odata.id` → SerialNumber). 광고한 링크만 GET, 404 = 미제공, 그 밖의 실패 = 미완결(합계 null). 18대 추가 드라이브 0. [MOCK_LIMITATION] — 섀시에만 드라이브가 노출되는 실장비 · golden recording 에 없는 경로의 실장비 응답 · HPE 에뮬레이터 4세트 경로(`Chassis/DE00A000` · `DE042000` · `DE00B000`) 미검증 |
+| DMTF `Port.LinkStatus` · `NetworkPort.LinkStatus` 전이 값 | `Starting` · `Training` 은 링크 협상 중이다(source: https://redfish.dmtf.org/schemas/v1/Port.json · https://redfish.dmtf.org/schemas/v1/NetworkPort.json). 18 미러 · fixture 관측 0(2026-10-28 행의 분포와 같음) | SA-09: 일반 NIC · 포트는 unknown + notice(InfiniBand `_normalize_ib_link_status` 와 같아짐). `Enabled` · `Active` · 미인식 값도 일반 NIC · 포트는 unknown. HBA 는 그대로 down(`_HBA_LINK_DOWN_VALUES`) |
+| HPE CSUS 3200 FlexGrid `Fabrics/<id>` | 본문에 `Endpoints` 키가 없다 · `Switches` 2(7대 미러 모두) | SA-01: `endpoint_count` null(종전 0) · `endpoints` `[]` 유지 · `switch_count` 2 |
+| DMTF `ProcessorSummary.CoreCount` · `Count` / `MemorySummary.TotalSystemMemoryGiB` | System 범위의 요약값(source: https://redfish.dmtf.org/schemas/v1/ComputerSystem.json) | SA-04 · 05: CPU · DIMM 목록이 미완결일 때 검사를 통과한 요약값만 쓰고(CoreCount ≥ 아는 코어 합 + 미상 CPU 수 등), 아니면 null. 18 미러 발동 0(합성 `syn_v4_partial` 로 확인) |
+
 ## 일자: 2026-10-28 — Redfish HBA `LinkStatus` up 값 · XCC3 NIC ↔ 포트 MAC 조인 · 전력 용량 원천 · XCC3 RedfishVersion (독립 검증 결함 정정)
 
 > 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(02-hba-link-policy · 01-f01-nic-link-fill · linkstatus_values · REVIEW_FIX_HANDOFF) · `docs/contract/03-fields.md` 6.3.2 · 6.4 · `docs/reference/decision-log.md` 2026-10-28. 실측: 2차 Mock 11대 + 1차 7대 미러(실장비 캡처본 — 실장비 실시간 검증 아님). 사용자 결정 Q1(2026-10-28).

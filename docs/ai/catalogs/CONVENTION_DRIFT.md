@@ -19,6 +19,16 @@
 
 ---
 
+## DRIFT-033 (2026-10-29, resolved — Summary 감사에서 드러난 사전 · 계약 문서끼리의 충돌과 구현과 어긋난 문장 묶음)
+
+- **발견 위치**(기준 `104bcaf0`): `schema/field_dictionary.yml` :695 `storage.physical_disks[]` "시스템 전체 물리 디스크" ↔ :834 · `docs/contract/03-fields.md` :616 "Storage 전체에 드라이브가 0건일 때만 섀시 `Drives` 폴백";
+  03-fields :1469-1471 "파티션 단위 요약은 계산하지 않는다" · 존재하지 않는 `memory.total_gb`; 03-fields 6.3.3 "ports = down / infiniband = unknown 으로 갈릴 수 있다"; FD :984 · :990(SA-11 단위 서술); 그룹 키 목록 공백 · `memory.free_mb` · `network.portgroups` 미등재
+- **분류**: catalog-stale(사전 · 계약) + convention-violation(문서끼리 충돌)
+- **설명**: 정의("시스템 전체")와 동작 서술("Storage 0건일 때만 폴백")이 달랐다. 감사가 SA-12 로 분류했고 정의 쪽이 맞아 동작을 고쳤다(섀시 드라이브 합집합 — 문서만 고쳐 끝내지 않음). 파티션 summary 는 실제로 계산되는데 문서는 반대로 적었다(SA-03). Starting · Training 의 ports 값이 unknown 으로 바뀌어 6.3.3 문장의 전제가 사라졌다(SA-09)
+- **영향**: 문서 · 사전만 — 키 · 타입 칸 · channel · enum · priority 불변, +2 항목은 이미 나가던 키
+- **resolved (2026-10-29)**: 사전 · 계약 `0bc68f71` + 코드 `ca5e5c54`(SA-12 합집합) · `92d03169`(SA-09) · `d18f5ca3`(SA-03). 근거 `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md` 1절
+- **관련**: rule 13 R7 · rule 92 R2 · rule 96 R1-B, `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`
+
 ## DRIFT-032 (2026-10-28, open — Lenovo XCC3 adapter 의 RedfishVersion 주석 · metadata ↔ 미러 실측)
 
 - **발견 위치**: `adapters/redfish/lenovo_xcc3.yml` 주석(:18 · :34 "RedfishVersion 1.15.0 (실측 2026-06-15)") · metadata `redfish_version: "1.17.0"` · `docs/ai/catalogs/VENDOR_ADAPTERS.md` Lenovo 표

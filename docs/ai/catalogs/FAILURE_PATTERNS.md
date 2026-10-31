@@ -1279,3 +1279,55 @@
   - 증거 해시는 blob(`git show :<경로>` 또는 `HEAD:<경로>`)으로 계산하고, 문서에 적은 방법으로 한 번 다시 계산해 맞는지 확인한 뒤 커밋한다
   - 문서 · 로그에서 뽑은 명령은 먼저 출력해 범위를 확인한 뒤 실행한다
 - 관련 rule: rule 25 R7-A · rule 24 R1 · rule 70 R3
+
+---
+
+## 2026-10-29 — 원천이 주지 않은 값을 0 으로, 일부만 확인한 합을 전체 합으로 적었다 (Summary 감사 SA-01 · 02 · 03f · 04 · 05 · 07 · 08)
+
+- 카테고리: scope-miss · convention-drift (null 과 0 의 혼동 — rule 95 R1 #5)
+- 발견 위치: 독립 Summary 감사(`se-indep-20261028/SUMMARY_AUDIT_REPORT.md`, 기준 `104bcaf0`) — `_gather_fabric_members` 의 `[]` → `len()` 0 · `_collect_multi_node_topology` 의 `else 0` · normalize `cores_physical` 의 select 합 · `_rf_summary_memory` 의 아는 DIMM 합 · 파티션 사본의 `_safe_int(..., 0)` · storage 합계 0 · NIC 속도 그룹 0
+- 증상: CSUS 7대 `multi_node.fabrics[].endpoint_count` 0(원천 FlexGrid 에 `Endpoints` 키 없음 — 감사 FAIL 관측 7). 나머지는 합성 미러 · 함수 단위에서만 발동(18대 출력 영향 0)
+- 원인: "빈 목록" 과 "읽지 못함" 을 같은 값으로 다뤘고, 기본값 0(`default(0)` · `_safe_int(x, 0)` · `else 0`)이 "모름" 을 "0" 으로 바꿨다. 합을 낼 때 목록이 온전한지(멤버 실패 · 미상 항목)를 보지 않았다. 파티션 사본은 top-level 수정(2026-10-19)을 따라가지 않았다
+- 영향: Redfish summary 개수 · 합계(top-level · 파티션). 호출자 — 값이 null 로 나오는 조건만 넓어짐(키 변화 0)
+- 수정: 커밋 `a1b6713f` · `19e3af89` · `d18f5ca3` · `ca5e5c54` · `92d03169` · `866d28d8`, `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`
+- 재발 방지: 개수는 "원천 컬렉션을 끝까지 읽었는가" 를 함께 돌려주는 형태(확인 여부 반환 · `inventory_out`)로만 정수를 낸다. 합은 목록이 온전하고 미상 항목이 없을 때만 낸다. 시험 `tests/unit/test_multi_node_counts_sa01.py` · `test_redfish_summary_null_rules.py` · `test_partition_summary_rules_sa03.py`(FIX 2 표 drift 포함), 변이 31/31. 파티션 사본을 고칠 때는 top-level 과 같은 입력으로 대조한다
+- 관련 rule: rule 95 R1 #5 · #7, rule 22, rule 96 R1-B
+
+---
+
+## 2026-10-29 — 승인 Plan 에 없던 규칙(용량 미상 디스크 → 합계 null)을 구현에 넣었다가 기존 계약 시험이 깨져 되돌렸다
+
+- 카테고리: scope-miss (승인 범위 이탈)
+- 발견 위치: 커밋 4(`ca5e5c54`) 작업 중 — `tests/unit/test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped` 실패
+- 증상: "부분 합 금지" 와 같은 원칙이라 보고 storage 합계에 "용량 미상 디스크가 있으면 null" 을 더했다. 기존 계약(용량 0 · None 디스크는 그룹 · 합에서 뺀다) 시험이 실패했다
+- 원인: 원칙이 같다는 이유로 Plan · 감사에 없는 규칙을 승인 없이 넣었다
+- 영향: 커밋 전에 되돌림 — 출력 영향 0(18대 디스크 52개 중 용량 미상 0)
+- 수정: 되돌림(커밋 4 에 포함되지 않음). 정책 질문으로 handoff 9절 · NEXT_ACTIONS 2026-10-29 에 올림
+- 재발 방지: 원칙에서 파생된 새 규칙은 구현 전에 "Plan 에 있는가" 를 확인하고, 없으면 사용자 결정 목록에 올린다
+- 관련 rule: rule 91 R2, rule 92 R2
+
+---
+
+## 2026-10-29 — 합성 미러 기대값에 실제와 다른 필드 경로(`data.system.power_state`)를 적어 등록 기준 FAIL 2
+
+- 카테고리: ai-hallucination (필드 경로 추정)
+- 발견 위치: `tests/evidence/2026-10-29-redfish-summary-fix/synthetic/expected.json` — `syn_g12_03_on` · `syn_r1csus01_off` 의 허용 차이 목록(`only_diffs_vs_unmodified`)
+- 증상: 등록 기준 7/9 PASS. 두 사례의 값 단정은 PASS 인데 허용 경로가 `data.system.power_state` 라, 실제로 바뀐 `data.hardware.power_state` 가 "허용 밖 차이" 로 잡혔다
+- 원인: 전원 상태 키의 위치를 봉투에서 확인하지 않고 이름으로 추정했다(`data.system` 에는 `power_state` 키가 없다)
+- 영향: 판정 기록만(제품 0). 사전 등록 기대값은 고치지 않고 정오표 + 사후 점검(9/9)으로 남겼다
+- 수정: `synthetic/ERRATUM.md` · `synthetic/expected_posthoc.json`
+- 재발 방지: 기대값을 등록하기 전에 경로마다 기준 봉투(같은 미러의 Tier 1 출력)에 그 키가 있는지 기계로 확인한다 — 없는 경로면 등록하지 않는다
+- 관련 rule: rule 25 R7-B, rule 95 R3
+
+---
+
+## 2026-10-29 — 감사 사례 번호(S1~S22)가 8개만 나온다고 적었는데 실제로는 13개였다
+
+- 카테고리: scope-miss (근거 탐색 범위)
+- 발견 위치: `tests/evidence/2026-10-29-redfish-summary-fix/audit_case_test_map.md` 0절(2026-10-29 작성 → 2026-10-31 보완, 커밋은 보완본만 `578677a2`)
+- 증상: 2026-10-29 판은 보고서에서 S 번호를 8개만 찾았다고 적었다. 2026-10-31 재검색에서 보고서 부록 A 의 S2 · S15, 8.3 절의 S16, 감사 도구 주석의 S10 · S19 가 더 나왔다(합 13). 번호별 정의 목록은 어디에도 없다
+- 원인: 보고서의 부록 · 다른 절과 감사 도구 소스까지 검색하지 않았다
+- 영향: 대응표에서 번호 5개 누락. 빠진 번호의 사례는 모두 이미 시험 · 합성이 있었다(대응표 1절) — 시험 공백은 아니었다
+- 수정: `audit_case_test_map.md` 0 · 1 · 5절 보완
+- 재발 방지: 감사 근거를 셀 때는 보고서 전체(본문 · 표 · 부록)와 감사 도구 소스를 `S[0-9]+` 정규식으로 전수 검색하고, 찾은 번호와 위치를 표에 그대로 남긴다
+- 관련 rule: rule 25 R7-A, rule 24 R2

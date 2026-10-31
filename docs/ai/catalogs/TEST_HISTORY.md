@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-29 — Redfish Summary 정합성 수정 브랜치 측정 (이 세션 자기 측정 · 독립 재검증 전)
+
+> 정본: `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md` 5 · 7절. 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`). 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7(playbook) · Ubuntu-24.04(HTTPS 미러 재생) — 2026-10-28 과 같은 구성. 측정 2026-10-29, 기록 2026-10-31.
+
+| 구분 | 결과 |
+|---|---|
+| pytest 4묶음(Windows, 커밋 8 `1b125686` 시점) | unit 5531 passed · 33 skipped / integration(`-m "not live"`) 540 passed · 6 skipped · 1 deselected / e2e 876 passed · 6 skipped / regression 222 passed · 6 skipped · 5 xfailed — 실패 0 |
+| 새 시험(HEAD `543a1794`) | 7파일 269 passed + `tests/unit/test_power_summary_b58_b59.py` 22 passed |
+| Tier 1(실제 playbook + HTTPS 미러, 18 label) | 18/18 rc 0 · success · errors 0 · adapter 같음 · 기준 대비 차이 34 = 허용 목록 10항목으로 전부 설명 · 미설명 0 · 새 GET 14 경로 전부 미러 실응답 · 불변 항목 위반 0 · 기준(`104bcaf0`) 재실행 = 2026-10-28 `tier1-A`(차이 0) |
+| Tier 2(모듈 재생, 18 label) | 18/18 success · golden 15 label GOLDEN_KEYS 차이 0 |
+| 합성 미러 9건(Tier 1) | 등록 기준 head 7/9 PASS — FAIL 2 는 기대값의 경로 오기(`data.system.power_state` → 실제 `data.hardware.power_state`)이고 값 단정은 PASS. 사후 점검 head 9/9 · base 9/9 결함 재현(사전 등록 PASS 로 세지 않음, `synthetic/ERRATUM.md`) |
+| A/B/C 독립 비교 | head PASS 666 · CM 36 · FAIL 0(두 번 실행 바이트 같음) / base PASS 642 · CM 36 · FAIL 24 |
+| 변이 | 31/31 KILLED |
+| 보존 | 개수 정합 18/18(2026-10-28 `_parity.md` 와 제목 줄만 다름) · 판별기 대조(불일치 69) · 132칸 · 처분 재집계(73) = 2026-10-28 산출과 sha256 같음 · LinkStatus 값 분포 2026-10-28 과 같음 · CSUS 7대 PCIe 카드 49개 링크 조건 모두 LinkUp |
+| Tier 0 · 최종 pytest | [WIP] 하네스 커밋 뒤 HEAD 에서 실행 — 결과는 다음 기록 커밋에서 이 행을 바꾼다 |
+| 훅 우회 | 커밋 9(`0bc68f71`)는 additive-only 훅이 종전의 틀린 help 문장 삭제를 막아 `ADDITIVE_SKIP_NEW_CYCLE=1` 로 그 훅만 건너뛰었다 — `--no-verify` 미사용, 다른 훅은 모두 실행 |
+
 ## 2026-10-28 — 독립 검증 결함 정정 브랜치 재측정 (이 세션 자기 측정 · 독립 재검증 전)
 
 > 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(REVIEW_FIX_HANDOFF 5 · 7절 · tier1-A/B · tier2-A · parity-A · oracle-A · cell_check · recount · tier0). 브랜치 `fix/redfish-mock2-review-20261028`. 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7(playbook) · Ubuntu-24.04(HTTPS 미러 재생) — 구현 · 독립 검증과 같은 구성.

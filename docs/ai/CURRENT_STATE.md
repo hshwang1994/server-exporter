@@ -1,5 +1,17 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-29 — Redfish Summary 정합성 결함 수정 SA-01~19 — **재검증 대기** (main 미병합 · production 미승격)
+
+> 정본: `tests/evidence/2026-10-29-redfish-summary-fix/`(SUMMARY_FIX_HANDOFF · audit_case_test_map · tier1 · tier1-after · tier2-after · synthetic · abc · mutation · preservation · golden_changes · replay_miss_ledger · tier0) · 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0` = 2026-10-28 정정 브랜치 HEAD, 그 브랜치에는 커밋을 더하지 않음) · `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md` · 감사 보고서 `C:\github\ClovirONE\se-indep-20261028\SUMMARY_AUDIT_REPORT.md`(저장소 밖, 읽기 전용).
+
+- **계기**: 독립 Summary 감사(기준 `104bcaf0`)가 1,670건 중 FAIL 7 · CONTRACT_MISMATCH 168 · MOCK_LIMITATION 85 · HOLD 8 을 냈다. 원인은 "원천 미제공 → 0" 과 "부분 합 → 전체 합". 사용자 지시서(2026-10-29) · Plan 승인(반려 의견: SA-07 전원 상태 미사용 · SA-09 전이 상태 unknown · SA-12 404 출처 구분) · 결정 5건(SA-06 두 채널 null · SA-01 목록 `[]` 유지 · SA-08 Summary 만 · SA-11 내림 유지 · SA-17 half-even).
+- **제품 변경**: `redfish-gather/library/redfish_gather.py` · `redfish-gather/tasks/normalize_standard.yml` · `filter_plugins/power_summary.py`(ESXi, SA-06) — 커밋 1~6(`a1b6713f` ~ `866d28d8`). OS · `common/tasks` · callback · adapters · vault · Jenkinsfile · `schema/sections.yml` 변경 0. envelope · `schema_version` 불변, 키 추가 · 삭제 0(값이 null 로 나오는 조건만 넓어짐). 새 GET 14 경로(SA-12 — 광고한 링크만).
+- **시험·데이터**: 새 시험 7파일 + 기존 고정값 갱신(커밋 7) · 감사 사례 보강 2커밋(3.7 M3 · C2 `b2fd9c0d`, 부록 A S14 운영 템플릿 동치 `543a1794`) · golden 4세트 12경로 · CSUS baseline 재생성(FIX 5 방법) · `request_budget.json` 8건(커밋 8 — 대장 `golden_changes.json` · `replay_miss_ledger.json`).
+- **문서·사전**: 사전 머리 메모 · help + 2 항목(`memory.free_mb` · `network.portgroups`) · `docs/contract/03-fields.md`(커밋 9 — additive-only 훅만 `ADDITIVE_SKIP_NEW_CYCLE=1`), SA-13 정정 addendum(2026-10-28 `01-f01-nic-link-fill.md`), DRIFT-033.
+- **검증(이 세션 자기 측정)**: Tier 1 18/18 · 차이 34 전부 허용 목록 · 새 GET 14 전부 미러 실응답; Tier 2 18/18 · golden 15 차이 0; 합성 9건 등록 기준 7/9(FAIL 2 = 기대값 경로 오기, 정오표 · 사후 9/9); A/B/C head FAIL 0 · CM 36(F-01 보충) / base FAIL 24; 변이 31/31; 보존 항목(개수 정합 · 판별기 69 · 132칸 · 처분 73 · HBA 값 · XCC3 선택 · F-01 20건) 전부 그대로. pytest · Tier 0 수치는 TEST_HISTORY 2026-10-29.
+- **남은 것**: HOLD 3건 그대로 · SA-12 · 07 · 09 · 17 실장비 확인 · 용량 미상 디스크가 섞인 storage 합계 정책(사용자 결정) · 공식 runner NOT_RUN · 실장비 검증 0.
+- **판정**: 재검증 대기 — 새 독립 세션이 `SUMMARY_FIX_HANDOFF.md` 로 다시 돌린다. main 병합 · production 승격은 하지 않았다(사용자 지시). 호출자 영향(handoff 3.1 · 3.4절): CSUS `multi_node.fabrics[].endpoint_count` 0 → null · 파티션 cpu `manufacturer` 'Intel' · 소비전력 +1 W(3대) · Dell/Lenovo `network.summary.groups[].speed_mbps` 0 → null · dl380_gen12_03 `power.summary.health_rollup` · `storage.summary.grand_total_gb` → null.
+
 ## 일자: 2026-10-28 — 2차 Mock 구현 독립 검증 결함 F-01~F-10 정정 · HBA 링크 up 값 한정 — **재검증 대기** (main 미병합 · production 미승격)
 
 > 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(REVIEW_FIX_HANDOFF · 01-f01-nic-link-fill · 02-hba-link-policy · recount · cell_check · linkstatus_values · mirrors · tier1-A/B · tier2-A · parity-A · oracle-A · tier0) · 브랜치 `fix/redfish-mock2-review-20261028`(분기 `f92ebe6a` — 독립 검증을 받은 구현 브랜치의 HEAD, 그 브랜치에는 커밋을 더하지 않음) · 독립 검증 보고서 `C:\github\ClovirONE\se-indep-20261027\INDEPENDENT_REVIEW_RESULT.md`(저장소 밖, 읽기 전용).

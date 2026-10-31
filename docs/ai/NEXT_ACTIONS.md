@@ -1,5 +1,26 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Redfish Summary 정합성 수정 (2026-10-29) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md`(9 · 10절) · 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`, main 미병합) · `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`. 제품 동작 변경은 Redfish 2파일 + ESXi `filter_plugins/power_summary.py`(SA-06).
+
+- [ ] **[HIGH / 사용자 — 새 독립 세션] 독립 재검증** — handoff 6절 명령(Tier 1 · 2 · 합성 · A/B/C · 변이 · 보존)과 감사 12절 7단계(감사 도구 `recheck.py` · 합성 10종 재실행 — 이 세션은 독립성을 위해 돌리지 않음). handoff 10절 질문 5건(S 번호 정의 · 합성 정오표 수용 · SA-12 합집합 · CM 36 · FD 표기).
+- [ ] **[HIGH / 운영 담당자] 공식 runner ci_gate (NOT_RUN)** — 아래 2026-10-28 절과 같은 방법(Runner 셸에서 이 브랜치 clone → `scripts/ai/ci_gate.sh`). 그 전까지 Tier 0 은 "로컬 Linux 등가" 로만 보고한다.
+- [ ] **[HIGH / 사용자 승인] `main` 병합(squash, rule 93 R2 4요소) → `prodgen promote` + canary** — 재검증 PASS · 공식 runner PASS 뒤, 병합과 승격을 각각 승인. 이 브랜치는 2026-10-28 정정 브랜치(`104bcaf0`)를 포함한다. 호출자 공지: handoff 3.1 · 3.4절(값이 null 로 나오는 조건이 넓어진 키 목록).
+- [ ] **[MED / 운영 담당자] Portal 등 소비자의 null 처리 확인** — 새로 null 이 나올 수 있는 키: `multi_node` 개수 · `fabrics[].switch_count` · `endpoint_count` · `network.summary.adapter_count` · `port_count` · cpu 그룹 `total_cores` · `cores_per_socket` · `storage.summary.grand_total_gb`(파티션 summary 포함).
+- [ ] **[MED / 사용자 결정] 용량 미상 디스크가 섞인 storage 합계** — 현행은 그 디스크를 빼고 합한다(부분 합이 전체 합처럼 보일 수 있음 — 이번 원칙과 어긋남). 선택지: 현행 유지 + 문서화 / Redfish 에서 null + notice(기존 계약 시험 `test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped` 기대값 변경). 18대 영향 0(용량 미상 디스크 0개).
+- [ ] **[MED / 실장비] SA-12 섀시 드라이브 합집합** — 섀시에만 드라이브가 노출되는 장비(NVMe direct-attach 등) · golden recording 에 없는 새 경로 8 fixture 의 실장비 응답 · 선택 링크가 5xx 를 줄 때의 동작 · HPE 에뮬레이터 4세트 경로(NO_MIRROR).
+- [ ] **[MED / 실장비] SA-07 storage 0 · null** — 다른 벤더가 전원 Off 에서 내는 드라이브 목록 원천(`Drives: []` 를 주는 BMC 는 "확인한 0" 이 되는 한계) · 디스크 없는 장비가 원천을 노출하지 않으면 null.
+- [ ] **[LOW / 실장비] SA-09 · SA-17** — Starting · Training 을 실제로 내는 장비(18 미러 관측 0) · Telemetry 소비전력 정밀도.
+- [ ] **[LOW / 설계] `power.summary.psu_count` 신호** — PSU 목록만 노출되지 않은 경우를 가를 신호가 없다.
+- [ ] **[LOW / 사용자 결정] OS · ESXi storage 미관측 정책** — SA-07 은 Redfish 만 바꿨다(OS · ESXi 는 수집 실패면 섹션 failed). 같은 구분이 필요한지.
+- [ ] **[LOW / 후속] S22 중복 제거 키 구분자** — `normalize_standard.yml` physical_disks 키 `name~model~serial`(감사도 NOT_RUN · 낮은 위험).
+- [ ] **[LOW / 확인] 감사 S 번호 정의** — S3 · S4 · S5 · S7 · S8 · S11 · S12 · S13 · S21 은 감사 폴더 어디에도 없다(`audit_case_test_map.md` 0절).
+- [ ] **[LOW / 선택] `tests/unit/test_power_summary_b58_b59.py` 복사 구현 정리** — 운영 템플릿 동치 시험(`543a1794`)이 drift 를 잡으므로 복사본 제거는 선택.
+- [ ] **[HOLD] 아래 2026-10-28 절의 HOLD 3건** — 03-network-002 잔여 2 NIC(HOLD-a) · 05-thermal-003 (b)(HOLD-b) · 03-storage-001 (b)(HOLD-c). 이번 범위 밖, 그대로.
+- [ ] **[LOW / 환경] Windows 실행 주의** — (1) pytest 묶음 · Tier 0 gate 를 겹쳐 돌리면 메모리 부족으로 중단된다(2026-10-28 과 같음) — 한 번에 하나씩. (2) `tests/unit/test_linux_hba_ib_markers.py::test_rate_parsing_keeps_decimal_and_nulls_when_not_active`(Git `sh.exe` 하위 실행)가 Windows 에서 가끔 멈췄다 — 변경과 무관, 그 파일만 다시 돌리면 통과. 원인 미조사.
+- [ ] **[LOW / 정리] 이 세션 임시물** — WSL `/root/se_syn_20261029`(합성 사본) · WSL `~/se-fix-20261029`(Tier 0 clone) · scratchpad worktree(`wt_base` · `wt_c5` · `wt_c6`).
+
 ## Redfish 2차 Mock 독립 검증 결함 정정 (2026-10-28) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/REVIEW_FIX_HANDOFF.md`(9절) · 브랜치 `fix/redfish-mock2-review-20261028`(분기 `f92ebe6a`, main 미병합). 제품 동작 변경 3곳(R1 NIC 링크 보충 · R2 HBA up 값 · R3 전원 Off 문구).
