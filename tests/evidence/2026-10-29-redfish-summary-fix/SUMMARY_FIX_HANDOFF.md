@@ -68,8 +68,10 @@
 | 9 | `0bc68f71` | docs: Field Dictionary·필드 계약 Summary 규칙 |
 | 9a | `b2fd9c0d` | test: 감사 3.7 M3·C2 전부 미상 사례 시험 추가 — Plan 에 없던 커밋 |
 | 9b | `543a1794` | test: 전력 summary 종전 사례를 운영 템플릿과 대조 — Plan 에 없던 커밋(감사 부록 A · S14) |
-| 10 | (이 문서를 담은 커밋) | docs: Summary 수정 증거와 재검증 handoff |
-| 11 · 12 | `git log 104bcaf0..HEAD` | 하네스 문서 갱신 · Tier 0 기록(이 문서 7절) — 기록만 바꾼다 |
+| 10 | `578677a2` | docs: Summary 수정 증거와 재검증 handoff |
+| 10a | `92ceb055` | docs: handoff에 구현 차이 6건·정책 질문 추가 — Plan 에 없던 커밋 |
+| 11 | `90f9c0eb` | harness: Summary 수정 상태·후속·ADR·카탈로그 갱신 — Tier 0 시험 대상 커밋(7절) |
+| 12 · 13 | (이 7절 · 2절을 담은 커밋과 그 뒤 — `git log 104bcaf0..HEAD`) | Tier 0 기록 · 하네스 시험 이력 — 기록만 바꾼다 |
 
 - 제품 동작이 바뀐 파일은 셋이다: `redfish-gather/library/redfish_gather.py` · `redfish-gather/tasks/normalize_standard.yml` · `filter_plugins/power_summary.py`(SA-06, ESXi 공용).
 - 제품 코드는 커밋 6(`866d28d8`) 뒤로 바뀌지 않았다. `git diff 866d28d8 HEAD -- redfish-gather filter_plugins callback_plugins common os-gather esxi-gather adapters vault` 는 비어 있다.
@@ -201,7 +203,28 @@ python -I -X utf8 -B $D/mutation/mutate.py ; python -I -X utf8 -B $D/mutation/mu
 
 ## 7. Tier 0 (CI gate) · 최종 pytest
 
-[TODO] 커밋 11(harness) 뒤 HEAD 에서 돌리고 이 절을 커밋 12 에서 채운다. 공식 Runner(`clovirone-server-gather-ci`)는 `*/main` 전용이라 이 브랜치로 돌릴 수 없다 — "로컬 Linux 등가 gate" 로만 보고하고 공식 Runner CI PASS 로 쓰지 않는다.
+- 시험한 커밋은 `90f9c0eb678e83c0b171d5b6c61b09b86bb03095`(커밋 11)이다. 그 뒤 커밋은 기록(이 절 · `tier0/` · 하네스 문서)만 바꾼다.
+- **공식 Runner: NOT_RUN.** `clovirone-server-gather-ci` 는 `*/main` 전용 Job 이라 이 브랜치를 돌릴 수 없고, 그 설정은 바꾸지 않았다. 아래 두 실행은 이 세션이 직접 돌린 로컬 등가 gate 이며 공식 Runner CI PASS 가 아니다.
+
+| 실행 | 조건 | 결과 | 산출 |
+|---|---|---|---|
+| Linux 공식 등가 | WSL `Ubuntu` ext4 새 clone `~/se-fix-20261029`(`core.autocrlf` unset · `core.fileMode=true` · CRLF 파일 0). 격리 venv `~/venv-se-ci-20261028`(2026-10-28 Tier 0 와 같은 venv — Python 3.12.3 · ansible-core 2.20.3 · pytest 9.2.0 · `include-system-site-packages = false`). `env -i` PATH = venv · `/usr/local/bin` · `/usr/bin` · `/bin`(pwsh · powershell.exe 없음). 명령은 `Jenkinsfile_ci` Gate 와 같다: `. scripts/activate_ansible_venv.sh` → `CI_GATE_JUNIT_DIR=… bash scripts/ai/ci_gate.sh` | **`RESULT: PASS` · rc 0.** 단계 FAIL 0 · 건너뜀 0. 사전 검사 PASS(10 checks 중 8 passed · 0 failed · 경고 114) · schema 정합(sections 11 · 사전 경로 264) · 벤더 경계 · 하네스 일관성 통과 · corpus 20/20 MATCH · pytest 6504 passed · 183 skipped · 5 xfailed · integration 563 passed · 4 skipped · 1 deselected · JUnit failures 0 · errors 0 · syntax-check 3 채널 통과 | `tier0/linux-venv/`(env · pip freeze · 로그 · JUnit) |
+| Windows 작업 트리 | 저장소 작업 트리(HEAD 같음 · 추적 파일 변경 0 — 시작과 끝의 untracked 는 `tier0/` · `tools/tier0_win.sh` 뿐). `core.autocrlf=true` · `core.fileMode=false`. Python 3.13.15 · pytest 9.1.1, ansible 없음. 명령 `CI_GATE_JUNIT_DIR=… bash scripts/ai/ci_gate.sh`(`tools/tier0_win.sh`) | **`RESULT: PARTIAL` · rc 2.** 단계 FAIL 0, 건너뜀 1(syntax-check — 실행할 수 있는 ansible-playbook 이 없다. ci_gate 설계상 ansible 없는 Windows 의 정상 판정). pytest 6642 passed · 45 skipped · 5 xfailed(1792 s) · integration 540 passed · 6 skipped · 1 deselected · JUnit failures 0 · errors 0 | `tier0/windows-worktree/`(env · 로그 · JUnit) |
+
+- 수집 수: unit · e2e · regression 은 두 실행 모두 6692 다. integration 은 Linux 567 · Windows 546 이다(차이 21 은 2026-10-28 Tier 0 와 같다).
+- skip(JUnit 기준, xfail 5 포함)은 Linux 188 · Windows 50 이고 2026-10-28 과 같은 수다. 사유: Linux 는 `powershell.exe 없음` 계열(43 · 42 · 32 · 26 · 12건 등), Windows 는 `Linux bash · coreutils timeout · flock 이 필요하다` 25건 · `failed 상태가 아님` 6건 등이다. 두 실행이 서로 빠진 쪽을 덮는다. syntax-check 는 Linux 실행 결과로 본다.
+- 2026-10-28 Tier 0(`d552ae06`) 대비 passed 가 두 환경 모두 pytest +254 · integration +38 이다. 커밋 8 시점 Windows 4묶음(unit · e2e · regression 합 6629 passed · integration 540) 대비 +13 · 같음이다.
+- Windows 에서 가끔 멈추던 `tests/unit/test_linux_hba_ib_markers.py::test_rate_parsing_keeps_decimal_and_nulls_when_not_active` 는 이번에 11개 경우 모두 통과했다(가장 긴 경우 7.8 s).
+- 두 실행은 겹치지 않게 차례로 돌렸다(Linux 2026-10-31 00:35 UTC 시작 → 끝난 뒤 Windows 00:43 UTC 시작). 2026-10-28 에 겹쳐 돌려 메모리 부족으로 중단된 일이 있었기 때문이다.
+- Windows 로그(`ci_gate.log` · `env.txt`)는 커밋 전에 줄 끝만 LF 로 바꿨다(CRLF 278 · 2건, 다른 바이트 같음). 11절 sha256 은 그 LF 파일 기준이다.
+- 공식 Runner 에서 닫으려면 운영 담당자가 Runner 셸에서 이 브랜치를 clone 해 같은 명령을 돌린다. 확인 항목은 `2026-10-28-redfish-mock2-review-fix/tier0/tier0.md` 3절과 같다: venv `include-system-site-packages` · pytest 버전 · Gate 단계 PATH 에 pwsh 없음 · git `core.autocrlf` · `core.fileMode` · `RESULT: PASS` · JUnit 보관.
+
+```bash
+# 재현 — Linux(WSL Ubuntu). ~/se-fix-20261029 가 이미 있으면 exit 3 이다(지우고 돌린다). 결과는 tier0/linux-venv 에 덮어쓴다
+MSYS_NO_PATHCONV=1 wsl -d Ubuntu -- bash /mnt/c/github/ClovirONE/clovirone-server-gathering/tests/evidence/2026-10-29-redfish-summary-fix/tools/tier0_wsl.sh <HEAD sha>
+# 재현 — Windows(Git Bash, 작업 트리). 출력 폴더가 이미 있으면 exit 3 이므로 새 폴더를 준다
+bash tests/evidence/2026-10-29-redfish-summary-fix/tools/tier0_win.sh <HEAD sha> <새 출력 폴더>
+```
 
 ## 8. Plan 문구와 실측 · 구현이 다른 곳
 
@@ -214,7 +237,7 @@ Plan 은 저장소 밖(사용자 승인본)이라 고치지 않고 여기에 적
 | 8절: `request_budget.json` 8건 "replay-miss 404 로 +1" | DL380 4건 · Dell 1건은 +1, CSUS 3건은 +2(404 캐시 없음 — top-level · 파티션 storage 가 각각 요청) | 3.3절 표 |
 | 9절: `syn_dell_primary` "25000 → null" | edit 은 대표 NIC `SpeedMbps` 10000 → 0. base 출력 10000(다른 NIC 값) → head null | `synthetic/results_posthoc.md` |
 | 10절: 합성 `syn_v4_links`(sr650_v4_02) | `syn_dell_links`(r1_DELL_R740_01)로 만들었다. 같은 값(NIC `Enabled` · 포트 `Training` · `LinkFlapping`)을 NIC 자체 `LinkStatus` 와 카드 `NetworkPorts` 가 함께 있는 미러에 넣었다 | `synthetic/expected.json` |
-| 14절: 커밋 11개 | 테스트 커밋 2개(`b2fd9c0d` · `543a1794`)와 Tier 0 기록 커밋이 더 있다 | 2절 |
+| 14절: 커밋 11개 | 테스트 커밋 2개(`b2fd9c0d` · `543a1794`) · handoff 보완 커밋 1개(`92ceb055`) · Tier 0 기록 커밋 2개가 더 있다 | 2절 |
 | 15절 조건 4: "합성 사례 전부 PASS (사전 기록한 기대값 기준)" | **등록 기준으로는 충족하지 못했다(7/9).** FAIL 2는 기대값 경로 오기이며 정오표 · 사후 점검(9/9)을 남겼다. 받아들일지는 검증자 · 사용자 판단이다(10절 질문 2) | `synthetic/ERRATUM.md` |
 | 8절 SA-07: 드라이브 목록 신호를 storage 반환 dict 의 내부 키 `_inventory` 로 넘긴다 | `gather_storage(..., inventory_out=<dict>)` 출력 인자로 넘긴다. top-level 은 `aux_out['storage_inventory']`, 파티션은 `_normalize_storage_raw(sto_data, part_inv)` 로 간다. storage dict 에 비어 있지 않은 내부 키가 생기면 섹션 runner 의 빈 결과 판정(`_is_empty_result` — 404 만 난 빈 결과를 미지원으로 분류)이 깨지기 때문이다. 판정 의미와 출력은 Plan 과 같다 | RG `gather_storage` docstring |
 | 3절 SA-07: incomplete 대상 목록(섀시는 `Drives` 컬렉션만 적음) | 섀시 본문(System 섀시 · `Links.Enclosures`)의 404 아닌 실패도 incomplete + errors[] 로 센다. 본문이 드라이브 목록 경로 위에 있기 때문이다. 404 는 미제공 | RG `_chassis_drives_union` |
@@ -297,3 +320,12 @@ git ls-files -- "$D/$r" | grep -E '/gather_output\.json$|\.module\.json$' | LC_A
 | `84724a579326d23c4bfebb537fc9b57300c5e337f77e57df9300039d40e11ac1` | `tier2-after` 의 `*.module.json` 18개 같은 방법 |
 | `2a42e2007d71a6055ff30194a44811d9e79e61272c85d539d8faa09697399f94` | `synthetic/run-head` 의 `*/gather_output.json` 9개 같은 방법 |
 | `da64bdae6431c9163ef4d8bf3097c6b7f3f6f5c4b8ec62a047980d2735137fee` | `synthetic/run-base` 같은 방법 |
+| `caee5156eed9c36ded8692d66db78daf19b67d4e8e562e417efb9c52858c1255` | `tier0/linux-venv/ci_gate.log` |
+| `8886fd47e7b6cea165a634c24b3376e96fbc6040455df121336c1b9a905dba9c` | `tier0/linux-venv/env.txt` |
+| `ce069c8da5f04bdf73b0e2e3cdfda0e1a5f8547b25682b4ade463f9320352bbc` | `tier0/linux-venv/pip_freeze.txt` |
+| `6ab1e0bf50a6c6979dfeee982939e27f723df775ad549bdf589d3dbb5a6e9587` | `tier0/linux-venv/ci_gate_junit_unit.xml` |
+| `4ee602d2648f68ca65f4435b63fd472157a173d4f65e87d2c1793bc77ffc73cf` | `tier0/linux-venv/ci_gate_junit_integration.xml` |
+| `a4e1663594f5c7b709ec9e528df4d62e52fa2afdde8591cd4e3558d5420435ec` | `tier0/windows-worktree/ci_gate.log`(줄 끝 LF 로 바꾼 뒤) |
+| `29530fb283ed76071a3257f4e96d52e1e29ba9bbde86cd5b6089bbb05aa66633` | `tier0/windows-worktree/env.txt`(줄 끝 LF 로 바꾼 뒤) |
+| `749033e3e46cf0feabc4337598a52e2c9ec09f09ea7265b395660b1012463a20` | `tier0/windows-worktree/ci_gate_junit_unit.xml` |
+| `f12676b21859d403f2d2d93d32498c1ed1364464bfa043d27736a6760733cbb9` | `tier0/windows-worktree/ci_gate_junit_integration.xml` |
