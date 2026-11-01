@@ -9,7 +9,8 @@
 - **시험·데이터**: 새 시험 7파일 + 기존 고정값 갱신(커밋 7) · 감사 사례 보강 2커밋(3.7 M3 · C2 `b2fd9c0d`, 부록 A S14 운영 템플릿 동치 `543a1794`) · golden 4세트 12경로 · CSUS baseline 재생성(FIX 5 방법) · `request_budget.json` 8건(커밋 8 — 대장 `golden_changes.json` · `replay_miss_ledger.json`).
 - **문서·사전**: 사전 머리 메모 · help + 2 항목(`memory.free_mb` · `network.portgroups`) · `docs/contract/03-fields.md`(커밋 9 — additive-only 훅만 `ADDITIVE_SKIP_NEW_CYCLE=1`), SA-13 정정 addendum(2026-10-28 `01-f01-nic-link-fill.md`), DRIFT-033.
 - **검증(이 세션 자기 측정)**: Tier 1 18/18 · 차이 34 전부 허용 목록 · 새 GET 14 전부 미러 실응답; Tier 2 18/18 · golden 15 차이 0; 합성 9건 등록 기준 7/9(FAIL 2 = 기대값 경로 오기, 정오표 · 사후 9/9); A/B/C head FAIL 0 · CM 36(F-01 보충) / base FAIL 24; 변이 31/31; 보존 항목(개수 정합 · 판별기 69 · 132칸 · 처분 73 · HBA 값 · XCC3 선택 · F-01 20건) 전부 그대로; Tier 0(커밋 11 `90f9c0eb`) 로컬 Linux 등가 gate `RESULT: PASS` · Windows 작업 트리 `PARTIAL`(ansible 없음 — 설계상, 실패 0) — 공식 runner 아님. 수치는 TEST_HISTORY 2026-10-29.
-- **남은 것**: HOLD 3건 그대로 · SA-12 · 07 · 09 · 17 실장비 확인 · 용량 미상 디스크가 섞인 storage 합계 정책(사용자 결정) · 공식 runner NOT_RUN · 실장비 검증 0.
+- **2026-11-01 사용자 결정 — 용량 미상 디스크**: 현행 유지(a안). 용량을 확인한 디스크만 합하고 용량 미상 디스크는 그룹 · 합에서 뺀다 — 그 때문에 합을 null 로 만들지 않는다. 한계("실제 전체 용량보다 작을 수 있음")는 `docs/contract/03-fields.md` 6.3 에 적었다. 제품 코드 · 시험 · 증거(`tests/evidence/`) 변경 0.
+- **남은 것**: HOLD 3건 그대로 · SA-12 · 07 · 09 · 17 실장비 확인 · 공식 runner NOT_RUN · 실장비 검증 0.
 - **판정**: 재검증 대기 — 새 독립 세션이 `SUMMARY_FIX_HANDOFF.md` 로 다시 돌린다. main 병합 · production 승격은 하지 않았다(사용자 지시). 호출자 영향(handoff 3.1 · 3.4절): CSUS `multi_node.fabrics[].endpoint_count` 0 → null · 파티션 cpu `manufacturer` 'Intel' · 소비전력 +1 W(3대) · Dell/Lenovo `network.summary.groups[].speed_mbps` 0 → null · dl380_gen12_03 `power.summary.health_rollup` · `storage.summary.grand_total_gb` → null.
 
 ## 일자: 2026-10-28 — 2차 Mock 구현 독립 검증 결함 F-01~F-10 정정 · HBA 링크 up 값 한정 — **재검증 대기** (main 미병합 · production 미승격)

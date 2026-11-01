@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-01 — 용량 미상 디스크 합계 정책 문서화 (문서만 · 제품 코드 · 시험 · 증거 변경 0)
+
+> 사용자 결정(2026-11-01) a안 — 현행 유지 + `docs/contract/03-fields.md` 6.3 에 한계 명시. 브랜치 `fix/redfish-mock2-summary-20261028`, 변경 전 HEAD `1e6d4d20`. 환경 Windows Python 3.13.15 · pytest 9.1.1. 문서만 바뀌어 Tier 0 · 1 · 2 는 다시 돌리지 않았다 — 제품 코드 diff 가 0 이라 아래 2026-10-29 · 2026-10-31 측정이 그대로 유효하다.
+
+| 구분 | 결과 |
+|---|---|
+| 변경 범위 | `docs/contract/03-fields.md` · `docs/ai/` 4파일. `git diff --name-only HEAD -- . ':(exclude)docs'` 빈 결과(코드 · 시험 · schema · `tests/evidence/` 변경 0) |
+| 기존 계약 시험 | `tests/unit/test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped` passed — 용량 0 · None 디스크를 그룹 · 합에서 빼는 종전 동작 그대로 |
+| 문서를 읽는 시험 · storage summary 시험 23파일 | 782 passed · 6 skipped · 5 xfailed · 실패 0 (43.65 s) |
+| 정적 · 계약 | `verify_harness_consistency.py` 통과 · `check_project_map_drift.py` 일치 · `validate_field_dictionary.py` PASS(실패 0) · `output_schema_drift_check.py` 정합(sections 11 · fd_paths 264) · `verify_vendor_boundary.py` 통과 |
+| `verify_docs_references.py` | rc 2 — 죽은 참조 1건: `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md:90` → `tests/unit/test_adapter_reselect_real_facts.py`(git 이력에 없는 파일). 변경 전 HEAD `1e6d4d20` 에서도 같다 — 이번 변경과 무관해 고치지 않았다(ci_gate 단계 아님) |
+
 ## 2026-10-29 — Redfish Summary 정합성 수정 브랜치 측정 (이 세션 자기 측정 · 독립 재검증 전)
 
 > 정본: `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md` 5 · 7절. 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`). 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7(playbook) · Ubuntu-24.04(HTTPS 미러 재생) — 2026-10-28 과 같은 구성. 측정 2026-10-29, 기록 2026-10-31.

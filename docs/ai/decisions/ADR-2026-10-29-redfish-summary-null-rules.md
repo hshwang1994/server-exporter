@@ -1,6 +1,6 @@
 # ADR-2026-10-29 — Redfish Summary null 규칙 (미제공 · 확정 불가 = null, 확인한 0 = 0, 부분 합 ≠ 전체 합)
 
-- 상태: Accepted (사용자 결정 2026-10-29 · Plan 승인). 구현 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`) — main 미병합, 독립 재검증 · 병합 승인 대기
+- 상태: Accepted (사용자 결정 2026-10-29 · Plan 승인 · 2026-11-01 용량 미상 디스크 결정 추가). 구현 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`) — main 미병합, 독립 재검증 · 병합 승인 대기
 - 범위: Redfish summary 전 구간(top-level · `multi_node.partitions[]` · `multi_node` 개수) · ESXi `power.summary.health_rollup`(SA-06 하나). OS 변경 0
 - 폐기 · 개정하는 결정:
   - 2026-06-08 `_normalize_link_status` 의 "Starting · Training → down"(코드 docstring 의 결정) → 일반 NIC · 포트는 unknown + notice(SA-09).
@@ -21,6 +21,7 @@
 ## 결정 (What)
 
 공통 원칙: null = 원천이 주지 않음 · 확정 불가, 0 = 확인한 0, 부분 합은 전체 합으로 쓰지 않는다. 추정값을 만들지 않는다. BMC 요약값(ProcessorSummary · MemorySummary)은 같은 System 범위에서 검사를 통과할 때만 쓴다.
+예외 1건: storage 합계에서 용량 미상 디스크는 합에서 빼고, 확인한 디스크의 합은 그대로 낸다(2026-11-01 사용자 결정 — 표 마지막 행).
 
 | 항목 | 결정 | 결정 주체 |
 |---|---|---|
@@ -37,6 +38,7 @@
 | SA-17 | 전력 측정값(소비 · min/avg/max · PSU 입출력)은 `_safe_round_int`(half-even), 정격은 그대로 | 사용자 |
 | SA-19 | EnvironmentMetrics `PowerWatts.ReadingRangeMin/Max`(측정 가능 범위)를 min/max 소비전력으로 쓰지 않는다 | 지시서 기본 방향(DMTF Sensor 정의) |
 | SA-13 · 15 · 16 · 18 | 주석 · 시험 설명 · 사전 · 계약 문장만 정정(출력 0) | — |
+| 용량 미상 디스크(2026-11-01) | `storage.summary.grand_total_gb`(파티션 포함, 3채널)는 용량을 확인한 디스크의 합이다. 용량 미상 디스크(`total_mb` null · 0)는 그룹 · 합에서 빼고, 그 때문에 합을 null 로 만들지 않는다. "실제 전체 용량보다 작을 수 있다" 는 한계를 `docs/contract/03-fields.md` 6.3 에 적는다. 드라이브 목록 미완결(SA-07)의 null 은 그대로다. 코드 · 시험 변경 0 | 사용자(a안) |
 
 ## 결과 (Impact)
 
@@ -44,7 +46,7 @@
 - 요청: 새 GET 14 경로(전부 미러 실응답). golden 4세트 12경로 · CSUS baseline 1 · `request_budget.json` 8건을 근거 대장과 함께 갱신했다.
 - 호출자: Portal 등 소비자가 새 null 을 처리하는지 운영 담당자 확인이 필요하다.
 - 검증: 이 구현 세션의 자기 측정이다. 실장비 0건, 공식 Runner NOT_RUN, 독립 재검증 대기.
-- 남은 것: HOLD 3건 · SA-12/07/09/17 실장비 확인 · `psu_count` 신호 · 용량 미상 디스크 합계 정책 · OS/ESXi storage 정책 · S22 — `docs/ai/NEXT_ACTIONS.md` 2026-10-29 절.
+- 남은 것: HOLD 3건 · SA-12/07/09/17 실장비 확인 · `psu_count` 신호 · OS/ESXi storage 정책 · S22 — `docs/ai/NEXT_ACTIONS.md` 2026-10-29 절.
 
 ## 대안 비교 (Considered)
 
@@ -58,3 +60,4 @@
 | SA-11 | half-even(감사 권장) | 3채널 storage 구현 5벌이 내림이라 값 변화 없이 문서화한다 — 사용자 결정 |
 | SA-12 | 문서 정합 먼저, 합집합은 실장비 확인 뒤(감사 권장) | 지시서가 "실제 결함이면 문서 정정만으로 완료 처리하지 않는다" 고 했다. 합집합을 구현하고 실장비 확인을 후속으로 남겼다 |
 | SA-17 | 절삭 유지 · 소수 자리 유지 | integer 타입을 유지하면서 반올림 — 사용자 결정 |
+| 용량 미상 디스크 | 하나라도 있으면 합계 null + notice(SA-04 · 05 와 같은 방식) | 일부 디스크의 용량을 모른다는 이유로 확인한 디스크의 합까지 버리게 된다 — 사용자 결정(2026-11-01). AI 검토 메모: SimpleStorage 경로는 빈 슬롯(Absent)을 거르지 않아 null 규칙이 빈 슬롯에서도 발동할 위험이 있었다 |
