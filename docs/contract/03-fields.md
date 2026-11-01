@@ -654,6 +654,18 @@ for e in response["errors"]:
 > (3) **그룹 키 · 단위(SA-11)** — `summary.groups[]` 는 `unit_capacity_gb` · `model` · `media_type` · `protocol` · `quantity` · `group_total_gb`(세 채널 같다)이고,
 > `unit_capacity_gb` 는 `physical_disks[].total_mb`(MiB) ÷ 1024 내림(GiB — 세 채널 모두 내림, 사용자 결정)이다. 용량을 모르는 디스크는 그룹 · 합에서 뺀다.
 > `logical_volumes[].total_mb` 와 `physical_disks[].total_mb` 는 같은 MiB 다 — 출력에 십진 GB 키는 없다(사전 `logical_volumes[].total_mb` 의 종전 문구 정정).
+> **2026-11-01 (사용자 결정 — 용량을 확인하지 못한 디스크)** — 세 채널 공통이다(`multi_node.partitions[].storage.summary` 포함). 코드 동작은 종전 그대로이고, 이 메모는 그 동작과 한계를 적는다.
+> (1) **`summary.grand_total_gb` 는 용량을 확인한 디스크의 합이다.** 용량 값이 없거나 0 인 디스크(`physical_disks[].total_mb` 가 null · 0)는 `groups[]` 와 합에 넣지 않는다.
+> 그런 디스크가 섞여 있다는 이유로 합을 `null` 로 만들지 않는다 — 일부 디스크의 용량을 모른다는 이유로, 용량을 확인한 디스크의 합까지 버리지 않기 위해서다. 빠진 디스크에 대한 notice 는 따로 없다.
+> (2) **한계 — 실제 전체 용량보다 작을 수 있다.** 일부 디스크의 용량을 확인하지 못하면 `grand_total_gb` 는 장착된 디스크 전체의 용량보다 작고, `groups[]` 의 `quantity` 합도
+> 실제 디스크 수보다 적다. 이 값은 "확인한 디스크 용량의 합" 으로 읽고 장착 용량 전체로 단정하지 않는다. 디스크마다 GiB 를 내림하므로(위 2026-10-29 (3)) 합은 디스크당
+> 1 GiB 미만씩 작아지고, 1 GiB 미만 디스크는 0 이 되어 그룹 · 합에서 빠진다. 용량을 확인하지 못한 디스크가 `physical_disks[]` 에 남아 있으면 그 항목의 `total_mb` 로 알아볼 수 있다.
+> 다만 Redfish 의 Storage · 섀시 드라이브 경로는 `CapacityBytes` 가 없거나 0 인 드라이브와 이름에 `Empty` 가 들어간 드라이브를 빈 슬롯으로 보고 목록에서도 뺀다 — 장착된
+> 드라이브가 용량을 보고하지 않으면 `physical_disks[]` 와 합 어디에도 나타나지 않는다. 구형 경로(SimpleStorage · HPE iLO 4 SmartStorage)는 그런 드라이브를 목록에 남긴다.
+> 2026-10-29 에 측정한 18대 Mock 미러에는 용량을 모르는 디스크가 없다.
+> (3) **`null` 과의 구분** — Redfish `grand_total_gb` 가 `null` 인 것은 위 2026-10-29 (1) · (2) 의 경우(storage 를 수집하지 않음 · 드라이브 목록 원천을 하나도 읽지 못함 ·
+> 원천이나 원천이 가리킨 드라이브를 다 읽지 못함 · 같은 디스크인지 판정할 수 없는 섀시 전용 드라이브)뿐이다. 드라이브를 읽었는데 용량 값만 없는 것은 미완결이 아니다.
+> OS · ESXi 는 이 판정이 없어 `grand_total_gb` 가 늘 정수다.
 
 스토리지는 다음 하위 list 가 있다.
 
