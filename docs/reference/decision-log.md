@@ -112,6 +112,8 @@
 ### 사용자 지시
 
 - "github에는 main이랑 production을 그대로 냅두고 … gitlab에는 현재 main 브랜치를 지우고 production 브랜치가 main이 되는거임 gitlab이 고객사인것처럼 … jenkins-prod 에 연결된 각종 ci 및 액션들은 gitlab이랑 연결돼있는게아니라 github랑 연결돼있어야함."
+- "main의 보호를 풀었어 나머지는 너가 진행해줘. GitLab 작업 브랜치 5개 삭제는 하지마 지금 작업중인게 있어서 나중에 없어질 예정임. Add-on 저장소는 냅둬라 지금 범위가 아님"
+- 사용자는 GitLab `main` 을 한 번 강제 갱신하는 방법을 승인했다(선택지 "강제 갱신 1회 허용").
 
 ### 결정
 
@@ -119,11 +121,11 @@
 2. 사내 GitLab 은 브랜치 `main` 하나만 둔다. 그 커밋은 GitHub `production` 과 같다. 개발 `main` · `production` · 작업 브랜치는 두지 않는다.
 3. 생성기는 원격마다 production 을 담는 브랜치를 따로 둔다 — GitHub 는 `refs/heads/production`, GitLab 은 `refs/heads/main`. 승격 · 복구 · `push-sync` · G20 이 원격마다 그 브랜치를 읽고 쓴다. 두 원격 모두가 아니면 실패하는 정책은 그대로다.
 4. 2026-05-01 부터 쓰던 dual push(`origin` 에 GitLab push URL 추가)는 폐기한다. 한 저장소가 서로 다른 브랜치를 담는 두 원격의 push 대상이면 GitLab 에 `production` 이 생기므로, 생성기는 그 설정을 보면 쓰기 전에 거부한다.
-5. GitLab 의 기본 브랜치 변경 · 보호 해제 · 브랜치 삭제는 관리 화면 작업이라 사용자가 한다(09-production-branch 8절).
+5. GitLab 의 보호 설정 · 기본 브랜치 · 미러링 · Webhooks 는 관리 화면 작업이라 사용자가 한다. 브랜치 갱신 · 삭제는 보호가 풀린 뒤 push 로 한다(09-production-branch 8절).
 
 ### 근거 (실측)
 
-- 2026-11-02 GitLab 브랜치: `main`(개발 `e8b5ae9b`) · `production`(`d464de4b`) · 작업 브랜치 5개(GitHub 에 같은 SHA 로 있음). GitHub `production` 도 `d464de4b`.
+- 2026-11-02 정리 전 GitLab 브랜치: `main`(개발 `e8b5ae9b`) · `production`(`d464de4b`) · 작업 브랜치 5개(GitHub 에 같은 SHA 로 있음). GitHub `production` 도 `d464de4b`.
 - 저장소의 Jenkins Job 정의(`jenkins/jobs/*/config.xml`)는 모두 GitHub 주소를 쓴다. CI 의 Promote 단계는 GitLab 자격이 없어 dry-run 만 한다.
 - 생성기 시험(`tests/unit/prodgen`): GitLab 이 `main` 하나뿐인 원격에서 승격 · 복구 · 재승격 · `push-sync` 뒤에도 GitLab 에 `main` 외 브랜치가 생기지 않고 GitHub 개발 `main` 은 그대로임을 확인. 공유 push URL 은 쓰기 전에 거부.
 
@@ -133,9 +135,16 @@
 - GitLab 에 `production` 이름을 남기고 개발 `main` 만 삭제: "production 이 main 이 된다" 는 지시와 고객사 형태(`main` 하나)에 맞지 않아 기각.
 - GitLab `main` 을 production 커밋만 있는 새 이력으로 재작성: 요청 범위 밖이고 force push 와 이력 재작성이 필요하며 production 조상 검사가 끊겨 기각.
 
+### 실행 (2026-11-02)
+
+- 사용자가 GitLab `main` 의 보호를 풀었다. 보호를 풀어도 기본 브랜치는 지울 수 없어서, 기본 브랜치를 두 번 바꾸고 `main` 을 지웠다가 다시 만드는 대신 사용자 승인을 받아 GitLab `main` 을 production 커밋으로 한 번 강제 갱신했다(`e8b5ae9b` → `d464de4b`). 강제 push 금지 원칙의 1회 예외다. 갱신 전 커밋을 lease 로 고정해 GitLab `main` 이 `e8b5ae9b` 일 때만 바뀌게 했고, `e8b5ae9b` 는 GitHub `main` 의 조상이라 잃은 커밋은 없다.
+- 이어서 GitLab `production` 을 지웠다. 진행 중인 작업 브랜치 5개는 사용자 지시로 남겼다(작업이 끝나면 사용자가 지운다).
+- 확인: GitLab 의 기본 브랜치는 `main`(`d464de4b`)이고 `production` 은 없다. 생성기의 `push-sync --dry-run` 은 할 일 없이 통과했고(GitHub `production` = GitLab `main` = 로컬 `production`), `drift-check` 는 `PROVENANCE` 다.
+
 ### 남은 것
 
-- GitLab 관리 화면 정리(사용자). 정리 전에는 승격과 `push-sync` 가 원격 불일치로 쓰기 전에 멈춘다.
+- GitLab `main` 다시 보호하기(push · merge 는 Maintainer, force push 불허)와 Mirroring · Webhooks 확인(사용자). 미러링이 남아 있으면 지운 브랜치가 다시 생긴다.
+- GitLab 작업 브랜치 5개 삭제(사용자, 작업이 끝난 뒤).
 - 다른 작업 사본에 남은 dual push 설정 제거. GitLab `main` 에는 배포본만 있으므로 `Jenkinsfile_portal_Byid` 를 GitLab 에서 읽던 외부 Job 이 있으면 GitHub 로 옮겨야 한다.
 - jenkins-prod 실제 Job 설정(저장소 주소 · 브랜치)의 화면 확인.
 
