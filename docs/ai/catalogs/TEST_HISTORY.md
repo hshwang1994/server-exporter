@@ -12,7 +12,8 @@
 | 최종 수정 뒤 재실행 | 거부 안내 문구 · `evidence.py` 설명 1줄을 고친 뒤 `test_promotion_cycle.py` · `test_verdict_evidence.py` · `test_promote_report_digest.py` **30 passed**(487 s, skip 0) |
 | 정적 | py_compile(prodgen 5 · 시험 1) OK · verify_harness_consistency 통과 · validate_claude_structure OK · check_project_map_drift 일치 · verify_vendor_boundary 통과 · output_schema_drift_check 정합 · validate_field_dictionary PASS · verify_no_plaintext_secret PASS |
 | 문서 참조 | verify_docs_references rc 2 — 죽은 참조 9건 전부 이번에 고치지 않은 파일(`LAB_INVENTORY.md` · `vault-credential-resolver.md` · `tests/reference/INDEX.md` · `tests/reference/redfish/mock2/README.md`). 이번에 고친 문서는 0건 |
-| 미실행 | GitLab · Jenkins 화면 확인(사용자 작업 대기) · 실 승격(배포본 변경 없음) |
+| GitLab 정리 뒤 확인 | 생성기 main `d158ce30` · `git fetch --prune internal` 뒤. `git ls-remote --symref internal HEAD` → `refs/heads/main` `d464de4b` · `--heads`: `main` + 작업 브랜치 5개(사용자 지시로 유지) · `production` 없음. `push-sync --remote origin --remote internal --dry-run` ok — 로컬 = GitHub `production` = GitLab `main` = `d464de4b`, 할 일 0, `preview_refusals` 없음. `drift-check --production origin/production` ok · `PROVENANCE`(C_tree_hash 196 파일 일치 · D_trailers · A1_recorded_generator True) |
+| 미실행 | GitLab `main` 보호 · Mirroring · Webhooks 화면과 jenkins-prod Job 화면 확인(사용자) · 실 승격(배포본 변경 없음) |
 
 ## 2026-10-22 (3) — sanitize_mirror 1.0 (반출용 IP·호스트 이름 치환) — 시험 19건 · Python 3.6.8 · 실측 미러 7개 · 번들 실행
 

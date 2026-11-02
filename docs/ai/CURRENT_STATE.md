@@ -9,7 +9,8 @@
 - **git 설정(이 작업 PC 사본)**: `origin` 에서 GitLab push URL 제거(GitHub 하나) · `remote.internal.push = refs/heads/production:refs/heads/main`. 변경 전 설정은 세션 임시 폴더(저장소 밖)에 백업.
 - **하네스**: rule 93(사용자 명시 2026-11-02 · Branch / Remote 표 · R1 금지 · R2 예외 2 대상 ref · R7 개정 · 금지 패턴 · 리뷰 포인트) · rule 24 R5 · cycle-orchestrator skill · `CLAUDE.md` §14 · ADR 신규 1 · ADR-2026-05-01 §2 대체 표기 · JENKINS_PIPELINES 저장소 연결 절. 표면 카운트 변화 0.
 - **사람용 문서**: 09-production-branch(1 · 3 · 4 · 5 · 6 · 7절, 8절 신규 — GitLab 전환 절차) · 03-job-registration 1절 · 07-update-and-rollback 2 · 5절 · decision-log 2026-11-02.
-- **남은 것(사용자 · 화면)**: GitLab 관리 화면 정리 — 그 전에는 실 승격 · push-sync 가 원격 불일치(GitHub production `d464de4b` ≠ GitLab main `e8b5ae9b`)로 쓰기 전에 멈춘다. jenkins-prod Job 화면 확인(이 세션은 TLS 인증서 미신뢰 · 브라우저 미연결로 미확인). NEXT_ACTIONS 2026-11-02.
+- **GitLab 정리(2026-11-02 실행)**: 사용자가 `main` 보호를 푼 뒤 사용자 승인 1회 강제 갱신(GitLab `main` `e8b5ae9b` → `d464de4b`, lease 고정 · rule 93 R1 예외 — 보호를 풀어도 기본 브랜치는 지울 수 없음) · `production` 삭제. 지금 GitLab = 기본 브랜치 `main` `d464de4b` + 작업 브랜치 5개(사용자 지시로 유지). `push-sync --dry-run` ok(할 일 0) · `drift-check` PROVENANCE. ADR 실행 기록.
+- **남은 것(사용자 · 화면)**: GitLab `main` 재보호(force push 불허) · Mirroring · Webhooks 확인 · 작업 브랜치 5개 삭제(작업 종료 뒤) · jenkins-prod Job 화면 확인(이 세션은 TLS 인증서 미신뢰 · 브라우저 미연결로 미확인). NEXT_ACTIONS 2026-11-02.
 - **검증**: TEST_HISTORY 2026-11-02.
 
 ## 일자: 2026-10-22 (3) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
