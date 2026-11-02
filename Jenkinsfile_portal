@@ -2137,9 +2137,9 @@ pipeline {
             defaultValue: '',
             description : '실행 위치. 수집을 맡을 Runner 묶음 이름입니다(common/vars/locations.yml 의 키, 예: ic, cj, yi, git)'
         )
-        choice(
+        string(
             name        : 'target_type',
-            choices     : ['os', 'esxi', 'redfish'],
+            defaultValue: '',
             description : '수집 대상 종류: os(Linux, Windows), esxi, redfish(BMC)'
         )
         text(
