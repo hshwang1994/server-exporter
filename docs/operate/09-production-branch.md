@@ -162,6 +162,7 @@ python -m scripts.ai.prodgen push-sync --remote origin --remote internal --dry-r
 python -m scripts.ai.prodgen drift-check --production origin/production
 ```
 
+- 생성기는 이 전환이 들어간 `main`(2026-11-02 이후)을 받은 사본에서 실행합니다. 그 전 생성기는 두 원격 모두 `production`을 보므로, 그 사본의 `push-sync`는 GitLab에 `production`을 다시 만듭니다. 승격과 복구는 원격 불일치로 거부됩니다.
 - GitLab `main`의 이력에는 첫 production `4ce90a00` 이전의 개발 커밋이 조상으로 남습니다. production 이력이 그 커밋에서 개발 이력과 이어지기 때문입니다. 이력은 다시 쓰지 않습니다.
 - GitLab `main`에는 배포본(2절)만 있습니다. `Jenkinsfile_portal_Byid`처럼 배포본에 없는 파일을 GitLab에서 읽던 Job이 있다면 GitHub 저장소를 보도록 바꿔야 합니다.
 
