@@ -2283,6 +2283,23 @@ pipeline {
             }
         }
 
+        stage('Run Ansible') {
+            agent { label "${env.SE_AGENT_LABEL}" }
+            environment {
+                INVENTORY_JSON = "${params.inventory_json}"
+                TARGET_TYPE = "${params.target_type}"
+                REPO_ROOT = "${WORKSPACE}"
+            }
+            steps {
+                script {
+                    clovirAnsible.run(
+                        playbook: "${WORKSPACE}/${params.target_type}-gather/site.yml",
+                        vaultCredentialsId: 'ansible-vault-password'
+                    )
+                }
+            }
+        }
+
         stage('서버 정보 수집') {
             steps {
                 script {
