@@ -538,6 +538,7 @@ def tip_frozen_revision(obs: dict | None, build_timestamp_ms, build_duration_ms)
     """Direct revision binding for a fail-closed build from a trigger-side observation (2026-10-04 최종 지시 §5): the Job's SCM tip
     (`git ls-remote <remote> refs/heads/main`) read before the build was queued and again after it finished. Both readings must be
     the same SHA and the build's [start, end] must lie inside [before, after] — lightweight checkout and readTrusted read that tip.
+    The Job's SCM is GitHub (`origin`); since 2026-11-02 the GitLab `main` carries production, never the development tip.
     Returns (sha, "tip_frozen:ls-remote", note) or (None, None, why)."""
     if not obs:
         return None, None, None

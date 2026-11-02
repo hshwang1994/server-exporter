@@ -9,8 +9,10 @@ G19  the generated tree is pushed as the only branch `main` of a throw-away bare
      branches or parser execution — those are the main/production Job E2E (plan §5). Unreachable targets do not guarantee a
      particular failure code: the observed condition is recorded and compared with `expected_failure_code`; a mismatch is PARTIAL
      (INVALID condition), never silently PASS.
-G20  all push remotes agree on refs/heads/production and equal the local ref; the new tree's main SHA descends from the main SHA of
-     the previous generated production (monotonic); a legacy baseline is accepted only via --bootstrap-baseline <that sha>.
+G20  all push remotes agree on production — each read on its own target ref (2026-11-02: GitHub `origin` refs/heads/production,
+     customer-form GitLab `internal` refs/heads/main) — and equal the local refs/heads/production; the new tree's main SHA descends
+     from the main SHA of the previous generated production (monotonic); a legacy baseline is accepted only via
+     --bootstrap-baseline <that sha>.
 """
 from __future__ import annotations
 
@@ -62,14 +64,16 @@ def g20_ancestry_and_remotes(ctx) -> GateResult:
     ref = p["production_ref"]
     prov = ctx["prov"]
     details, failed = [], False
+    from .. import remote_ref
     local = store.rev_parse(ref) if store.rev_exists(ref) else None
-    data = {"local": local, "remotes": {}, "new_main": prov.get("main_sha")}
+    refs = {r: remote_ref(r, ref) for r in p.get("remotes") or []}
+    data = {"local": local, "remotes": {}, "remote_refs": refs, "new_main": prov.get("main_sha")}
     remote_shas = {}
     for r in p.get("remotes") or []:
-        sha, err = ls_remote(store, r, ref)
+        sha, err = ls_remote(store, r, refs[r])
         if err is not None:
             failed = True
-            details.append(f"{r}: ls-remote failed: {err}")
+            details.append(f"{r} {refs[r]}: ls-remote failed: {err}")
             data["remotes"][r] = f"error: {err}"
         else:
             remote_shas[r] = sha
@@ -78,7 +82,8 @@ def g20_ancestry_and_remotes(ctx) -> GateResult:
     expected_parent = local
     if len(distinct) > 1:
         failed = True
-        details.append(f"remotes disagree on {ref}: {remote_shas} — run `prodgen push-sync` first")
+        seen = {f"{r} {refs[r]}": (s or "absent")[:12] for r, s in remote_shas.items()}
+        details.append(f"remotes disagree on production: {seen} — run `prodgen push-sync` first")
     elif distinct:
         remote = next(iter(distinct))
         expected_parent = remote or None

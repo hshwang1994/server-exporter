@@ -14,6 +14,9 @@ Covers (none of this touches the real repository's refs or remotes):
     failing / foreign-SHA / missing-tree E2E evidence, --skip-live without --dry-run, race (remote moved between baseline and
     publish → partial_push, local unchanged).
   - push-sync: lagging remote fast-forwarded; divergence refused.
+  - remote target refs (2026-11-02, 사용자 결정): GitHub `origin` carries production on refs/heads/production next to its
+    development main; the customer-form GitLab `internal` carries it on refs/heads/main, its only branch. promote/restore/push-sync
+    keep that layout, and a push URL shared by the two remotes is refused before anything is written.
 Live gates (WSL/Jenkins/pytest/G19) are stubbed to PASS so the real G18/G20/state/publish logic is what runs here.
 """
 from __future__ import annotations
@@ -22,13 +25,13 @@ import json
 
 import pytest
 
-from scripts.ai.prodgen import DEPLOY_REMOTES, PROVENANCE_FILE, REQUIRED_CI_STAGES
+from scripts.ai.prodgen import DEPLOY_REMOTES, DEPLOY_TARGET_REFS, PROVENANCE_FILE, REQUIRED_CI_STAGES, remote_ref
 from scripts.ai.prodgen.build import build
 from scripts.ai.prodgen.common import ProdgenError
 from scripts.ai.prodgen.drift import baseline_record, classify_production, drift_check
 from scripts.ai.prodgen.evidence import REQUIRED_HARNESS, REQUIRED_HARNESS_TREE, REQUIRED_MAIN, canonical_digest
 from scripts.ai.prodgen.gitstore import GitStore
-from scripts.ai.prodgen.promote import _publish, promote, push_sync, remote_baseline, restore
+from scripts.ai.prodgen.promote import _publish, _repo_key, promote, push_sync, remote_baseline, restore
 from scripts.ai.prodgen.strip.psstrip import PowerShellParser
 from scripts.ai.prodgen.verify import GateResult, gates_live, gates_promotion, run_gates
 
@@ -37,11 +40,14 @@ from .test_pipeline_tmp_repo import FILES, MANIFEST, _git  # noqa: F401  (same t
 _needs_ps = pytest.mark.skipif(not PowerShellParser().available, reason="PowerShell 파서 없음 — 생성(build)이 class B 로 막힌다")
 PROD = "refs/heads/production"
 BOTH = ",".join(DEPLOY_REMOTES)
+# remote → the ref it carries production on (2026-11-02, 사용자 결정) — written out here so the test pins the contract
+TARGET = {"origin": PROD, "internal": "refs/heads/main"}
 
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
-    """repo with main, two bare remotes (origin/internal), a legacy production commit B pushed everywhere."""
+    """repo with main, two bare remotes and a legacy production commit B: origin (GitHub form — development main +
+    production B) and internal (customer-form GitLab — its only branch main = B)."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q")
@@ -65,8 +71,8 @@ def world(tmp_path, monkeypatch):
     tree = store.build_tree([("100644", blob, "legacy.txt")], write=True)
     B = store.commit_tree(tree, [], "legacy production\n")
     store.update_ref(PROD, B)
-    for name in DEPLOY_REMOTES:
-        _git(repo, "push", "-q", name, "main", PROD)
+    _git(repo, "push", "-q", "origin", "main", PROD)                       # GitHub: development main + production
+    _git(repo, "push", "-q", "internal", f"{B}:{TARGET['internal']}")      # customer-form GitLab: only main (= production)
     # stub the live gates (WSL / Jenkins / pytest / G19) — G18/G20 and the plumbing stay real
     monkeypatch.setattr(gates_live, "g11_syntax_check", lambda ctx: GateResult("G11", "PASS", ["stub"]))
     monkeypatch.setattr(gates_live, "g12_config_dump", lambda ctx: GateResult("G12", "PASS", ["stub"]))
@@ -117,8 +123,15 @@ def _ci(main_sha: str, world, bad: str | None = None, build_url: str = "https://
 
 
 def _remote_prod(repo, name):
-    out = _git(repo, "ls-remote", name, PROD)
+    """production as `name` carries it — on its own target ref (GitHub production · customer-form GitLab main)."""
+    out = _git(repo, "ls-remote", name, TARGET[name])
     return out.split()[0] if out else None
+
+
+def _branches(repo, name):
+    """{branch ref: sha} of every branch on `name` — the customer-form check (GitLab has nothing but main)."""
+    out = _git(repo, "ls-remote", name)
+    return {ref: sha for sha, ref in (line.split() for line in out.splitlines() if line.strip()) if ref.startswith("refs/heads/")}
 
 
 def _promote(world, sha, **kw):
@@ -154,6 +167,9 @@ def test_full_cycle_bootstrap_restore_repromote(world):
     assert tr["CI-Stages"] == "verified"
     assert _remote_prod(repo, "origin") == P1 and _remote_prod(repo, "internal") == P1
     assert res["publish"]["local_updated"] and len(res["publish"]["done"]) == 2
+    assert res["remote_refs"] == TARGET and [d["ref"] for d in res["publish"]["done"]] == [TARGET["origin"], TARGET["internal"]]
+    assert _branches(repo, "internal") == {TARGET["internal"]: P1}, "customer-form GitLab: only main, carrying production"
+    assert _branches(repo, "origin") == {"refs/heads/main": X, PROD: P1}, "GitHub keeps its development main next to production"
     assert classify_production(store, P1)["state"] == "PROVENANCE"
     # ④ arbitrary legacy restore refused; restore to B only with --bootstrap-baseline B → R
     with pytest.raises(ProdgenError):
@@ -169,6 +185,7 @@ def test_full_cycle_bootstrap_restore_repromote(world):
     st = classify_production(store, R)
     assert st["state"] == "RESTORED_BASELINE" and st["ok"] and st["previous_generated"] == P1 and st["previous_generated_main_sha"] == X
     assert _remote_prod(repo, "origin") == R and _remote_prod(repo, "internal") == R
+    assert _branches(repo, "internal") == {TARGET["internal"]: R} and done["remote_refs"] == TARGET
     d = drift_check(str(repo), PROD, man)
     assert d["mode"] == "RESTORED_BASELINE" and d["ok"]
     # ⑤ re-promotion P2 from a descendant of X: parent R, no bootstrap flag needed
@@ -180,6 +197,7 @@ def test_full_cycle_bootstrap_restore_repromote(world):
     P2 = store.rev_parse(PROD)
     assert store.commit_parents(P2) == [R] and GitStore.parse_trailers(store.commit_message(P2))["Bootstrap-Baseline"] == B
     assert _remote_prod(repo, "origin") == P2 == _remote_prod(repo, "internal")
+    assert _branches(repo, "internal") == {TARGET["internal"]: P2} and _branches(repo, "origin")["refs/heads/main"] == X
     # ⑥ non-monotonic candidate (a commit beside main that does not descend from X2) → G20 FAIL → refused
     side = store.commit_tree(store.commit_tree_sha(X), [X], "side\n")
     res3 = _promote(world, side)
@@ -281,29 +299,47 @@ def test_g20_without_remotes_is_partial_not_pass(world):
 
 
 @_needs_ps
-def test_shared_push_url_between_remotes_is_idempotent_not_partial(world):
-    """Lab configuration (2026-10-04 real P1 `1f725071`): `origin` has two push URLs (GitHub + the GitLab repo that is also
-    remote `internal`). The origin push updates GitLab, so `internal` is already at the new commit when its turn comes —
-    that is an idempotent success, not `partial_push`; both remotes and the local ref end on the new commit."""
+def test_shared_push_url_across_target_refs_is_refused_before_writing(world):
+    """2026-11-02: `origin` used to carry the GitLab repository (remote `internal`) as a second push URL (dual push, the
+    2026-10-04 P1 configuration). With GitLab in customer form the two remotes carry production on different refs, so that URL
+    would create `production` on GitLab. promote / restore / push-sync refuse it before anything is written (a dry-run shows
+    it) and go through again once the extra push URL is removed."""
     repo, store, B = world["repo"], world["store"], world["B"]
     origin_url, internal_url = _git(repo, "remote", "get-url", "origin"), _git(repo, "remote", "get-url", "internal")
     _git(repo, "remote", "set-url", "--add", "--push", "origin", origin_url)
     _git(repo, "remote", "set-url", "--add", "--push", "origin", internal_url)
     X = _git(repo, "rev-parse", "main")
     res = _promote(world, X, bootstrap_baseline=B)
-    assert res["ok"] and "partial_push" not in res, res.get("refused")
-    pub = res["publish"]
-    assert [d["remote"] for d in pub["done"]] == ["origin", "internal"] and not pub["failed"] and pub["local_updated"], pub
-    assert pub["done"][1].get("shared_push_url") is True and "shared push URL" in pub["done"][1]["protection"]
-    assert internal_url.rstrip("/") in {u.rstrip("/") for u in pub["shared_push_urls"]}, pub.get("shared_push_urls")
+    assert not res["ok"] and res["stage"] == "policy" and "build" not in res, res
+    assert "remove the extra push URL" in res["refused"] and f"internal → {TARGET['internal']}" in res["refused"], res["refused"]
+    pre = promote(str(repo), X, world["man"], dry_run=True, skip_live=True, push_remote=BOTH, bootstrap_baseline=B)
+    assert pre["deploy_policy"]["preview_refusals"] and "commit" not in pre, pre["deploy_policy"]
+    with pytest.raises(ProdgenError, match="push target of origin and internal"):
+        restore(str(repo), B, dry_run=False, push_remote=BOTH, bootstrap_baseline=B)
+    with pytest.raises(ProdgenError, match="push-sync refused"):
+        push_sync(str(repo), PROD, list(DEPLOY_REMOTES), dry_run=False)
+    assert push_sync(str(repo), PROD, list(DEPLOY_REMOTES), dry_run=True)["preview_refusals"]
+    assert store.rev_parse(PROD) == B and _branches(repo, "internal") == {TARGET["internal"]: B}, "nothing written, no production on GitLab"
+    # the extra push URL removed → the same promotion goes through; GitLab still has nothing but main
+    _git(repo, "config", "--unset-all", "remote.origin.pushurl")
+    res = _promote(world, X, bootstrap_baseline=B)
+    assert res["ok"], res.get("refused")
     P1 = res["commit"]
-    assert _remote_prod(repo, "origin") == P1 == _remote_prod(repo, "internal") == store.rev_parse(PROD)
-    # a remote that moved to something ELSE is still a pre-check failure (the idempotent branch only accepts the new commit)
-    other = store.commit_tree(store.build_tree([("100644", store.hash_object(b"other\n", write=True), "legacy.txt")], write=True), [P1], "other\n")
-    _git(repo, "push", "-q", "internal", f"{other}:{PROD}")
+    assert "shared_push_urls" not in res["publish"] and _branches(repo, "internal") == {TARGET["internal"]: P1}
+    # a remote already holding exactly the new commit on its own target ref is an idempotent success, not partial_push
     new = store.commit_tree(store.commit_tree_sha(P1), [P1], "candidate\n\nX: y\n")
-    pub2 = _publish(store, PROD, new, P1, ["internal"])
-    assert pub2["failed"] and pub2["failed"][0]["stage"] == "pre-check" and not pub2["local_updated"]
+    _git(repo, "push", "-q", "internal", f"{new}:{TARGET['internal']}")
+    pub = _publish(store, PROD, new, P1, list(DEPLOY_REMOTES))
+    assert [d["remote"] for d in pub["done"]] == ["origin", "internal"] and not pub["failed"] and pub["local_updated"], pub
+    assert pub["done"][1]["ref"] == TARGET["internal"] and pub["done"][1]["protection"] == "already at the new commit (idempotent)"
+    assert _remote_prod(repo, "origin") == new == _remote_prod(repo, "internal") == store.rev_parse(PROD)
+    # a remote that moved to something ELSE is still a pre-check failure (the idempotent branch only accepts the new commit)
+    other = store.commit_tree(store.build_tree([("100644", store.hash_object(b"other\n", write=True), "legacy.txt")], write=True), [new], "other\n")
+    _git(repo, "push", "-q", "internal", f"{other}:{TARGET['internal']}")
+    newer = store.commit_tree(store.commit_tree_sha(new), [new], "candidate 2\n\nX: z\n")
+    pub2 = _publish(store, PROD, newer, new, ["internal"])
+    assert pub2["failed"] and pub2["failed"][0]["stage"] == "pre-check" and pub2["failed"][0]["ref"] == TARGET["internal"]
+    assert not pub2["local_updated"] and store.rev_parse(PROD) == new
 
 
 @_needs_ps
@@ -335,7 +371,7 @@ def test_refusals_evidence_skiplive_remotes_and_race(world):
     assert store.rev_parse(PROD) == B and _remote_prod(repo, "origin") == B, "refusals change no ref"
     # remotes disagree → refused before any object is written
     moved = store.commit_tree(store.build_tree([("100644", store.hash_object(b"moved\\n", write=True), "legacy.txt")], write=True), [B], "moved on internal\n")
-    _git(repo, "push", "-q", "internal", f"{moved}:{PROD}")
+    _git(repo, "push", "-q", "internal", f"{moved}:{TARGET['internal']}")
     res = _promote(world, X, bootstrap_baseline=B)
     assert not res["ok"], res
     with pytest.raises(ProdgenError):
@@ -343,6 +379,7 @@ def test_refusals_evidence_skiplive_remotes_and_race(world):
     # push-sync: origin=B, internal=moved(B+1) → fast-forward origin and the local ref to moved (no force)
     sync = push_sync(str(repo), PROD, list(DEPLOY_REMOTES), dry_run=False)
     assert sync["ok"] and _remote_prod(repo, "origin") == moved == _remote_prod(repo, "internal") == store.rev_parse(PROD)
+    assert sync["remote_refs"] == TARGET and _branches(repo, "internal") == {TARGET["internal"]: moved}, "GitLab stays customer-form"
     # race: baseline computed (expected=moved), origin moves before publish → pre-check fails, nothing moved locally
     expected = store.rev_parse(PROD)
     raced = store.commit_tree(store.build_tree([("100644", store.hash_object(b"raced\\n", write=True), "legacy.txt")], write=True), [expected], "raced\n")
@@ -353,10 +390,30 @@ def test_refusals_evidence_skiplive_remotes_and_race(world):
     assert not pub["local_updated"] and store.rev_parse(PROD) == expected
     # true divergence: internal gets a *different* child of moved → no single descendant → push-sync refuses, no force
     other = store.commit_tree(store.build_tree([("100644", store.hash_object(b"other\\n", write=True), "legacy.txt")], write=True), [expected], "other on internal\n")
-    _git(repo, "push", "-q", "internal", f"{other}:{PROD}")
+    _git(repo, "push", "-q", "internal", f"{other}:{TARGET['internal']}")
     div = push_sync(str(repo), PROD, list(DEPLOY_REMOTES), dry_run=False)
     assert not div["ok"] and "divergence" in div["refused"]
     assert _remote_prod(repo, "origin") == raced and _remote_prod(repo, "internal") == other, "refusal moves nothing"
+
+
+def test_remote_ref_contract():
+    """2026-11-02 (사용자 결정): GitHub `origin` carries production on refs/heads/production, the customer-form GitLab `internal`
+    on refs/heads/main. A non-default --production-ref is never mapped — a trial ref must not land on the customer `main`."""
+    assert DEPLOY_TARGET_REFS == TARGET and set(DEPLOY_TARGET_REFS) == set(DEPLOY_REMOTES)
+    assert {r: remote_ref(r) for r in DEPLOY_REMOTES} == TARGET and remote_ref("other") == PROD
+    assert remote_ref("internal", "refs/heads/prod-trial") == "refs/heads/prod-trial" == remote_ref("origin", "refs/heads/prod-trial")
+
+
+def test_repo_key_treats_one_repository_as_one_push_target():
+    """http/https, credentials, port, `.git` and a trailing slash do not make the GitLab project a different push target."""
+    gitlab = _repo_key("https://10.100.64.156/root/server-expoter.git")
+    assert gitlab == "10.100.64.156/root/server-expoter"
+    for same in ("http://10.100.64.156/root/server-expoter.git", "https://user@10.100.64.156:443/root/server-expoter/",
+                 "ssh://git@10.100.64.156:2222/root/server-expoter.git", "git@10.100.64.156:root/server-expoter.git"):
+        assert _repo_key(same) == gitlab, same
+    github = _repo_key("git@github.com:hshwang1994/server-exporter.git")
+    assert github == _repo_key("https://GitHub.com/hshwang1994/server-exporter") != gitlab
+    assert "user" not in _repo_key("https://user:secret@10.100.64.156/root/server-expoter.git"), "no credential in the key"
 
 
 def test_legacy_state_and_drift_without_bootstrap(world):

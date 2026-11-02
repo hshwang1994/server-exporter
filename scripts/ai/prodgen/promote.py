@@ -11,6 +11,10 @@ promote (2026-10-04, Astra 2~4차 R1 · R2 · R4 · §8 · 검토 C2~C4):
   temp index → write-tree → commit-tree -p <expected> → fast-forward invariant (new^ == expected, expected is an ancestor) →
   per-remote: pre ls-remote == expected → push (--force-with-lease as a race detector, ff enforced by the parent) → post ls-remote == new
   → local ref updated only after every remote succeeded. A failure on a later remote leaves `partial_push` for `push-sync`.
+remote target refs (2026-11-02, 사용자 결정): every remote is read and written on its own production ref (`remote_ref`) — GitHub
+  `origin` refs/heads/production, customer-form GitLab `internal` refs/heads/main (its only branch). The local ref stays
+  refs/heads/production. A push URL shared by remotes whose target refs differ would write one remote's ref onto the other
+  (`origin` carrying the GitLab URL would create `production` on GitLab) — a real promote/restore/push-sync refuses it first.
 restore: a new commit whose tree is a previous production commit's tree (no history rewrite). A legacy target is allowed only when
   --bootstrap-baseline names it and the generated production in the history recorded that baseline. Same publish path.
 push-sync: fast-forward lagging remotes (and the local ref) to the single descendant; divergence is refused (no retry, no force).
@@ -20,10 +24,11 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import subprocess
 import tempfile
 
-from . import DEPLOY_REMOTES, GENERATOR_VERSION, PROVENANCE_FILE, REQUIRED_CI_STAGES, RULES_VERSION
+from . import DEPLOY_REMOTES, GENERATOR_VERSION, PRODUCTION_REF, PROVENANCE_FILE, REQUIRED_CI_STAGES, RULES_VERSION, remote_ref
 from .build import build
 from .common import ProdgenError
 from .drift import baseline_record, classify_production, first_prodgen_commit, is_ancestor
@@ -32,7 +37,7 @@ from .verify import (ENV_DEPENDENT_GATES, MANDATORY_GATES, MUTABLE_GATES, GateRe
                      collect_environment, environment_compatible, report_digest_ok, run_gates)
 from .verify.gates_promotion import g18_drift, g20_ancestry_and_remotes, ls_remote
 
-DEFAULT_REF = "refs/heads/production"
+DEFAULT_REF = PRODUCTION_REF
 
 
 def _now() -> str:
@@ -58,13 +63,19 @@ def _gate_line(report_dict: dict) -> str:
 
 
 # ── remote baseline / publish ─────────────────────────────────────────────────────
+def _remote_refs(remotes: list, production_ref: str) -> dict:
+    """{remote: the ref that remote carries production on} (2026-11-02 — GitHub production · customer-form GitLab main)."""
+    return {r: remote_ref(r, production_ref) for r in remotes}
+
+
 def remote_baseline(store: GitStore, ref: str, remotes: list) -> dict:
-    """Agreeing production SHA across local + remotes. Refuses divergence."""
+    """Agreeing production SHA across local + remotes, each remote read on its own target ref. Refuses divergence."""
     local = store.rev_parse(ref) if store.rev_exists(ref) else None
+    refs = _remote_refs(remotes, ref)
     shas = {}
     errors = {}
     for r in remotes:
-        sha, err = ls_remote(store, r, ref)
+        sha, err = ls_remote(store, r, refs[r])
         if err is not None:
             errors[r] = err
         else:
@@ -73,42 +84,48 @@ def remote_baseline(store: GitStore, ref: str, remotes: list) -> dict:
         raise ProdgenError(f"ls-remote failed: {errors}")
     distinct = set(shas.values())
     if len(distinct) > 1:
-        raise ProdgenError(f"remotes disagree on {ref}: {shas} — run `prodgen push-sync` first")
+        seen = {f"{r} {refs[r]}": (s or "absent")[:12] for r, s in shas.items()}
+        raise ProdgenError(f"remotes disagree on production: {seen} — run `prodgen push-sync` first")
     remote = next(iter(distinct)) if distinct else None
     if remotes and (local or None) != (remote or None):
         raise ProdgenError(f"local {ref}={(local or 'absent')[:12]} != remotes {(remote or 'absent')[:12]} — fetch / push-sync first")
-    return {"local": local, "remotes": shas, "expected": remote if remotes else local}
+    return {"local": local, "remotes": shas, "remote_refs": refs, "expected": remote if remotes else local}
 
 
 def _publish(store: GitStore, ref: str, new: str, expected: str | None, remotes: list) -> dict:
-    """ff-enforced publish to every remote, then the local ref. Returns {done, failed, local_updated}."""
+    """ff-enforced publish to every remote (each on its own target ref), then the local ref. Returns {done, failed, local_updated}."""
     parents = store.commit_parents(new)
     if expected and parents != [expected]:
         raise ProdgenError(f"fast-forward invariant: {new[:12]}^ = {parents} != expected {expected[:12]}")
     if expected and not is_ancestor(store, expected, new):
         raise ProdgenError(f"fast-forward invariant: expected {expected[:12]} is not an ancestor of {new[:12]}")
     done, failed = [], []
+    refs = _remote_refs(remotes, ref)
     shared = _shared_push_urls(store, remotes)
     for r in remotes:
-        pre, err = ls_remote(store, r, ref)
+        rref = refs[r]
+        pre, err = ls_remote(store, r, rref)
         if err is None and pre == new:
-            # Already holds exactly the new commit: reached through another configured remote's push URL (2026-10-04 P1 —
-            # `origin` carries the GitLab URL as a second push URL). Idempotent success, recorded as such; not a failure.
-            done.append({"remote": r, "sha": new, "protection": "already at the new commit (reached via a shared push URL)", "shared_push_url": True})
+            # Already holds exactly the new commit on its own target ref — an idempotent success, recorded as such, not a failure
+            # (2026-10-04 P1: reached through a push URL that another remote also carries). Since 2026-11-02 a real
+            # promote/restore refuses a shared push URL between remotes whose target refs differ before it gets here.
+            via_shared = any(r in names for names in shared.values())
+            done.append({"remote": r, "ref": rref, "sha": new, "shared_push_url": via_shared,
+                         "protection": "already at the new commit " + ("(reached via a shared push URL)" if via_shared else "(idempotent)")})
             continue
         if err is not None or (pre or None) != (expected or None):
-            failed.append({"remote": r, "stage": "pre-check", "remote_sha": pre, "error": err or "moved since baseline"})
+            failed.append({"remote": r, "ref": rref, "stage": "pre-check", "remote_sha": pre, "error": err or "moved since baseline"})
             break
-        lease = f"--force-with-lease={ref}:{expected}" if expected else f"--force-with-lease={ref}:"
-        proc = subprocess.run(["git", "push", lease, r, f"{new}:{ref}"], cwd=store.repo_root, capture_output=True, text=True)
+        lease = f"--force-with-lease={rref}:{expected}" if expected else f"--force-with-lease={rref}:"
+        proc = subprocess.run(["git", "push", lease, r, f"{new}:{rref}"], cwd=store.repo_root, capture_output=True, text=True)
         if proc.returncode != 0:
-            failed.append({"remote": r, "stage": "push", "error": proc.stderr.strip()[-300:]})
+            failed.append({"remote": r, "ref": rref, "stage": "push", "error": proc.stderr.strip()[-300:]})
             break
-        post, err = ls_remote(store, r, ref)
+        post, err = ls_remote(store, r, rref)
         if err is not None or post != new:
-            failed.append({"remote": r, "stage": "post-check", "remote_sha": post, "error": err or "ref is not the pushed commit"})
+            failed.append({"remote": r, "ref": rref, "stage": "post-check", "remote_sha": post, "error": err or "ref is not the pushed commit"})
             break
-        done.append({"remote": r, "sha": new, "protection": "accepted by remote"})
+        done.append({"remote": r, "ref": rref, "sha": new, "protection": "accepted by remote"})
     local_updated = False
     if remotes and not failed or not remotes:
         store.update_ref(ref, new, expected)
@@ -119,15 +136,48 @@ def _publish(store: GitStore, ref: str, new: str, expected: str | None, remotes:
     return out
 
 
+def _repo_key(url: str) -> str:
+    """The repository a push URL points at, as host/path — scheme, credentials, port, `.git` and a trailing slash ignored, so
+    http:// and https:// to the same GitLab project count as the same target. Local paths are compared as absolute paths."""
+    u = url.strip()
+    m = re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://(?:[^/@]*@)?([^/:]+)(?::\d+)?/(.*)$", u)
+    if m:
+        host, path = m.group(1), m.group(2)
+    else:
+        m = re.match(r"^(?:[^@/]+@)?([^:/]+):(.*)$", u)                      # scp-like ssh: git@host:owner/repo.git
+        if not m or re.match(r"^[A-Za-z]:[\\/]", u):                         # a Windows drive path is not host:path
+            return os.path.normcase(os.path.abspath(u)).rstrip("\\/")
+        host, path = m.group(1), m.group(2)
+    path = path.strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
+    return f"{host.lower()}/{path}"
+
+
 def _shared_push_urls(store: GitStore, remotes: list) -> dict:
-    """{url: [remote, …]} for push URLs configured under more than one remote name (informational; such a URL is
-    updated by the first remote's push and then found already-at-new by the later one)."""
+    """{repository: [remote, …]} for a repository reached by the push URLs of more than one remote name. The key is the
+    credential-free `_repo_key` form (no userinfo is ever reported)."""
     seen: dict = {}
     for r in remotes:
         proc = subprocess.run(["git", "remote", "get-url", "--push", "--all", r], cwd=store.repo_root, capture_output=True, text=True)
         for url in (proc.stdout or "").split():
-            seen.setdefault(url.rstrip("/"), []).append(r)
+            names = seen.setdefault(_repo_key(url), [])
+            if r not in names:
+                names.append(r)
     return {u: rs for u, rs in seen.items() if len(rs) > 1}
+
+
+def _shared_target_problems(store: GitStore, remotes: list, production_ref: str) -> list:
+    """A repository reached by two remotes whose production refs differ would get the other remote's ref as well (2026-11-02:
+    `origin` carrying the GitLab URL as a second push URL would create `production` on the customer-form GitLab). Refused."""
+    refs = _remote_refs(remotes, production_ref)
+    problems = []
+    for repo, names in sorted(_shared_push_urls(store, remotes).items()):
+        if len({refs[n] for n in names}) > 1:
+            pairs = ", ".join(f"{n} → {refs[n]}" for n in names)
+            problems.append(f"repository {repo} is a push target of {' and '.join(names)} whose production refs differ ({pairs}) — "
+                            f"remove the extra push URL (`git config --unset remote.<remote>.pushurl <url regex>`) first")
+    return problems
 
 
 # ── evidence helpers ──────────────────────────────────────────────────────────────
@@ -200,11 +250,17 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
     store = GitStore(repo_root)
     main_sha = store.rev_parse(sha)
     remotes = _split_remotes(push_remote)
-    result = {"main_sha": main_sha, "dry_run": dry_run, "production_ref": production_ref, "remotes": remotes, "ok": False}
+    result = {"main_sha": main_sha, "dry_run": dry_run, "production_ref": production_ref, "remotes": remotes,
+              "remote_refs": _remote_refs(remotes, production_ref), "ok": False}
     if skip_live and not dry_run:
         raise ProdgenError("--skip-live is allowed only together with --dry-run (a real promotion needs every mandatory gate)")
     policy = _deploy_policy_problems(remotes, dry_run)
+    shared = _shared_target_problems(store, remotes, production_ref)
+    if shared and not dry_run:
+        policy = policy + shared
     result["deploy_policy"] = {"required_remotes": list(DEPLOY_REMOTES), "ok": not policy, "problems": policy}
+    if shared and dry_run:
+        result["deploy_policy"]["preview_refusals"] = shared          # a real run would stop here; the preview goes on
     if policy:
         result["stage"] = "policy"
         result["refused"] = "deploy policy: " + "; ".join(policy)
@@ -397,14 +453,19 @@ def restore(repo_root: str, to_commit: str, *, dry_run: bool = True, production_
     target = store.rev_parse(to_commit)
     target_tree = store.commit_tree_sha(target)
     remotes = _split_remotes(push_remote)
+    shared = _shared_target_problems(store, remotes, production_ref)
     if remotes and not dry_run:
         policy = _deploy_policy_problems(remotes, dry_run)
         if policy:
             raise ProdgenError("deploy policy: " + "; ".join(policy) + " — a restore that moves one remote leaves the other behind (divergence)")
+        if shared:
+            raise ProdgenError("deploy policy: " + "; ".join(shared))
     base = remote_baseline(store, production_ref, remotes)
     prev = base["expected"]
     result = {"target": target, "target_tree_oid": target_tree, "parent": prev, "dry_run": dry_run,
-              "production_ref": production_ref, "remotes": remotes, "baseline": base, "ok": False}
+              "production_ref": production_ref, "remotes": remotes, "remote_refs": base["remote_refs"], "baseline": base, "ok": False}
+    if shared:
+        result["preview_refusals"] = shared          # dry-run only — a real restore refuses before reading a remote
     if prev == target:
         result.update({"ok": True, "note": "production already points at the target"})
         return result
@@ -457,16 +518,22 @@ def push_sync(repo_root: str, production_ref: str = DEFAULT_REF, remotes=(), dry
     remotes = _split_remotes(remotes) if isinstance(remotes, str) else list(remotes)
     if not remotes:
         raise ProdgenError("push-sync needs at least one --remote")
+    refs = _remote_refs(remotes, production_ref)
+    shared = _shared_target_problems(store, remotes, production_ref)
+    if shared and not dry_run:
+        raise ProdgenError("push-sync refused: " + "; ".join(shared))
     states = {"local": store.rev_parse(production_ref) if store.rev_exists(production_ref) else None}
     for r in remotes:
-        sha, err = ls_remote(store, r, production_ref)
+        sha, err = ls_remote(store, r, refs[r])
         if err is not None:
             raise ProdgenError(f"ls-remote {r} failed: {err}")
         states[r] = sha or None
         if sha:
-            subprocess.run(["git", "fetch", "-q", r, production_ref], cwd=store.repo_root, capture_output=True)
+            subprocess.run(["git", "fetch", "-q", r, refs[r]], cwd=store.repo_root, capture_output=True)
     candidates = [s for s in states.values() if s]
-    result = {"before": states, "ref": production_ref, "dry_run": dry_run, "ok": False}
+    result = {"before": states, "ref": production_ref, "remote_refs": refs, "dry_run": dry_run, "ok": False}
+    if shared:
+        result["preview_refusals"] = shared          # dry-run only — a real push-sync refuses before reading a remote
     if not candidates:
         result.update({"ok": True, "note": "no production anywhere"})
         return result
@@ -485,12 +552,12 @@ def push_sync(repo_root: str, production_ref: str = DEFAULT_REF, remotes=(), dry
         if cur == head:
             continue
         if dry_run:
-            actions.append({"remote": r, "from": cur, "to": head, "dry_run": True})
+            actions.append({"remote": r, "ref": refs[r], "from": cur, "to": head, "dry_run": True})
             continue
-        lease = f"--force-with-lease={production_ref}:{cur}" if cur else f"--force-with-lease={production_ref}:"
-        proc = subprocess.run(["git", "push", lease, r, f"{head}:{production_ref}"], cwd=store.repo_root, capture_output=True, text=True)
-        post, err = ls_remote(store, r, production_ref)
-        actions.append({"remote": r, "from": cur, "to": head, "rc": proc.returncode, "post": post,
+        lease = f"--force-with-lease={refs[r]}:{cur}" if cur else f"--force-with-lease={refs[r]}:"
+        proc = subprocess.run(["git", "push", lease, r, f"{head}:{refs[r]}"], cwd=store.repo_root, capture_output=True, text=True)
+        post, err = ls_remote(store, r, refs[r])
+        actions.append({"remote": r, "ref": refs[r], "from": cur, "to": head, "rc": proc.returncode, "post": post,
                         "error": (proc.stderr.strip()[-200:] if proc.returncode != 0 else err)})
         if proc.returncode != 0 or post != head:
             result["actions"] = actions
