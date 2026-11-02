@@ -1,18 +1,20 @@
 # production 브랜치 생성, 검증, 반영, 되돌리기
 
-이 문서는 사내 저장소의 `production` 브랜치를 어떻게 만들고 올리는지 설명합니다. 고객사 저장소에는 이 브랜치가 없고 `main` 하나만 있으므로, 고객사 반영은 [07-update-and-rollback.md](07-update-and-rollback.md) 3절을 보세요.
+이 문서는 GitHub 저장소의 `production` 브랜치와, 같은 커밋을 담는 사내 GitLab `main`을 어떻게 만들고 올리는지 설명합니다. 고객사 저장소에는 `production` 브랜치가 없고 `main` 하나만 있으므로, 고객사 반영은 [07-update-and-rollback.md](07-update-and-rollback.md) 3절을 보세요.
 
 ## 1. 저장소와 브랜치
 
 | 저장소 | 브랜치 | 역할 |
 |---|---|---|
-| 사내 GitHub(`origin`) | `main`, `production` | 개발 원본과 검증된 배포본 |
-| 사내 GitLab(`internal`) | `main`, `production` | 같은 두 브랜치. 승격과 복구는 두 원격을 함께 다룹니다 |
+| 사내 GitHub(`origin`) | `main`, `production` | 개발 원본과 검증된 배포본. jenkins-prod의 Job은 모두 이 저장소를 봅니다 |
+| 사내 GitLab(`internal`) | `main` 하나 | 고객사와 같은 형태(2026-11-02부터). `main`은 GitHub `production`과 같은 커밋입니다. 개발 `main`과 작업 브랜치는 두지 않습니다 |
 | 고객사 저장소 | `main` | 고객사 운영 브랜치. 사내 `production`의 tree를 전달받습니다 |
+
+승격과 복구는 두 원격을 함께 다룹니다. 생성기는 GitHub에는 `production`, 사내 GitLab에는 `main`으로 같은 커밋을 올립니다. 개발 브랜치는 GitHub에만 push하고, 사내 GitLab에는 생성기 말고는 쓰지 않습니다.
 
 `production`은 사람이 편집하거나 `main`을 병합하는 브랜치가 아닙니다. 생성기 `scripts/ai/prodgen`이 고정된 `main` 커밋에서 운영에 필요한 파일만 뽑아 설명 주석을 지운 tree를 만들고, 그 tree를 새 커밋으로 `production`에 덧붙입니다. 생성기는 개발 저장소(`main`)에만 있고 배포본에는 들어가지 않습니다.
 
-전달 방향은 `개발 main → 생성 · 검증 → 사내 production → 고객사 main`입니다. 고객사 `main`과 개발 `main`을 같은 내용으로 맞추지 않습니다. 고객사 반영은 커밋이 아니라 tree 사본으로 이뤄질 수 있으므로 동일성은 `.production-provenance.json`의 `tree_hash`(파일 목록의 SHA-256)로 확인합니다.
+전달 방향은 `개발 main → 생성 · 검증 → GitHub production = 사내 GitLab main → 고객사 main`입니다. 고객사 `main`과 개발 `main`을 같은 내용으로 맞추지 않습니다. 고객사 반영은 커밋이 아니라 tree 사본으로 이뤄질 수 있으므로 동일성은 `.production-provenance.json`의 `tree_hash`(파일 목록의 SHA-256)로 확인합니다.
 
 ## 2. 배포본에 들어가는 것
 
@@ -59,7 +61,7 @@ python -m scripts.ai.prodgen evidence-aggregate --report verify.json --evidence 
 # 만들어질 커밋 미리 보기. 원격은 바뀌지 않습니다
 python -m scripts.ai.prodgen promote --sha "$SHA" --dry-run
 
-# 실제 승격. 4절의 전제가 모두 맞을 때만 커밋을 만들고 두 원격에 올립니다
+# 실제 승격. 4절의 전제가 모두 맞을 때만 커밋을 만들고 두 원격(GitHub production, 사내 GitLab main)에 올립니다
 python -m scripts.ai.prodgen promote --sha "$SHA" --verify-report verify.agg.json --e2e-evidence e2e.json \
     --ci-stage-results ci_stage_results.json --vault-password-file <vault 비밀번호 파일> --push-remote origin,internal
 
@@ -72,9 +74,11 @@ python -m scripts.ai.prodgen restore --to <이전 production 커밋> --push-remo
 
 - `--skip-live`는 `--dry-run`과만 쓸 수 있습니다. 건너뛴 gate가 있으면 결과는 PARTIAL이고 승격은 COMPLETE_PASS에서만 합니다.
 - 실제 `promote`와 `restore`는 `--push-remote origin,internal` 정확히 그 집합만 받습니다. 원격을 하나만 쓰면 거부되고 아무것도 만들지 않습니다.
+- 원격마다 production을 담는 브랜치가 다릅니다. `origin`은 `refs/heads/production`, `internal`은 `refs/heads/main`입니다. 결과의 `remote_refs`에 그 대응이 나옵니다. 기본값이 아닌 `--production-ref`(시험용 ref)는 두 원격에 같은 이름으로 씁니다.
+- 한 저장소가 두 원격의 push 대상이면 쓰기 전에 거부합니다. 예를 들어 `origin`에 사내 GitLab push URL을 추가한 설정은 GitLab에 `production`을 만들게 되므로 막힙니다. `--dry-run`에서는 `preview_refusals`로 보입니다. 해당 push URL을 지우면 됩니다(`git config --unset remote.origin.pushurl '10\.100\.64\.156'`).
 - `--ci-stage-results`는 같은 `main` 커밋의 CI 빌드가 남긴 `ci_stage_results.json`입니다. 다른 빌드의 파일을 섞으면 거부됩니다.
 - `--verify-report`는 바인딩(main SHA, tree hash, 생성기 해시, manifest 해시)이 같을 때만 재사용하고, 환경 식별자(Python, Ansible, PowerShell, Jenkins 버전 등)가 다르거나 비어 있으면 환경 의존 gate(G11 G12 G13 G14 G15 G19)를 다시 실행합니다. G18과 G20은 항상 다시 실행합니다. 어느 gate를 재사용했는지는 보고서의 `gates_reused`, `gates_rerun`과 커밋 trailer에 남습니다.
-- gate 구성: G01~G10, G16, G17 정적 검사. G11 syntax-check, G12 config dump, G15 module smoke. G13 Jenkins 린터. G14 생성 tree 위 pytest. G18 drift. G19 고객사 `main` 형태의 깨끗한 checkout에서 3채널 실제 실행. G20 조상과 두 원격 동일.
+- gate 구성: G01~G10, G16, G17 정적 검사. G11 syntax-check, G12 config dump, G15 module smoke. G13 Jenkins 린터. G14 생성 tree 위 pytest. G18 drift. G19 고객사 `main` 형태의 깨끗한 checkout에서 3채널 실제 실행. G20 조상, 그리고 GitHub `production`과 사내 GitLab `main`의 일치.
 
 - Windows 작업 PC에서 결과를 파일로 받으려면 `PYTHONIOENCODING=utf-8`을 붙입니다. 붙이지 않으면 결과 출력이 cp949로 인코딩되는데, 결과의 `—` 문자를 cp949로 쓸 수 없어 `UnicodeEncodeError`로 종료 코드 1이 납니다. 결과 출력은 승격과 push가 끝난 뒤에 하므로, 이 경우에도 원격은 이미 바뀌었을 수 있습니다. 다시 실행하기 전에 5절처럼 세 ref를 직접 확인하세요. G14는 이 변수를 pytest 자식 프로세스에 넘기지 않으므로 시험 결과는 달라지지 않습니다.
 
@@ -97,21 +101,21 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 2. gate G01~G20이 COMPLETE_PASS이고 보고서 바인딩이 일치합니다.
 3. 같은 `main` 커밋의 main Job 시나리오(S1, S2, S3, T2, T5, T6, E2E-A, E2E-A′)와 Harness 증거가 `e2e.json`에서 계약대로 PASS입니다. 기대 결과(T5 ABORTED, T6 UNSTABLE, E2E-A′ FAILURE)는 계약이 정하고 호출자가 바꿀 수 없습니다.
 4. 생성 tree의 hash가 검증한 tree와 같습니다.
-5. 두 원격의 `production`이 같고 현재 parent이며 G18, G20 재검사를 통과합니다.
+5. GitHub `production`과 사내 GitLab `main`이 같고 그 커밋이 현재 parent이며 G18, G20 재검사를 통과합니다.
 6. `--dry-run`이 아니고 `--push-remote origin,internal`을 명시했습니다.
 
 승격은 수집 시간대 밖에서 하고, 직후 production Job(`clovirone-server-gather`)으로 OS 대상 1~3대를 한 번 실행해 checkout SHA가 새 커밋이고 Portal 전송이 2xx인지 확인합니다. 이 확인은 첫 단계이고 완료 판정은 아닙니다. 명부 전수 재검증은 [../reference/live-validation.md](../reference/live-validation.md)에 기록합니다.
 
 ## 5. 반영 뒤 확인
 
-- `git ls-remote origin refs/heads/production`, `git ls-remote internal refs/heads/production`, 로컬 `git rev-parse production` 세 값이 같은지 봅니다. 승격 명령은 원격마다 push 직전과 직후의 ref를 확인하고 모두 성공했을 때만 로컬 ref를 옮깁니다. 두 번째 원격만 실패하면 `partial_push`로 보고하고, `push-sync`로 맞춥니다.
+- `git ls-remote origin refs/heads/production`, `git ls-remote internal refs/heads/main`, 로컬 `git rev-parse production` 세 값이 같은지 봅니다. `git ls-remote --heads internal`에는 `refs/heads/main` 한 줄만 있어야 합니다. 승격 명령은 원격마다 push 직전과 직후의 ref를 확인하고 모두 성공했을 때만 로컬 ref를 옮깁니다. 두 번째 원격만 실패하면 `partial_push`로 보고하고, `push-sync`로 맞춥니다.
 - 명령의 종료 코드만으로 원격 상태를 판단하지 마세요. 비정상 종료 뒤에도 원격이 바뀌었을 수 있고, 정상 종료 뒤에도 위 세 값을 확인합니다.
 - production Job 다음 빌드의 콘솔에서 `Checking out Revision`이 새 커밋인지 봅니다.
 - 커밋 trailer(`Main-SHA`, `Tree-Hash`, `Verdict`, `Gates`, `Verify-Report-SHA256`)와 `.production-provenance.json`이 맞는지 봅니다.
 
 ## 6. 되돌리기
 
-`restore --to <마지막 정상 production 커밋> --push-remote origin,internal`은 그 커밋의 tree를 새 커밋으로 두 원격에 올립니다. force push와 reset은 쓰지 않습니다. 첫 production `4ce90a00`으로 되돌릴 때만 `--bootstrap-baseline 4ce90a00`이 함께 필요합니다. 원격을 하나만 지정한 restore는 거부됩니다. 운영 Job은 브랜치를 고정해 보므로 Job 설정은 바꾸지 않습니다.
+`restore --to <마지막 정상 production 커밋> --push-remote origin,internal`은 그 커밋의 tree를 새 커밋으로 두 원격(GitHub `production`, 사내 GitLab `main`)에 올립니다. force push와 reset은 쓰지 않습니다. 첫 production `4ce90a00`으로 되돌릴 때만 `--bootstrap-baseline 4ce90a00`이 함께 필요합니다. 원격을 하나만 지정한 restore는 거부됩니다. 운영 Job은 브랜치를 고정해 보므로 Job 설정은 바꾸지 않습니다.
 
 고객사 `main`은 사내 production을 되돌린 것만으로 복구되지 않습니다. 이전 정상 tree를 고객사 `main`에 다시 반영하고 그 내용으로 확인합니다([07-update-and-rollback.md](07-update-and-rollback.md) 5절).
 
@@ -119,12 +123,47 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 
 | 항목 | 값 |
 |---|---|
-| production | `027409f4` (`main` `27c4b393`에서 생성, 2026-10-19, 정규 승격 — CI #63 COMPLETE_PASS · gate G01~G20 PASS · main Job 매트릭스 11건(#689~#699) · `CI-Stages: verified`. runtime tree `3d9c6c8c…` — `storage.hbas[].link_status` up/down 둘뿐 · ESXi hbas vmhba 그대로 · Windows `system.version` 연도 접두 반영. 승격 직후 production Job canary #310 ESXi · #311 Redfish · #312 OS · #313 Windows SUCCESS) |
-| 상태 | `PROVENANCE`, 두 원격 일치 |
-| 직전 production | `144c295f` (`main` `3e1e2aba`, 2026-10-18 정규 승격 — HBA 4채널 · link_status null · RAID 논리 볼륨) · `151cc395` (`main` `dd69aee1`, 2026-10-17 정규 승격 — InfiniBand 4채널 · CSUS 시리얼 접미사) · `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
+| production | `d464de4b` (`main` `447b6af7`에서 생성, 2026-10-19T22:31Z, 정규 승격 — CI #65 COMPLETE_PASS · gate G01~G20 PASS(G11~G15 · G18~G20 재실행) · main Job 매트릭스 #709~#719 · `CI-Stages: verified`. 승격 직후 production Job canary #314 ESXi · #315 Redfish · #316 OS · #317 Windows SUCCESS) |
+| 상태 | `PROVENANCE`. GitHub `production`과 로컬 `production`이 `d464de4b`. 사내 GitLab은 2026-11-02 고객사 형태 전환을 결정했고 관리 화면 정리(8절)를 기다립니다. 정리 전에는 GitLab에 옛 개발 `main`, `production`, 작업 브랜치가 남아 있어 승격과 `push-sync`가 원격 불일치로 쓰기 전에 멈춥니다 |
+| 직전 production | `027409f4` (`main` `27c4b393`, 2026-10-19 정규 승격 — CI #63 · canary #310~#313) · `144c295f` (`main` `3e1e2aba`, 2026-10-18 정규 승격 — HBA 4채널 · link_status null · RAID 논리 볼륨) · `151cc395` (`main` `dd69aee1`, 2026-10-17 정규 승격 — InfiniBand 4채널 · CSUS 시리얼 접미사) · `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
 | 첫 production(baseline) | `4ce90a00` |
 
 승격 이력과 각 승격의 검증 빌드는 [../reference/decision-log.md](../reference/decision-log.md)와 [../reference/live-validation.md](../reference/live-validation.md)에 있습니다.
+
+## 8. 사내 GitLab을 고객사 형태로 바꾸기
+
+2026-11-02 결정에 따른 정리입니다. GitLab에는 `main` 하나만 남기고, 그 커밋은 GitHub `production`과 같게 둡니다. GitHub의 `main`과 `production`은 그대로입니다. 보호된 기본 브랜치는 git push로 지울 수 없으므로 GitLab 관리 화면에서 Maintainer 이상 계정으로 진행합니다. 아래 순서를 지키면 어느 단계에서도 GitLab에 production 커밋이 남아 있습니다.
+
+1. 기준 커밋을 확인합니다. `git ls-remote origin refs/heads/production`과 `git ls-remote internal refs/heads/production`이 같은 SHA여야 합니다.
+2. Settings → Repository의 기본 브랜치(Default branch)를 `production`으로 바꿉니다.
+3. Settings → Repository → Protected branches에서 `main` 보호를 해제하고, Code → Branches에서 `main`을 지웁니다.
+4. Code → Branches → New branch로 `production`에서 `main`을 만듭니다. 작업 PC에서 `python -m scripts.ai.prodgen push-sync --remote origin --remote internal`을 실행해도 같습니다. 없는 GitLab `main`을 GitHub `production` 커밋으로 만듭니다.
+5. 기본 브랜치를 `main`으로 바꾸고 `main`을 보호합니다. push와 merge는 Maintainer만 허용하고 force push는 허용하지 않습니다.
+6. `production`의 보호를 해제하고 지웁니다. 작업 브랜치도 지웁니다. 작업 브랜치는 GitHub에 같은 커밋으로 남아 있습니다.
+7. Settings → Repository → Mirroring repositories와 Settings → Webhooks를 봅니다. GitHub와의 미러링이나 jenkins-prod 연동이 남아 있으면 지웁니다. 미러링이 남아 있으면 지운 브랜치가 다시 생깁니다.
+
+작업 PC의 git 설정도 맞춥니다. GitLab에 push하는 모든 사본에서 확인합니다.
+
+```bash
+git remote get-url --push --all origin        # GitHub 주소 한 줄. GitLab 주소가 있으면 아래 줄로 지웁니다
+git config --unset remote.origin.pushurl '10\.100\.64\.156'
+git config remote.internal.push refs/heads/production:refs/heads/main
+```
+
+마지막 줄은 refspec 없이 `git push internal`을 실행해도 개발 브랜치가 아니라 로컬 `production`만 GitLab `main`으로 가게 하는 안전장치입니다. 승격과 복구는 이 설정과 관계없이 원격마다 정해진 브랜치에 씁니다.
+
+정리 뒤 확인입니다.
+
+```bash
+git fetch --prune internal
+git ls-remote --heads internal                                   # refs/heads/main 한 줄
+git ls-remote origin refs/heads/production                       # 위와 같은 SHA
+python -m scripts.ai.prodgen push-sync --remote origin --remote internal --dry-run   # ok, 할 일 없음
+python -m scripts.ai.prodgen drift-check --production origin/production
+```
+
+- GitLab `main`의 이력에는 첫 production `4ce90a00` 이전의 개발 커밋이 조상으로 남습니다. production 이력이 그 커밋에서 개발 이력과 이어지기 때문입니다. 이력은 다시 쓰지 않습니다.
+- GitLab `main`에는 배포본(2절)만 있습니다. `Jenkinsfile_portal_Byid`처럼 배포본에 없는 파일을 GitLab에서 읽던 Job이 있다면 GitHub 저장소를 보도록 바꿔야 합니다.
 
 ## 다음 단계
 

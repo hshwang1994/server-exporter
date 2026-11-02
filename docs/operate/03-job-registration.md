@@ -7,10 +7,11 @@
 
 | 구성 | 브랜치 | Job의 Branch Specifier |
 |---|---|---|
-| 사내 (GitHub `origin`과 사내 GitLab `internal`) | `main`(개발)과 `production`(배포) | 개발 검증 Job은 `*/main`, 운영 Job은 `*/production` |
+| 사내 GitHub (`origin`) | `main`(개발)과 `production`(배포) | 개발 검증 Job은 `*/main`, 운영 Job은 `*/production`. jenkins-prod의 Job은 모두 이 저장소를 봅니다 |
+| 사내 GitLab (`internal`) | `main` 하나 (GitHub `production`과 같은 커밋) | 고객사와 같은 형태입니다. jenkins-prod의 Job은 이 저장소를 보지 않습니다 |
 | 고객사 | `main` 하나 | `*/main` |
 
-고객사 저장소에는 `production` 브랜치가 없습니다. 고객사 `main`에는 배포본(runtime 파일만 있는 tree)이 들어가며, 파이프라인은 브랜치 이름을 가정하지 않습니다. 사내에서 `production`을 만드는 방법은 [09-production-branch.md](09-production-branch.md)에 있습니다.
+고객사 저장소와 사내 GitLab에는 `production` 브랜치가 없습니다. 고객사 `main`에는 배포본(runtime 파일만 있는 tree)이 들어가며, 파이프라인은 브랜치 이름을 가정하지 않습니다. 사내에서 `production`을 만드는 방법은 [09-production-branch.md](09-production-branch.md)에 있습니다.
 
 Controller와 Runner 모두 저장소에 닿아야 합니다. Controller는 `readTrusted`로 파일 몇 개만 읽고, Runner는 수집 단계에서 전체를 checkout합니다.
 

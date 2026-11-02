@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-22
+> 최종 갱신: 2026-11-02
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -26,7 +26,7 @@
 | CSUS 3200 단일 서버 · summary 거짓 값 | CSUS 3200 은 Partition0 = 서버(다른 x86 과 같은 JSON), `multi_node` 는 유지, 시리얼 `-NNN` 제거는 OS · Redfish · **ESXi** · **Superdome Flex** 까지. `power.summary` 용량 모르면 null, `adapter_count` 는 FC 전용 카드 제외, RMC 의 `LogicalProcessorCount` 는 코어 수(adapter 플래그), Redfish 는 정보가 없을 때만 PCIeDevices · 섀시 Drives · NetworkInterfaces · 다중 섀시 Power/Thermal 을 읽는다. "노출 vs 요청" 범위 감사 회귀 3종 상시 | 2026-10-19 (2) |
 | 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개. 중단 원인은 Jenkins 의 분류로만(경과시간 · 노드 상태로 확정 안 함), 보존은 handler 한 곳에서 1회 | 2026-10-05~07 · 2026-10-12 |
 | 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가. 404 는 서버가 돌려준 것만 확정 거부, 플러그인이 합성한 404(이름 풀이 실패)는 통신 실패 | 2026-10-03 · 2026-10-05 · 2026-10-10 · 2026-10-12 |
-| production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, 양 원격 동일, 승격 직후 canary. 사용자 지시 긴급 승격은 같은 생성 tree + 사실 trailer(`Emergency-Promotion`) 로 하고 정규 재승격으로 증거를 채운다 | 2026-10-03 · 2026-10-04 · 2026-10-14 · 2026-10-15 |
+| production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, GitHub `production` = 사내 GitLab `main`(GitLab 은 고객사 형태 — `main` 하나), 승격 직후 canary. 사용자 지시 긴급 승격은 같은 생성 tree + 사실 trailer(`Emergency-Promotion`) 로 하고 정규 재승격으로 증거를 채운다 | 2026-10-03 · 2026-10-04 · 2026-10-14 · 2026-10-15 · 2026-11-02 |
 | Jenkinsfile 사본 | `Jenkinsfile_portal_Byid` 유지 · portal 과 동기화(시험 강제) | 2026-10-09 |
 | Add-on | 전역 `ADDON_REPO_URL` 하나로 켜고 빌드마다 받는다, 실패는 UNSTABLE + Add-on 없이 수집 | 2026-09-29 · 2026-09-30 |
 | Runner 선택 | `loc` 의 agent_label && target_type 능력 라벨, venv 는 `activate_ansible_venv.sh` 가 고른다 | 2026-09-28 · 2026-09-30 |
@@ -47,6 +47,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-11-02 — 사내 GitLab 을 고객사 형태로(`main` 하나 = GitHub production) · jenkins-prod 는 GitHub · dual push 폐기 |
 | 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합(uuid · 정격 클럭 · 스레드 · NIC 모델) · RAID 논리 볼륨 OS/ESXi |
 | 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 |
 | 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격 |
@@ -103,6 +104,40 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-11-02 — 사내 GitLab 을 고객사 형태로 (`main` 하나 = GitHub production)
+
+> 정본: [../operate/09-production-branch.md](../operate/09-production-branch.md) 1절 · 8절. 생성기(`scripts/ai/prodgen`) 변경, 수집 코드 · 배포본(runtime tree) 변경 0.
+
+### 사용자 지시
+
+- "github에는 main이랑 production을 그대로 냅두고 … gitlab에는 현재 main 브랜치를 지우고 production 브랜치가 main이 되는거임 gitlab이 고객사인것처럼 … jenkins-prod 에 연결된 각종 ci 및 액션들은 gitlab이랑 연결돼있는게아니라 github랑 연결돼있어야함."
+
+### 결정
+
+1. GitHub 는 그대로 `main`(개발) · `production`(배포) · 작업 브랜치를 둔다. jenkins-prod 의 Job 은 모두 GitHub 저장소를 SCM 으로 쓴다.
+2. 사내 GitLab 은 브랜치 `main` 하나만 둔다. 그 커밋은 GitHub `production` 과 같다. 개발 `main` · `production` · 작업 브랜치는 두지 않는다.
+3. 생성기는 원격마다 production 을 담는 브랜치를 따로 둔다 — GitHub 는 `refs/heads/production`, GitLab 은 `refs/heads/main`. 승격 · 복구 · `push-sync` · G20 이 원격마다 그 브랜치를 읽고 쓴다. 두 원격 모두가 아니면 실패하는 정책은 그대로다.
+4. 2026-05-01 부터 쓰던 dual push(`origin` 에 GitLab push URL 추가)는 폐기한다. 한 저장소가 서로 다른 브랜치를 담는 두 원격의 push 대상이면 GitLab 에 `production` 이 생기므로, 생성기는 그 설정을 보면 쓰기 전에 거부한다.
+5. GitLab 의 기본 브랜치 변경 · 보호 해제 · 브랜치 삭제는 관리 화면 작업이라 사용자가 한다(09-production-branch 8절).
+
+### 근거 (실측)
+
+- 2026-11-02 GitLab 브랜치: `main`(개발 `e8b5ae9b`) · `production`(`d464de4b`) · 작업 브랜치 5개(GitHub 에 같은 SHA 로 있음). GitHub `production` 도 `d464de4b`.
+- 저장소의 Jenkins Job 정의(`jenkins/jobs/*/config.xml`)는 모두 GitHub 주소를 쓴다. CI 의 Promote 단계는 GitLab 자격이 없어 dry-run 만 한다.
+- 생성기 시험(`tests/unit/prodgen`): GitLab 이 `main` 하나뿐인 원격에서 승격 · 복구 · 재승격 · `push-sync` 뒤에도 GitLab 에 `main` 외 브랜치가 생기지 않고 GitHub 개발 `main` 은 그대로임을 확인. 공유 push URL 은 쓰기 전에 거부.
+
+### 대안 (Considered)
+
+- dual push 유지(GitLab = 개발 미러): 사용자 결정과 반대라 기각.
+- GitLab 에 `production` 이름을 남기고 개발 `main` 만 삭제: "production 이 main 이 된다" 는 지시와 고객사 형태(`main` 하나)에 맞지 않아 기각.
+- GitLab `main` 을 production 커밋만 있는 새 이력으로 재작성: 요청 범위 밖이고 force push 와 이력 재작성이 필요하며 production 조상 검사가 끊겨 기각.
+
+### 남은 것
+
+- GitLab 관리 화면 정리(사용자). 정리 전에는 승격과 `push-sync` 가 원격 불일치로 쓰기 전에 멈춘다.
+- 다른 작업 사본에 남은 dual push 설정 제거. GitLab `main` 에는 배포본만 있으므로 `Jenkinsfile_portal_Byid` 를 GitLab 에서 읽던 외부 Job 이 있으면 GitHub 로 옮겨야 한다.
+- jenkins-prod 실제 Job 설정(저장소 주소 · 브랜치)의 화면 확인.
 
 ## 2026-10-22 (4) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
 

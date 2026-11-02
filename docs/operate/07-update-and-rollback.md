@@ -28,7 +28,7 @@
 
 업데이트 뒤에는 다음을 확인하세요.
 
-1. `git ls-remote <GitHub 주소> production`과 `git ls-remote <사내 GitLab 주소> production`이 같은 SHA인지.
+1. `git ls-remote <GitHub 주소> production`과 `git ls-remote <사내 GitLab 주소> main`이 같은 SHA인지. 사내 GitLab은 고객사와 같은 형태라 `main` 하나만 두고, 그 커밋이 GitHub `production`과 같습니다([09-production-branch.md](09-production-branch.md) 1절).
 2. 운영 Job을 대상 1~3대로 한 번 실행해 콘솔의 `Checking out Revision <SHA>`가 새 커밋인지, `[Portal 전송] HTTP 2xx` 줄이 있는지.
 3. 결과 봉투의 값이 업데이트 전 빌드와 같은 대상에서 같은지. 바뀐 값은 변경 내역에 적힌 것만이어야 합니다.
 
@@ -60,12 +60,12 @@
 
 ### 사내 production
 
-이전 정상 `production` 커밋의 tree를 새 커밋으로 두 원격에 올립니다. force push와 reset은 쓰지 않습니다.
+이전 정상 `production` 커밋의 tree를 새 커밋으로 두 원격(GitHub `production`, 사내 GitLab `main`)에 올립니다. force push와 reset은 쓰지 않습니다.
 
 ```bash
 # 작업 PC의 main checkout 에서. <이전 커밋> 은 되돌릴 production 커밋 SHA
 python -m scripts.ai.prodgen restore --to <이전 커밋> --push-remote origin,internal
-git ls-remote origin production && git ls-remote internal production
+git ls-remote origin refs/heads/production && git ls-remote internal refs/heads/main
 ```
 
 운영 Job은 브랜치를 고정해 보므로 Job 설정은 바꾸지 않습니다. 되돌린 뒤 2절의 확인을 반복하세요. 상세는 [09-production-branch.md](09-production-branch.md) 5절입니다.
