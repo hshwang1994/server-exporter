@@ -81,7 +81,7 @@ ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바
 | Harness Driver | `seRunHarnessGroup('checkout', …)` — `HARNESS_SCENARIOS` 를 두 고정 lane(i % 2)이 나눠 동시에 부른다. 시나리오당 빌드 1개는 그대로: `build(job: harnessJob, wait: true, propagate: false, quietPeriod: 0, parameters: [SCENARIO, MAIN_SHA, FUNCTIONS_SRC, SINK_PORT=0])`. 결과는 parallel 반환값으로 모아 요청 순서로 정렬(`seMergeLanes` — 누락 · 중복 · 섞인 함수 해시는 문제). 판정 `seHarnessOk` = 기대 Jenkins 결과(scenarios.json `jenkins_result`) · 내부 verdict PASS · 결속(자식 빌드 변수 `SE_HARNESS_SHA` == MAIN_SHA · 함수 해시). 그룹마다 판정 · 집계 자체 시험표(`seHarnessJudgeSelfTest`)를 먼저 돈다 | 불통과 · 집계 문제 → UNSTABLE(stage FAIL) |
 | Harness (prodtree) | Build PASS 뒤. 같은 방식으로 `FUNCTIONS_SRC=artifact` + `ARTIFACT_BASE_URL=${BUILD_URL}artifact` + `EXPECTED_SHA256` · `EXPECTED_ARCHIVE_SHA256` · `EXPECTED_TREE_HASH` (`HARNESS_TREE_SCENARIOS`). main 단계와 같은 판정 + 생성물 결속(Jenkinsfile_portal sha · 압축 파일 sha · tree_hash) — 종전의 Jenkins 결과만 보던 판정을 바꿨다(2026-10-08 C5) | 같음 |
 | Evidence Aggregate | (선행 FAIL 이면 건너뜀) 이 빌드의 Harness 결과(결과 파일의 `harness_job` · 빌드 번호) + `E2E_MAIN_ENTRIES`(main Job 시나리오 빌드) [+ `E2E_TIP_OBSERVATIONS_JSON` → `--tip-observations`: fail-closed 빌드의 직접 revision 바인딩] → `prodgen e2e-evidence`(시나리오 계약으로 판정 — 파라미터·artifact·콘솔 표식 · `[Trusted]` 내용 대조; 이웃 빌드 추정은 `binding=estimated` 로 기록될 뿐 승격 증거로 인정되지 않는다) → `evidence-aggregate`(입력 digest 검증) → `prodgen_verify_report.aggregated.json` | 미완료 → UNSTABLE |
-| Prodgen Promote | `PROMOTE=true` 일 때만. 필수 stage 전부 PASS · 집계 보고서 존재 · SHA 4값 일치(`PROMOTE_SHA`·`MAIN_SHA`·HEAD·보고서 binding) · `verdict == COMPLETE_PASS` · GitLab credential 있을 때만 양 원격 실 승격(없으면 dry-run) → `prodgen promote` | 조건 미충족 → `error`, 원격 변경 0 |
+| Prodgen Promote | `PROMOTE=true` 일 때만. 필수 stage 전부 PASS · 집계 보고서 존재 · SHA 4값 일치(`PROMOTE_SHA`·`MAIN_SHA`·HEAD·보고서 binding) · `verdict == COMPLETE_PASS` · GitLab credential 있을 때만 양 원격 실 승격(없으면 dry-run) → `prodgen promote` (2026-11-02 부터 GitHub 는 `production`, 사내 GitLab 은 `main` 에 같은 커밋 — 생성기 매핑, 이 파일 변경 없음) | 조건 미충족 → `error`, 원격 변경 0 |
 
 - 파라미터: `PROMOTE`(false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(true) · `BOOTSTRAP_BASELINE`(빈 값) · `HARNESS_SCENARIOS` · `HARNESS_TREE_SCENARIOS` · `HARNESS_JOB`(빈 값 = 공유 Harness Job, 시험용 CI 사본은 시험용 Harness Job — 공유 Job 을 부르지 않는다) · `E2E_MAIN_ENTRIES`(`SCENARIO=job/path:build[:EXPECTED]`) · `E2E_TIP_OBSERVATIONS_JSON`. 시나리오 목록의 정본은 `Jenkinsfile_ci` 기본값과 `scripts/ai/prodgen/evidence.py` 의 REQUIRED_* 집합(테스트가 둘을 맞춘다).
 - 사내 Jenkins 전역 환경변수: `ADDON_REPO_URL`(Add-on 빌드별 체크아웃). `SE_FINALIZER_BOUNDED`(Tier 2)는 2026-10-05 8차에서 코드가 더 읽지 않는다 — 전역 설정에서도 지운다(실행 기록은 TEST_HISTORY).
@@ -133,6 +133,16 @@ Jenkins credential `server-gather-vault-password` (type: **Secret text**). `with
 |---|---|---|---|---|
 | lab 10.100.64.153 | `clovirone-server-gather` | `Jenkinsfile_portal` | `*/production` | `jenkins-agent-dev` = 10.100.64.155 (`/opt/ansible-env`, 라벨 yi/git/chj/ic/linux/windows) |
 | 신규 jenkins-prod.gooddi.lab | `clovirone-cicd/clovirone-server-gather` | `Jenkinsfile_portal` | `production` (사용자 전환) | `SKHynix-Jenkins-Runner01~04` = 10.100.64.33~36 (`/app/ansible-env`, 라벨 git/linux/redfish/windows — `ic/chj/yi` 노드 없음, git 2.47.3 은 2026-09-28 설치됨, 시스템 CA 가 내부 GitLab 자체 서명 인증서를 모름 → Add-on 은 기본값(검증 안 함)으로 받는다) |
+
+**저장소 연결 (2026-11-02 사용자 결정 — `docs/ai/decisions/ADR-2026-11-02-gitlab-customer-form.md`)**: jenkins-prod 의 Job 은 모두 GitHub
+`https://github.com/hshwang1994/server-expoter`(GitHub 이름 변경 리다이렉트, credential `hshwang token`)를 SCM 으로 쓴다. 사내 GitLab 은 고객사 형태
+(`main` 하나 = GitHub `production`)라 어떤 Job 도 GitLab 을 SCM 으로 쓰지 않는다.
+- 실측 2026-11-02: 저장소의 Job 정의 `jenkins/jobs/*/config.xml` 5개(ci · harness · net-probe · perf-observe · term-probe) 전부 위 GitHub 주소 · `*/main`.
+- 운영 Job `clovirone-cicd/clovirone-server-gather`(`production`) · main Job `clovirone-cicd/clovirone-server-gather-main`(`*/main`) 의 주소는
+  `tests/evidence/2026-10-03-phase1-baseline.md`("Jenkins Job 저장소 URL" = 위 GitHub 주소) 기준이다. 2026-11-02 세션은 Jenkins 화면을 다시 보지
+  못했다(Jenkins TLS 인증서를 작업 PC 가 신뢰하지 않음 · 브라우저 미연결) — 미확인으로 둔다(NEXT_ACTIONS).
+- 예외: Add-on 저장소는 별개 저장소로 사내 GitLab `clovirone-server-gathering-addon` 에 있다(`docs/develop/07-addon-hook.md`, jenkins-prod 전역 `ADDON_REPO_URL`
+  등록은 2026-10-01 확인 — 값은 이 세션에서 다시 보지 않았다). 이 결정의 범위 밖이며 GitHub 로 옮길지는 사용자 결정 대기.
 
 `main` 은 tests/reference 를 포함해 약 17k 파일이라 컨트롤러의 Resolve Location(2분 제한)이 체크아웃 도중 끊겼다
 (신규 Jenkins 빌드 #4, `clovirone-server-gather-main` #1 @ a45ba808 도 같은 원인으로 ABORTED). 2026-10-03 부터 Resolve Location 은

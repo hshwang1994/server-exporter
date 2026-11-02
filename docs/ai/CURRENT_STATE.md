@@ -1,5 +1,17 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-11-02 — 사내 GitLab 을 고객사 형태로 (`main` 하나 = GitHub production) · dual push 폐기
+
+> 정본: `docs/ai/decisions/ADR-2026-11-02-gitlab-customer-form.md` · rule 93 R7 · `docs/operate/09-production-branch.md` 1절 · 8절 · `docs/reference/decision-log.md` 2026-11-02. 수집 코드 · 배포본(runtime tree) 변경 0 — 승격 해당 없음.
+
+- **계기**: 사용자 — GitHub 는 `main` · `production` 그대로, 사내 GitLab 은 고객사처럼 개발 `main` 을 지우고 `production` 이 `main` 이 된다. jenkins-prod 의 CI · 액션은 GitHub 에 연결. 하네스에 기록.
+- **prodgen**: 원격별 production ref — `DEPLOY_TARGET_REFS`(origin `refs/heads/production` · internal `refs/heads/main`) · `remote_ref`. promote · restore · push-sync · G20 · `remote_baseline` · `_publish` 가 원격마다 그 ref 를 읽고 쓴다(결과에 `remote_refs`). 기본값이 아닌 `--production-ref` 는 매핑하지 않는다. 대상 ref 가 다른 두 원격이 같은 저장소를 가리키면(공유 push URL) 실 실행은 쓰기 전에 거부하고 dry-run 은 `preview_refusals` 로 보인다. 저장소 동일성은 `_repo_key`(scheme · 자격 · port · `.git` · 끝 슬래시 무시). idempotent 게시는 공유 URL 로 닿았을 때만 `shared_push_url: true`. main 끝 관측(`evidence.py`)은 Job SCM 인 GitHub 기준임을 설명에 적었다.
+- **git 설정(이 작업 PC 사본)**: `origin` 에서 GitLab push URL 제거(GitHub 하나) · `remote.internal.push = refs/heads/production:refs/heads/main`. 변경 전 설정은 세션 임시 폴더(저장소 밖)에 백업.
+- **하네스**: rule 93(사용자 명시 2026-11-02 · Branch / Remote 표 · R1 금지 · R2 예외 2 대상 ref · R7 개정 · 금지 패턴 · 리뷰 포인트) · rule 24 R5 · cycle-orchestrator skill · `CLAUDE.md` §14 · ADR 신규 1 · ADR-2026-05-01 §2 대체 표기 · JENKINS_PIPELINES 저장소 연결 절. 표면 카운트 변화 0.
+- **사람용 문서**: 09-production-branch(1 · 3 · 4 · 5 · 6 · 7절, 8절 신규 — GitLab 전환 절차) · 03-job-registration 1절 · 07-update-and-rollback 2 · 5절 · decision-log 2026-11-02.
+- **남은 것(사용자 · 화면)**: GitLab 관리 화면 정리 — 그 전에는 실 승격 · push-sync 가 원격 불일치(GitHub production `d464de4b` ≠ GitLab main `e8b5ae9b`)로 쓰기 전에 멈춘다. jenkins-prod Job 화면 확인(이 세션은 TLS 인증서 미신뢰 · 브라우저 미연결로 미확인). NEXT_ACTIONS 2026-11-02.
+- **검증**: TEST_HISTORY 2026-11-02.
+
 ## 일자: 2026-10-22 (3) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
 
 > 정본: `docs/develop/08-onsite-capture.md` 9절 · `docs/reference/decision-log.md` 2026-10-22 (4) · `tests/redfish-probe/sanitize_mirror.py`(1.0.0) · `tests/unit/test_sanitize_mirror.py`.

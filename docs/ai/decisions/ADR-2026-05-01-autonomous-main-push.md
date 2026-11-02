@@ -1,7 +1,8 @@
 # ADR-2026-05-01-autonomous-main-push
 
 ## 상태
-Accepted (2026-05-01)
+Accepted (2026-05-01). §2(github + gitlab 동시 push)는 2026-11-02 사용자 결정으로 **대체**됐다 —
+`ADR-2026-11-02-gitlab-customer-form.md`(사내 GitLab 은 `main` 하나 = GitHub production, `origin` push URL 은 GitHub 하나). §1 · §3 은 유효.
 
 ## 컨텍스트 (Why)
 
@@ -27,7 +28,7 @@ Accepted (2026-05-01)
 - rule 24 R5: main 직접 push 사용자 명시 승인 → 자율 진행
 - CLAUDE.md Step 6 R2: "main 직접 push" 항목 제거 → "force push"만 명시 승인 필요
 
-### 2. github + gitlab 동시 push 보장
+### 2. github + gitlab 동시 push 보장 (2026-11-02 대체 — ADR-2026-11-02-gitlab-customer-form)
 
 - origin remote가 두 push URL 등록 (github + gitlab) → `git push origin main` 한 번이면 양쪽 push
 - rule 93 R7 (신설): origin push URL ≥ 2개 보장. 한 개로 단일화 금지

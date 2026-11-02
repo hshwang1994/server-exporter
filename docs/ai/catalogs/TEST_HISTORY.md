@@ -1,5 +1,19 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-02 — prodgen 원격별 production ref (사내 GitLab 고객사 형태) · 하네스 · 문서
+
+> 정본: `docs/ai/decisions/ADR-2026-11-02-gitlab-customer-form.md`. 수집 코드 변경 0 — ansible syntax-check 는 해당 없음(변경 범위 밖, Windows 작업 PC 에 ansible 없음). main worktree(`e8b5ae9b` + 이 변경), Windows · Python 3.13.15 · pytest 9.1.1.
+
+| 구분 | 결과 |
+|---|---|
+| `tests/unit/prodgen` | **123 passed** — 첫 실행 119 passed · 4 failed(592 s). 4건은 새 worktree 의 `tests/fixtures/prodgen/*` 가 CRLF 로 풀린 것(main `.gitattributes` 에 eol 속성 없음, fix 브랜치가 고침). LF 로 다시 받아 `test_fixtures_golden.py` 6 passed. PowerShell 시험 skip 0 |
+| 바뀐 시험 | `test_promotion_cycle.py`: world fixture 를 고객사 형태(GitLab = `main` 하나)로 · 전 cycle 에 브랜치 형태 단언(GitLab 에 `main` 외 0 · GitHub 개발 `main` 그대로) · 공유 push URL 거부(종전 idempotent 시험 대체 — 승격 · 복구 · push-sync 거부, dry-run `preview_refusals`, URL 제거 뒤 통과, idempotent · pre-check 실패를 GitLab `main` 기준으로) · `remote_ref` 계약 · `_repo_key` |
+| 관련 단위 | `test_jenkinsfile_ci.py` · `test_jenkinsfile_portal_byid_sync.py` · `test_addon_hook_contract.py` · `test_location_registry.py` · `test_secret_guard.py` · `test_time_limits.py` **124 passed** — 첫 실행 1 failed(`tests/scripts/finalize_corpus_check.py` CRLF — 같은 원인), LF 로 받아 `test_jenkinsfile_ci.py` 41 passed |
+| 최종 수정 뒤 재실행 | 거부 안내 문구 · `evidence.py` 설명 1줄을 고친 뒤 `test_promotion_cycle.py` · `test_verdict_evidence.py` · `test_promote_report_digest.py` **30 passed**(487 s, skip 0) |
+| 정적 | py_compile(prodgen 5 · 시험 1) OK · verify_harness_consistency 통과 · validate_claude_structure OK · check_project_map_drift 일치 · verify_vendor_boundary 통과 · output_schema_drift_check 정합 · validate_field_dictionary PASS · verify_no_plaintext_secret PASS |
+| 문서 참조 | verify_docs_references rc 2 — 죽은 참조 9건 전부 이번에 고치지 않은 파일(`LAB_INVENTORY.md` · `vault-credential-resolver.md` · `tests/reference/INDEX.md` · `tests/reference/redfish/mock2/README.md`). 이번에 고친 문서는 0건 |
+| 미실행 | GitLab · Jenkins 화면 확인(사용자 작업 대기) · 실 승격(배포본 변경 없음) |
+
 ## 2026-10-22 (3) — sanitize_mirror 1.0 (반출용 IP·호스트 이름 치환) — 시험 19건 · Python 3.6.8 · 실측 미러 7개 · 번들 실행
 
 > 정본: `docs/develop/08-onsite-capture.md` 9절 · `tests/unit/test_sanitize_mirror.py`. 합성 데이터와 저장소 밖의 기존 실측 미러 재생 — **용인 11대 데이터로는 돌려 보지 않았다(NEXT_ACTIONS)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).

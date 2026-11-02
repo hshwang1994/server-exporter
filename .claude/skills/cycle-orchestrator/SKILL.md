@@ -80,7 +80,7 @@ P1 출력 종합:
 - rule / skill / agent / hook 보강 (M-G2 패턴)
 - NEXT_ACTIONS.md 갱신 (P2/P3 후보 list)
 - PROJECT_MAP fingerprint 갱신
-- final commit + push (github + gitlab 동시)
+- final commit + push (`origin` = GitHub. 사내 GitLab 은 prodgen 승격으로만 — rule 93 R7)
 
 ## 입력
 

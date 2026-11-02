@@ -1,5 +1,18 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## 사내 GitLab 고객사 형태 전환 (2026-11-02) — 남은 항목
+
+> 정본: `docs/ai/decisions/ADR-2026-11-02-gitlab-customer-form.md` · `docs/operate/09-production-branch.md` 8절. 저장소 쪽(prodgen · 하네스 · 문서)은 main 에 들어갔다. 배포본 변경 0 — 승격 해당 없음.
+
+- [ ] **[HIGH / 사용자 — GitLab 관리 화면] GitLab 정리** — 09-production-branch 8절 1~7: 기본 브랜치 → `production`, `main` 보호 해제 · 삭제, `production` 에서 `main` 생성(또는 `python -m scripts.ai.prodgen push-sync --remote origin --remote internal`), 기본 브랜치 → `main` · 보호, `production` 삭제, 작업 브랜치 5개 삭제(`docs/redfish-mock2-audit-20261026` `b8985826` · `feature/gathering-addon` `e45fde6f` · `fix/redfish-mock2-20261027` `f92ebe6a` · `fix/redfish-mock2-review-20261028` `104bcaf0` · `fix/redfish-mock2-summary-20261028` `31f2db21` — 2026-11-02 GitHub 에 같은 SHA), Mirroring · Webhooks 확인. 그 전에는 실 승격 · push-sync 가 원격 불일치(GitHub production `d464de4b` ≠ GitLab main `e8b5ae9b`)로 쓰기 전에 멈춘다.
+- [ ] **[HIGH / AI — 정리 직후] 확인** — `git fetch --prune internal` · `git ls-remote --heads internal` 이 `refs/heads/main` 한 줄이고 GitHub production 과 같은 SHA · `prodgen push-sync --remote origin --remote internal --dry-run` ok · `drift-check --production origin/production` PROVENANCE. 그 뒤 09-production-branch 7절 "상태" 행 갱신.
+- [ ] **[MED / 사용자 · AI] jenkins-prod Job 저장소 화면 확인** — 운영 `clovirone-server-gather`(`production`) · main `clovirone-server-gather-main` · 그 밖의 Job 의 SCM 이 GitHub 인지, GitLab webhook 이 jenkins-prod 를 부르는지. 이 세션은 Jenkins TLS 인증서를 작업 PC 가 신뢰하지 않고(검증 약화는 하지 않음) 브라우저가 연결되지 않아 못 봤다. 저장소의 Job 정의 5개는 GitHub(2026-11-02 실측).
+- [ ] **[MED / 사용자] 다른 작업 사본의 dual push 제거** — 예: `C:\github\ClovirONE\se-fix-20261028-win`, WSL clone. `git remote get-url --push --all origin` 에 GitLab 주소가 있으면 rule 93 R7 재구성. 남겨 두면 prodgen 이 거부하고, 맨 `git push` 는 GitLab 에 작업 브랜치를 다시 만든다.
+- [ ] **[MED / 사용자 결정] `Jenkinsfile_portal_Byid` 외부 소비자** — GitLab `main` 에는 배포본만 남아 Byid 가 GitLab 에서 사라진다(ADR-2026-10-09: 이 Jenkins 밖 소비자 가능성). 쓰는 Job 이 있으면 GitHub 를 보게 바꾼다.
+- [ ] **[LOW / 사용자 결정] Add-on 저장소 위치** — 사내 GitLab `clovirone-server-gathering-addon`(jenkins-prod `ADDON_REPO_URL`). 이 결정의 범위 밖. GitHub 로 옮길지.
+- [INFO] 다음 승격: prodgen 소스 변경으로 `generator_hash` 가 바뀌었다 — 이 커밋 이전 SHA 의 CI 보고서는 `--verify-report` 로 재사용되지 않는다. CI Promote 의 GitLab 경로(`se-gitlab-push` 가 있을 때만)는 그대로 두었고 같은 매핑을 쓴다.
+- [INFO] fix 브랜치(`fix/redfish-mock2-summary-20261028`)를 main 에 병합할 때 `CURRENT_STATE` · `NEXT_ACTIONS` · `TEST_HISTORY` · `decision-log` 의 맨 위 항목이 겹친다 — 양쪽 다 남기면 된다.
+
 ## Redfish 전수 미러 v2.2 (2026-10-22) — 남은 항목
 
 > 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22. 도구 · 시험 · 문서는 같은 날 main 에 들어갔다 (`tests/**` 는 production 제외 경로 — 승격 해당 없음. `production_manifest.yml` 의 `runtime_roots` 에 닿지 않음).

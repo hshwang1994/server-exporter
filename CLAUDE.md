@@ -117,6 +117,8 @@ Credential은 기존 Vault와 Credential Profile 구조를 사용한다.
 ## 14. Git / Production
 `main`: 개발 기준 Branch, 순수 Project Code와 Harness 포함.
 `production`: 순수 Gathering 배포 Branch, Harness 제외.
+원격(2026-11-02 사용자 결정): GitHub(`origin`)가 `main`·`production`을 갖고 jenkins-prod 의 모든 Job·CI 는 GitHub 를 본다. 사내 GitLab(`internal`)은 고객사 형태로 `main` 하나만 두며 그 커밋은 GitHub `production` 과 같다.
+GitLab 은 prodgen 만 쓴다 — 개발 브랜치를 GitLab 에 push 하거나 `origin` 에 GitLab push URL 을 다시 넣지 않는다(rule 93 R7).
 대표 production 제외 경로: `.claude/`, `CLAUDE.md`, `docs/ai/`, `scripts/ai/`, `tests/reference/`, `tests/evidence/`.
 원칙: 순수 코드/Harness 변경 가능하면 별도 Commit, `git merge main`으로 production 전체 병합 금지, production 은 `scripts/ai/prodgen`(고정 main SHA → runtime-only 생성 · gate · provenance)으로만 승격하고 승격 직후 production Job canary 를 확인한다(`docs/operate/09-production-branch.md`).
 유효한 자동 승격 범위에서는 매번 별도 승인 재요구 금지. force push와 History Rewrite 금지.

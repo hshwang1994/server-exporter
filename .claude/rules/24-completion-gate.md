@@ -68,13 +68,13 @@
 
 - **Default** (rule 93 R1+R4 — 2026-05-01 + 2026-06-30 사용자 명시):
   - 태그 (해당 시): `v{영역}-{상태}-{YYYYMMDD}` 포맷
-  - **현재 체크아웃된 브랜치는 자율 push** (main 포함 — origin 이 github + gitlab 동시 push)
+  - **현재 체크아웃된 브랜치는 자율 push** (main 포함 — origin = GitHub. 사내 GitLab 은 고객사 형태라 prodgen 승격으로만 갱신된다, rule 93 R7)
   - 작업 종료 시 commit + push 무조건 (사용자 "보류" 명시 시 skip)
   - **순수 게더링 코드 변경 시 production 승격** — `python -m scripts.ai.prodgen promote --sha <main sha>` (2026-10-03 부터; 종전 `promote_to_production.sh` shim 은 2026-10-11 삭제)
-    (하네스 제외 sync + github/gitlab push). **사용자 승인 불요** (2026-06-30 사용자 명시
+    (runtime-only tree 생성 · gate · GitHub `production` 과 사내 GitLab `main` 에 같은 커밋). **사용자 승인 불요** (2026-06-30 사용자 명시
     "production 에 넣는건 자동이여야 한다"). 완료 보고(R9)에 production 승격 여부 명시.
 - **Forbidden**: force push / `--all` / 다른 브랜치 push (rule 93 R1) / 순수 코드 변경 후 production 승격 누락
-- **Why**: 사용자 명시 (2026-05-01) — 작업 끝나면 자율 commit + push, github + gitlab 동기화
+- **Why**: 사용자 명시 (2026-05-01) — 작업 끝나면 자율 commit + push. (2026-11-02) GitHub 는 개발 · 배포, 사내 GitLab 은 production 만 받는 고객사 형태
 - **재검토**: force push 사고 발생 시 강화
 
 ### R6. Schema/Baseline 변경 시 회귀 통과 의무
