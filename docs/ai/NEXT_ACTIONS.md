@@ -10,6 +10,7 @@
 - [ ] **[MED / 사용자] 다른 작업 사본의 dual push 제거** — 예: `C:\github\ClovirONE\se-fix-20261028-win`, WSL clone. `git remote get-url --push --all origin` 에 GitLab 주소가 있으면 rule 93 R7 재구성. 남겨 두면 prodgen 이 거부하고, 맨 `git push` 는 GitLab 에 작업 브랜치를 다시 만든다.
 - [ ] **[MED / 사용자 결정] `Jenkinsfile_portal_Byid` 외부 소비자** — GitLab `main` 에는 배포본만 남아 Byid 가 GitLab 에서 사라진다(ADR-2026-10-09: 이 Jenkins 밖 소비자 가능성). 쓰는 Job 이 있으면 GitHub 를 보게 바꾼다.
 - [ ] **[LOW / 사용자 결정] Add-on 저장소 위치** — 사내 GitLab `clovirone-server-gathering-addon`(jenkins-prod `ADDON_REPO_URL`). 이 결정의 범위 밖. GitHub 로 옮길지.
+- [WARN] prodgen 은 main `c37f5298` 이후 사본에서만 실행한다. 옛 생성기(예: 아직 main 을 병합하지 않은 `fix/redfish-mock2-summary-20261028` checkout)의 `push-sync` 는 GitLab 에 `production` 을 다시 만든다(옛 코드는 두 원격 모두 `refs/heads/production`). 옛 promote · restore 는 원격 불일치로 거부되어 안전하다.
 - [INFO] 다음 승격: prodgen 소스 변경으로 `generator_hash` 가 바뀌었다 — 이 커밋 이전 SHA 의 CI 보고서는 `--verify-report` 로 재사용되지 않는다. CI Promote 의 GitLab 경로(`se-gitlab-push` 가 있을 때만)는 그대로 두었고 같은 매핑을 쓴다.
 - [INFO] fix 브랜치(`fix/redfish-mock2-summary-20261028`)를 main 에 병합할 때 `CURRENT_STATE` · `NEXT_ACTIONS` · `TEST_HISTORY` · `decision-log` 의 맨 위 항목이 겹친다 — 양쪽 다 남기면 된다.
 
