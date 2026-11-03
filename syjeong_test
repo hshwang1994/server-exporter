@@ -2132,6 +2132,9 @@ pipeline {
     agent none
 
     parameters {
+        boolean (
+            name        : 'DRY_RUN'
+        )
         string(
             name        : 'loc',
             defaultValue: '',
