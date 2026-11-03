@@ -2132,11 +2132,13 @@ pipeline {
     agent none
 
     parameters {
-            booleanParam(
+        /*
+        booleanParam(
             name: 'DRY_RUN',
             defaultValue: false,
             description: 'Ansible DryRun 실행 여부'
         )
+        */
         string(
             name        : 'loc',
             defaultValue: '',
