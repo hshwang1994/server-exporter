@@ -2161,11 +2161,11 @@ pipeline {
             defaultValue: '',
             description : '결과를 보낼 Portal 주소(예: http://portal.example.com). 뒤에 /api/jenkins/gather/<target_type> 을 붙여 POST 합니다'
         )
-        choice(
-            name        : 'verbosity',
-            choices     : ['0', '1', '2', '3', '4'],
-            description : 'Ansible verbosity (0=운영, 1~2=디버그, 3~4=깊은 진단)'
-        )
+//        choice(
+//            name        : 'verbosity',
+//           choices     : ['0', '1', '2', '3', '4'],
+//            description : 'Ansible verbosity (0=운영, 1~2=디버그, 3~4=깊은 진단)'
+//        )
     }
 
     environment {
