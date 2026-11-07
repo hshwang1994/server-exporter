@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-07 — Redfish Summary 수정 main 병합 · GitLab 9건 반영 · 정규 승격 (main `a38fa73c` → production `7e3b2e6b`)
+
+> 정본: `docs/reference/decision-log.md` 2026-11-07 · `docs/reference/live-validation.md` 2026-11-07. main `a38fa73c` = merge commit `d7cc7264`(`31f2db21`) + GitLab 9건 `aa5b55c6` + 문서 정정 3커밋. 실장비 검증은 main Job 매트릭스와 production canary 다.
+
+| 구분 | 결과 |
+|---|---|
+| Linux 등가 Gate (작업 PC) | WSL Ubuntu · Python 3.12.3 · ext4 clone `a38fa73c`(CRLF 0) · `scripts/ai/ci_gate.sh` **RESULT: PASS rc 0**(2026-11-07T07:35Z~07:42Z) — field_dictionary PASS · finalize corpus MATCH 20/20 · pytest **6506 passed · 183 skipped · 5 xfailed** + **563 passed · 4 skipped · 1 deselected** · 3채널 `--syntax-check` 통과 · 실행 전후 `git status` 깨끗 |
+| main Job 매트릭스 | #720~#729 · #731 — 11 시나리오 모두 기대 결과, checkout `a38fa73c`(E2E-A2 는 fail-closed 라 checkout 없음 · tip 관측 전후 `a38fa73c`). **#730(T5 첫 시도) 제외** — 투입 스크립트가 cp949 출력 오류로 stop 전에 멈춰 일반 수집 SUCCESS 89 s 로 끝남(FAILURE_PATTERNS 2026-11-07). 상세 live-validation |
+| CI #66 | **FAILURE** 23분(Runner02) — Gate(6506 · 563 passed) · corpus · budget · build · vault 복호화 · G01~G19 PASS, **Prodgen Drift · Verify(G20) FAIL** — GitHub 저장소 비공개로 두 셸 단계의 자격 없는 `git fetch` · `ls-remote` 가 `could not read Username`. Harness · Evidence SKIPPED |
+| CI #67 | 사용자가 저장소를 공개로 되돌린 뒤 같은 SHA · 같은 매트릭스 입력 — **SUCCESS 66분**(Runner01) · 필수 단계 전부 PASS(PROMOTE=false) · 집계 **COMPLETE_PASS**(G01~G20) · tree `ae2549ba` · Harness main 54 · tree 23 PASS · E2E 증거 88건(Harness 77 #2829~#2905 + 매트릭스 11) 통과 · `evidence_sha256 028dcd55` |
+| 작업 PC gate 사전 실행 | 승격 전 같은 tree 로 G11 · G12 · G13 · G14(pytest 6339 passed · 112 skipped · 52 deselected · 5 xfailed, 18분) · G15 · G19 PASS(원격 변경 없음) |
+| 승격 | `push-sync`(GitHub `production` `d464de4b` → `e808cf4d` fast-forward, GitLab 9커밋 이력 보존) → `restore --to d464de4b`(`e180a4ca`, PROVENANCE) → `promote --sha a38fa73c`(CI #67 산출물 3개) → **`7e3b2e6b`** 197 파일 · COMPLETE_PASS · Gates-Rerun G11~G15 · G18~G20 · CI-Stages verified(2026-11-07T10:28Z, 24분). 로컬 = GitHub `production` = GitLab `main` · drift-check `PROVENANCE`(197 파일 tree hash 일치) · push-sync dry-run 할 일 0 · force 0 |
+| canary | production Job #321 ESXi 6 · #322 Redfish 7 · #323 OS 11 · #324 Windows 1 — **4/4 SUCCESS**(93 · 388 · 120 · 136 s), checkout 전부 `7e3b2e6b` · Portal HTTP 200 · 결과 수 == 접수 수 · errors 0 · 13키. 직전 canary #314~#317(production `d464de4b`) 대비 바뀐 JSON 경로 · 개수가 매트릭스 병합 전후 비교와 같다(Redfish 만 코드 변경, 나머지는 사용률 · 호스트 쪽 구성) |
+| 브랜치 정리 뒤 | 작업 브랜치 5개를 GitHub · 사내 GitLab · 로컬에서 삭제(모두 `origin/main` 의 조상 확인 뒤). GitHub heads `main` · `production`, GitLab heads `main`(`7e3b2e6b`) 하나 · `push-sync --dry-run` ok · 할 일 0 · 독립 검증 worktree 3개(detached) 그대로 |
+| 병합 전후 실장비 값 | Redfish 7대만 바뀜(2026-10-27 C4 · C8 · C9 · FIX 1/2 — 계약 문서 그대로) · ESXi · OS 수집 코드 변경 0. 상세 live-validation |
+| 미실행 · 관찰 | Portal 소비자의 새 null 처리 확인(소스 · 환경 없음) · `target_type` 빈 값 거부의 실빌드(매트릭스 파라미터는 모두 값 있음 — Validate 단위 시험만) · S2 `10.100.64.132` 도달 불가(5985 · 22 EHOSTUNREACH · 5986 시간 초과 · ICMP 무응답 — 장비 상태 확인 필요) |
+
 ## 2026-11-02 — prodgen 원격별 production ref (사내 GitLab 고객사 형태) · 하네스 · 문서
 
 > 정본: `docs/ai/decisions/ADR-2026-11-02-gitlab-customer-form.md`. 수집 코드 변경 0 — ansible syntax-check 는 해당 없음(변경 범위 밖, Windows 작업 PC 에 ansible 없음). main worktree(`e8b5ae9b` + 이 변경), Windows · Python 3.13.15 · pytest 9.1.1.

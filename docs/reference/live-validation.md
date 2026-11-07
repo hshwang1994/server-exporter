@@ -469,6 +469,59 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-11-07 Redfish Summary 정합성 수정 · 사내 GitLab `main` 직접 수정 9건 — main `a38fa73c` 매트릭스 #720~#731 · CI #67 · production `7e3b2e6b` · canary (실장비)
+
+main `a38fa73c`(`fix/redfish-mock2-summary-20261028` `31f2db21` 의 merge commit `d7cc7264` · 사내 GitLab `main` 직접 수정 9건 `aa5b55c6` · 문서 정정)로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다.
+결정 근거는 [decision-log.md](decision-log.md) 2026-11-07, Mock 근거는 `tests/evidence/2026-10-29-redfish-summary-fix/`. 매트릭스 · CI · canary 투입은 작업 PC 에서 Jenkins API 로 했다(고정한 Jenkins 인증서로 TLS 검증, 자격은 파일로 전달).
+
+### main `a38fa73c` 매트릭스 (main Job #720~#729 · #731, checkout 전부 == `a38fa73c` — #709~#719 와 같은 파라미터, eventUuid 만 새 값)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #720 | SUCCESS | 87 s · 3/3 success · errors 0 |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #721 | SUCCESS | 106 s · success 2 · `TARGET_UNREACHABLE` 3 — TEST-NET 2 와 `10.100.64.132`(#710 에서는 success. 5985 · 22 "호스트로 갈 루트가 없음" · 5986 시간 초과 · ICMP 무응답 — 사전 진단 · OS 코드 변경 0, 장비 쪽 상태) |
+| S3 Linux 11 | #722 | SUCCESS | 128 s · 11/11 success · errors 0 |
+| S4 Windows 1 | #723 | SUCCESS | 154 s · `system.version 2022-21H2` |
+| T2 TEST-NET 2 | #724 | SUCCESS | 76 s · 2/2 `TARGET_UNREACHABLE` |
+| T5 사용자 중단 (6대) | #731 | ABORTED | `정보 수집을 시작합니다` 관측 +10초 API stop · `[수집] 중단됨:` · `outcome=aborted` · 접수 6 = 보충 6 · `callback_body.json` 보존 · 56 s |
+| T6 Callback 거부 주소 | #725 | UNSTABLE | 107 s |
+| E2E-A loc=cj | #726 | UNSTABLE | TEST-NET 2 · 112 s |
+| E2E-A2 loc=chj | #727 | FAILURE | fail-closed · 19 s · tip 관측 `a38fa73c` 전후 동일(`ls-remote` origin) |
+| E2E-D ESXi 6 | #728 | SUCCESS | 85 s · 6/6 success · `sections.power/thermal` 6대 success · errors 0 |
+| E2E-E Redfish 7 | #729 | SUCCESS | 397 s · 7/7 success · errors 0 · 표준 계정 인증 7/7 · `diagnosis.details.account_service` 빈 값 7/7(Account Write 0) |
+
+#730(T5 첫 시도)은 시험 증거에서 뺐다 — 투입 스크립트가 콘솔 출력 인코딩 오류로 stop 요청 전에 멈춰 일반 수집(SUCCESS 89 s, checkout `a38fa73c`)으로 끝났다. 스크립트를 고쳐 #731 로 다시 돌렸다.
+
+병합 전(#709~#718) 대비 바뀐 값 — 변동 값(사용률 · 시각 · 소비전력 · 온도 등)과 계정 목록은 빼고 JSON 경로로 비교:
+
+- **Redfish 7대(#718 → #729)**: `cpu.manufacturer` 발행(`Intel`) · `cpu.summary.groups[].manufacturer` 정규화(Cisco · Lenovo `Intel(R) Corporation` → `Intel`) · `cpu.logical_threads` 미발행(OS/ESXi 채널만) · cpu 그룹 `l2_cache_kb` · `l3_cache_kb` ·
+  `storage.physical_disks[].wwn`(26 디스크) · Dell 5대 다운 · 미상 포트 `network.ports[].current_link_speed_mbps` 0 → null 과 `network.summary.groups[].speed_mbps` 0 → null ·
+  Lenovo `hardware.oem.machine_type 7Z73` · `led_indicator Off` · NIC 4개 `mtu` null → 12000(같은 MAC 기능의 `Ethernet.MTUSize`) · 대기 펌웨어 2건(`BMC-Primary-Pending` · `UEFI-Pending` — Disabled · Version 없음) 목록 제외와 `diagnosis.details.notices` 4건.
+  status · errors · 디스크 수 · `grand_total_gb` 는 그대로다. 모두 2026-10-27 C4 · C8 · C9 · FIX 1/2 로 [../contract/03-fields.md](../contract/03-fields.md) 에 적힌 변경이다.
+- **ESXi 6대 · Linux · Windows**: 수집 코드 변경 0. 차이는 사용률과 장비 쪽 구성(S3 `network.driver_map` · S4 디스크 · NIC)뿐이다.
+
+### CI · 승격
+
+- CI `clovirone-cicd/clovirone-server-gather-ci` #66(`PROMOTE=false`, E2E 입력 매트릭스 11건 + tip 관측): **FAILURE** 23분 — Gate · corpus · build · G01~G19 PASS, Prodgen Drift · Verify(G20) FAIL.
+  GitHub 저장소가 비공개라 두 단계의 셸 `git fetch` · `ls-remote`(자격 없음)가 실패했다([../operate/03-job-registration.md](../operate/03-job-registration.md) 8절). 사용자가 저장소를 공개로 되돌렸다.
+- CI #67(같은 SHA · 같은 입력): **SUCCESS** 66분 · 필수 단계 전부 PASS · 집계 **COMPLETE_PASS** · Harness main 54 · tree 23 PASS · E2E 증거 88건 통과.
+- 작업 PC prodgen: `push-sync`(GitHub `production` `d464de4b` → `e808cf4d` fast-forward — GitLab 관리자 9커밋 이력 보존) → `restore --to d464de4b`(`e180a4ca`) → `promote --sha a38fa73c`(CI #67 산출물 3개 · 사용자 자격 파일) →
+  **production `7e3b2e6b`**(parent `e180a4ca` · 197 파일 · Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20 PASS · CI-Stages verified · 2026-11-07T10:28Z) · GitHub `production` · GitLab `main` · 로컬 일치 · drift-check PROVENANCE · force 0.
+
+### production `7e3b2e6b` canary (production Job #321~#324, 2026-11-07)
+
+직전 canary #314~#317(production `d464de4b`)과 같은 파라미터(eventUuid 만 새 값)로 차례로 돌렸다.
+
+| 빌드 | 채널 | 결과 | 확인 (checkout 전부 `7e3b2e6b` · Portal HTTP 200 · 결과 수 == 접수 수 · errors 0 · 13키) |
+|---|---|---|---|
+| #321 | ESXi 6 | SUCCESS 93초 | 6/6 success · #314 대비 바뀐 값은 `storage.datastores[].usage_percent`(사용률)뿐 |
+| #322 | Redfish 7 | SUCCESS 388초 | 7/7 success · `diagnosis.details.account_service` 빈 값 7/7(Account Write 0) · `cpu.manufacturer` `Intel` 7/7 · `cpu.logical_threads` 미발행 · `physical_disks[].wwn` 26 디스크(값은 Dell 14, Cisco · Lenovo 12 는 null) · Lenovo 대기 펌웨어 2건 제외(목록 17 → 15)와 `notices` 4. `total_capacity_w`(1540 · 800 ×5 · 750) · `adapter_count`(Cisco 0 · Dell 2 ×4 · .34 3 · Lenovo 1) · 컨트롤러 수 · 디스크 수 · `grand_total_gb` 는 #315 와 같다 |
+| #323 | OS 11 | SUCCESS 120초 | 11/11 success · `memory.summary.grand_total_gb` 8/8/8/8/4/4/256/128/4/8/8(#316 과 같음) · hbas 0 · 바뀐 경로는 `network.driver_map` · `network.bridges` · `system.runtime.listening_ports` · 파일시스템 사용률(호스트 쪽 런타임) |
+| #324 | Windows 1 (.120) | SUCCESS 136초 | 1/1 success · `system.version 2022-21H2` · memGB 8 · 네트워크 그룹 20000 · 10000 · 바뀐 경로는 디스크 구성(디스크 그룹 1개 추가 · `grand_total_gb`) · 인터페이스 1개의 주소 · MAC · 사용률 |
+
+직전 canary 대비 바뀐 JSON 경로와 경로별 개수는 네 채널 모두 위 매트릭스의 병합 전후 비교(#717 → #728 · #718 → #729 · #711 → #722 · #712 → #723)와 같다(파일시스템 사용률 개수만 시각차).
+수집 코드가 바뀐 채널은 Redfish 하나이고, 그 변화는 위 "병합 전 대비 바뀐 값" 목록 그대로다.
+
 ## 2026-10-19 ESXi 전원·온도·팬 · Linux iSCSI · CSUS 단일 서버 · 3채널 summary — main `447b6af7` 매트릭스 #709~#719 · CI #65 · production `d464de4b` · canary (실장비)
 
 main `447b6af7`(2026-10-19 둘째 · 셋째 라운드 — CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 정비 · ESXi vSphere 하드웨어 센서 power/thermal · Linux iSCSI 이니시에이터)로

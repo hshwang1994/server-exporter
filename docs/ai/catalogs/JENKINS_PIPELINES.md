@@ -16,6 +16,10 @@
 >   빈 값 · 다른 값은 여전히 멈춘다. `Jenkinsfile_portal_Byid` 도 같은 커밋에서 맞췄다. ② `syjeong_test`(Portal 시험 파이프라인 — `clovirAnsible.run` 호출,
 >   주석이 지워진 portal 사본에서 시작)를 추가했다. GitLab `main` 이 이 파일을 잃지 않도록 production 생성 대상(`production_manifest.yml` groovy)에 넣었다.
 >   jenkins-prod 에서 이 파일을 쓰는 Job 은 확인하지 않았다(저장소의 Job 정의에는 없다). 정본 `docs/reference/decision-log.md` 2026-11-07.
+> 실측 2026-11-07 — CI(`Jenkinsfile_ci`)의 Prodgen Drift `git fetch -q origin production`(637행) · Prodgen Verify `prodgen verify --remote origin`(683행, G20 `ls-remote`)은
+>   셸에서 **자격 없이** GitHub 를 읽는다(checkout 만 Job 자격 `hshwang token`). GitHub 저장소가 비공개였던 CI #66 은 두 단계가 FAIL(`could not read Username`)이었고,
+>   공개로 되돌린 CI #67 은 통과했다. 비공개로 운영하려면 두 단계를 Prodgen Promote 처럼 `withCredentials` + `scripts/ai/prodgen/git_askpass.sh` 로 감싼다.
+>   Harness Job(`tests/jenkins/harness/Jenkinsfile_harness:61`)은 checkout 자격을 쓰고 로컬 git 만 써서 영향 없음.
 
 ## Stage 매트릭스 (실측 — `Jenkinsfile_portal`)
 

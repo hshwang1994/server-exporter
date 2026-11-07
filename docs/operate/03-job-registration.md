@@ -166,6 +166,8 @@ HTTP 201이 돌아오면 요청이 큐에 들어간 것입니다.
 
 이 Job들은 수집을 하지 않으며 `production` 브랜치에는 그 파일이 없습니다. 정의는 `jenkins/jobs/<Job 이름>/config.xml`에 있습니다.
 
+`clovirone-server-gather-ci`의 checkout은 Job 자격으로 받지만, Prodgen Drift 단계의 `git fetch origin`과 Prodgen Verify 단계의 원격 비교(`ls-remote`)는 셸에서 자격 없이 GitHub를 읽습니다. 그래서 GitHub 저장소를 비공개로 바꾸면 이 두 단계가 실패하고 승격 증거가 만들어지지 않습니다(2026-11-07 CI #66 — 공개로 되돌려 CI #67 통과). 비공개로 운영하려면 먼저 두 단계에 Job 자격을 연결해야 합니다. 수집 Job과 Harness Job은 checkout 자격만 쓰므로 영향이 없습니다.
+
 ## 다음 단계
 
 | 다음 작업 | 문서 |

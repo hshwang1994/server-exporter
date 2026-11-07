@@ -1331,3 +1331,29 @@
 - 수정: `audit_case_test_map.md` 0 · 1 · 5절 보완
 - 재발 방지: 감사 근거를 셀 때는 보고서 전체(본문 · 표 · 부록)와 감사 도구 소스를 `S[0-9]+` 정규식으로 전수 검색하고, 찾은 번호와 위치를 표에 그대로 남긴다
 - 관련 rule: rule 25 R7-A, rule 24 R2
+
+---
+
+## 2026-11-07 — 매트릭스 투입 스크립트가 콘솔 출력 인코딩(cp949)에서 멈춰 T5 빌드 1개가 시험 증거가 되지 못했다
+
+- 카테고리: tooling (Windows 콘솔 인코딩)
+- 발견 위치: 작업 PC 스크래치 스크립트(main Job 매트릭스 투입) — main Job T5 #730
+- 증상: T5 는 콘솔에 `정보 수집을 시작합니다` 가 보이고 10초 뒤 stop 을 보내야 한다. 표식을 본 순간의 로그 한 줄(`—` 포함)을 cp949 콘솔에 찍다 `UnicodeEncodeError` 로 스크립트가 죽어 stop 이 가지 않았고, #730 은 일반 수집(SUCCESS 89 s)으로 끝났다
+- 원인: `python -I` 는 `PYTHON*` 환경변수를 무시한다 — `PYTHONIOENCODING=utf-8` 이 효과가 없었다. 앞 시나리오 10개는 출력에 비-ASCII 가 없어 드러나지 않았다
+- 영향: 빌드 1개(대상 6대 일반 수집 1회, 결과 전송 포함). #730 은 시험 증거에서 빼고 T5 를 #731 로 다시 돌렸다. 제품 영향 0
+- 수정: 스크립트 시작에서 `sys.stdout.reconfigure(encoding="utf-8", errors="replace")`, 재실행 eventUuid 를 새 값으로
+- 재발 방지: `-I` 로 도는 Windows 스크립트는 stdout 인코딩을 코드에서 고정한다. 긴 실행 전에 비-ASCII 한 줄을 먼저 찍어 본다
+- 관련 rule: rule 25 R7-A, rule 24 R1
+
+---
+
+## 2026-11-07 — GitHub 저장소를 비공개로 바꾼 뒤 CI 의 Prodgen Drift · Verify(G20) 가 원격을 읽지 못해 CI #66 FAILURE
+
+- 카테고리: environment-drift (저장소 접근 조건)
+- 발견 위치: `clovirone-cicd/clovirone-server-gather-ci` #66 — `Jenkinsfile_ci` Prodgen Drift 의 `git fetch origin production`, Prodgen Verify 의 `prodgen verify --remote origin`(G20 `ls-remote`)
+- 증상: `fatal: could not read Username for 'https://github.com': terminal prompts disabled` → Drift FAIL · Verify FAIL(G20 만) → Harness · Evidence SKIPPED. Gate · corpus · build · G01~G19 는 PASS
+- 원인: Job checkout 은 Job 자격(`hshwang token`)으로 받지만 이 두 셸 단계는 자격 없이 GitHub 를 읽는다. 2026-10-19 CI #65 는 저장소가 공개라 통과했고, 그 뒤 저장소가 비공개가 됐다(사용자 확인 2026-11-07). Harness Job 은 checkout 자격을 쓰고 로컬 git 만 써서 영향 없음
+- 영향: 승격 지연(CI 1회). 사용자가 저장소를 공개로 되돌린 뒤 같은 SHA 로 CI #67 재실행
+- 수정: 설정 복구(공개). 비공개로 운영하려면 두 단계를 Prodgen Promote 처럼 `withCredentials([usernamePassword(credentialsId: 'hshwang token', …)])` + `scripts/ai/prodgen/git_askpass.sh` 로 감싸야 한다 — `docs/ai/NEXT_ACTIONS.md` 2026-11-07
+- 재발 방지: 저장소 공개 범위를 바꾸기 전에 CI 셸 단계의 자격 없는 원격 접근(`git fetch` · `ls-remote`)을 확인한다
+- 관련 rule: rule 80 R1-C, rule 96 R4

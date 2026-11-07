@@ -116,6 +116,8 @@
 ### 사용자 지시
 
 - "최종 독립 검증 PASS를 확인했습니다. 이제 main 병합과 production 승격까지 진행하는 것을 승인합니다." — GitLab 에 따로 있는 9개 커밋(`Jenkinsfile_portal` 포함)을 잃지 않게 통합하고, 문서 충돌 4건과 D-01~D-03 을 정정하고, 기존 운영 절차로 승격한다. force push · 브랜치 삭제는 하지 않고 기존 독립 검증 증거는 보존한다.
+- "승격까지 너가 알아서해라 나의 개입없이." — 승격과 canary 를 사용자 확인 없이 이어서 한다.
+- CI #66 이 저장소 비공개 때문에 실패한 뒤 "프로젝트 공개로 변경했음. 계속 진행해라. 그리고 원하시는 건 main 병합부터 production 승격, 검증, 브랜치 삭제까지 전부 한 번에 끝내는 것임." — 첫 지시의 "브랜치 삭제는 하지 않는다" 를 이 지시가 바꿨다.
 
 ### 결정
 
@@ -123,6 +125,19 @@
 2. `syjeong_test` 는 production 생성 대상에 넣는다(`production_manifest.yml` — groovy). GitLab `main` 이 배포본이라 생성 대상이 아니면 다음 승격이 이 파일을 지운다. 배포본에서는 다른 groovy 파일처럼 설명 주석이 지워진다.
 3. Summary 브랜치는 merge commit(`--no-ff`, `d7cc7264`)으로 병합한다. 독립 재검증을 받은 SHA `31f2db21` 이 main 이력에 그대로 남는다. 기록 문서 4개의 충돌은 양쪽 항목을 모두 남긴다.
 4. GitLab 의 9커밋 이력은 force 없이 남긴다. 승격 때 `push-sync` 로 GitHub `production` 을 GitLab `main` 까지 fast-forward 하고, `restore --to d464de4b`(마지막 생성 커밋의 tree 를 새 커밋으로 — provenance 회복)와 `promote` 를 이어서 올린다.
+5. 저장소를 공개로 바꾼 뒤 CI 를 다시 돌린다(#67). `Jenkinsfile_ci` 의 Prodgen Drift · Verify 가 자격증명 없이 GitHub 를 읽는 구조는 이번에 고치지 않는다 — Job 정의와 시험을 함께 바꿔야 해 병합 범위 밖이다. 다시 비공개로 하려면 먼저 두 단계에 자격을 연결해야 한다([../operate/03-job-registration.md](../operate/03-job-registration.md) 8절).
+6. 병합이 끝난 작업 브랜치 5개(`docs/redfish-mock2-audit-20261026` · `feature/gathering-addon` · `fix/redfish-mock2-20261027` · `fix/redfish-mock2-review-20261028` · `fix/redfish-mock2-summary-20261028`)는 로컬 · GitHub · 사내 GitLab 에서 지운다. 모두 main 의 조상이라 커밋은 남는다. 독립 검증 작업 트리(`se-indep-2026102{7,8}\wt-*`, 브랜치 없는 detached)와 `se-final-20261107\` 은 지우지 않는다.
+
+### 실행 기록 (2026-11-07)
+
+| 단계 | 결과 |
+|---|---|
+| main 병합 | `aa5b55c6`(GitLab 9건) → `d7cc7264`(merge commit, 부모 `31f2db21`) → `6ab65234`(D-01~D-03) → `6a6d0fea` · `a38fa73c`(기록 · rule 관찰 줄). GitHub `main` = `a38fa73c` |
+| main Job 매트릭스 | `a38fa73c` 로 #720~#729 · #731, 11/11 기대대로. #730 은 투입 스크립트 인코딩 오류로 증거에서 뺐다([live-validation.md](live-validation.md) 2026-11-07) |
+| CI | #66 FAILURE — 저장소 비공개로 Drift(`git fetch`) · Verify G20(`ls-remote`)가 익명으로 GitHub 를 읽지 못했다. 공개 전환 뒤 #67 SUCCESS · COMPLETE_PASS |
+| 승격 | `push-sync`(GitHub `production` `d464de4b` → `e808cf4d` fast-forward) → `restore --to d464de4b`(`e180a4ca`) → `promote --sha a38fa73c`(`7e3b2e6b`, gate G01~G20 PASS · class B 0 · 197파일). GitHub `production` = 사내 GitLab `main` = `7e3b2e6b`, force 없음 |
+| canary | production Job #321~#324(ESXi 6 · Redfish 7 · OS 11 · Windows 1) 4/4 SUCCESS · checkout `7e3b2e6b` · Portal HTTP 200 · 직전 canary 대비 바뀐 경로가 매트릭스 병합 전후 비교와 같다 |
+| 브랜치 정리 | 5개 모두 `origin/main` 의 조상임을 확인한 뒤 GitHub · 사내 GitLab · 로컬 순으로 지웠다. GitHub heads = `main` · `production`, GitLab heads = `main`(`7e3b2e6b`) 하나. 정리 뒤 `push-sync --dry-run` 할 일 0. 독립 검증 작업 트리 3개(detached)는 그대로 |
 
 ### 대안 (Considered)
 
@@ -130,6 +145,7 @@
 - `syjeong_test` 를 생성 대상에서 빼기: 다음 승격이 GitLab `main` 에서 이 파일을 지워 "유실하지 않도록" 지시와 어긋나 기각.
 - squash 병합(rule 93 R5 기본값): 재검증한 SHA 와 커밋 90개의 이력이 main 에서 끊겨 기각(main 에 merge commit 선례 있음).
 - GitLab `main` 을 `d464de4b` 로 되돌리기: force push 가 필요해 기각.
+- 저장소를 비공개로 둔 채 `Jenkinsfile_ci` 를 먼저 고치기: Job 정의 · 시험 변경과 그 CI 재검증이 더 필요하다. 사용자가 공개 전환을 택했다.
 
 ## 2026-11-02 — 사내 GitLab 을 고객사 형태로 (`main` 하나 = GitHub production)
 

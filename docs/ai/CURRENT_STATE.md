@@ -9,8 +9,10 @@
 - **병합(`d7cc7264`, merge commit `--no-ff`)**: `fix/redfish-mock2-summary-20261028` @ `31f2db21` — 재검증 대상 SHA 를 main 이력에 그대로 남긴다. 충돌 4파일(CURRENT_STATE · NEXT_ACTIONS · TEST_HISTORY · decision-log)은 양쪽 항목을 모두 남겼다. 브랜치 대비 제품 코드 차이는 GitLab 9건의 4파일뿐.
 - **문서 정정(`6ab65234`)**: 재검증 LOW 3건 — D-01 handoff 9절 a안 결정 표기 · D-02 SA-15 빈 카드 조건(포트 수 출처 = Controllers 의 ControllerCapabilities, 최상위 Ports 링크는 근거 아님 — 사전 help · 03-fields) · D-03 SA-05 종전 동작 문장. 사전은 help 문장만(키 · 타입 · priority 불변).
 - **하네스 · 운영 문서**: rule 00 · 80 관찰 줄(`syjeong_test`) · JENKINS_PIPELINES · 03-job-registration 5절(`target_type`) · 09-production-branch 2절.
-- **승격**: 진행 중 — 결과는 이 항목과 TEST_HISTORY 2026-11-07 에 갱신한다.
-- **브랜치 · 증거**: 작업 브랜치 삭제 0(사용자 지시) · 재검증 산출물(`se-final-20261107\`) 보존.
+- **승격**: production `7e3b2e6b`(정규 — CI #67 COMPLETE_PASS · main Job 매트릭스 #720~#729 · #731 · canary production Job #321~#324 4/4 SUCCESS — 직전 canary 대비 바뀐 경로가 매트릭스와 같음). 순서: `push-sync`(GitHub `production` `d464de4b` → `e808cf4d` fast-forward — GitLab 9커밋 이력 보존) → `restore --to d464de4b`(`e180a4ca`) → `promote --sha a38fa73c`. 로컬 = GitHub `production` = GitLab `main` · drift-check PROVENANCE · force 0.
+- **CI 재실행**: #66 FAILURE — GitHub 저장소가 비공개라 Prodgen Drift · Verify(G20)의 자격 없는 셸 `git fetch` · `ls-remote` 가 실패(Gate · G01~G19 는 PASS). 사용자가 저장소를 공개로 되돌린 뒤 같은 SHA 로 #67 SUCCESS. 다시 비공개로 하려면 `Jenkinsfile_ci` 두 단계에 자격 연결이 먼저다(NEXT_ACTIONS 2026-11-07).
+- **후속 지시**: 사용자 — "승격까지 너가 알아서해라 나의 개입없이" · "프로젝트 공개로 변경했음. 계속 진행해라" · main 병합부터 승격 · 검증 · 브랜치 삭제까지 한 번에.
+- **브랜치 · 증거**: 작업 브랜치 5개(`docs/redfish-mock2-audit-20261026` · `feature/gathering-addon` · `fix/redfish-mock2-20261027` · `fix/redfish-mock2-review-20261028` · `fix/redfish-mock2-summary-20261028`)는 사용자 지시로 GitHub · 사내 GitLab · 로컬에서 삭제(모두 `origin/main` 의 조상 · 정리 뒤 `push-sync --dry-run` 할 일 0). 지금 GitHub = `main` · `production`, GitLab = `main` 하나 · 재검증 산출물(`se-final-20261107\`)과 독립 검증 worktree 3개(detached) 보존.
 
 ## 일자: 2026-11-02 — 사내 GitLab 을 고객사 형태로 (`main` 하나 = GitHub production) · dual push 폐기
 
@@ -22,7 +24,7 @@
 - **하네스**: rule 93(사용자 명시 2026-11-02 · Branch / Remote 표 · R1 금지 · R2 예외 2 대상 ref · R7 개정 · 금지 패턴 · 리뷰 포인트) · rule 24 R5 · cycle-orchestrator skill · `CLAUDE.md` §14 · ADR 신규 1 · ADR-2026-05-01 §2 대체 표기 · JENKINS_PIPELINES 저장소 연결 절. 표면 카운트 변화 0.
 - **사람용 문서**: 09-production-branch(1 · 3 · 4 · 5 · 6 · 7절, 8절 신규 — GitLab 전환 절차) · 03-job-registration 1절 · 07-update-and-rollback 2 · 5절 · decision-log 2026-11-02.
 - **GitLab 정리(2026-11-02 실행)**: 사용자가 `main` 보호를 푼 뒤 사용자 승인 1회 강제 갱신(GitLab `main` `e8b5ae9b` → `d464de4b`, lease 고정 · rule 93 R1 예외 — 보호를 풀어도 기본 브랜치는 지울 수 없음) · `production` 삭제. 지금 GitLab = 기본 브랜치 `main` `d464de4b` + 작업 브랜치 5개(사용자 지시로 유지). `push-sync --dry-run` ok(할 일 0) · `drift-check` PROVENANCE. ADR 실행 기록.
-- **남은 것(사용자 · 화면)**: GitLab `main` 재보호(force push 불허) · Mirroring · Webhooks 확인 · 작업 브랜치 5개 삭제(작업 종료 뒤) · jenkins-prod Job 화면 확인(이 세션은 TLS 인증서 미신뢰 · 브라우저 미연결로 미확인). NEXT_ACTIONS 2026-11-02.
+- **남은 것(사용자 · 화면)**: GitLab `main` 재보호(force push 불허) · Mirroring · Webhooks 확인 · 작업 브랜치 5개 삭제(작업 종료 뒤 — 2026-11-07 삭제함) · jenkins-prod Job 화면 확인(이 세션은 TLS 인증서 미신뢰 · 브라우저 미연결로 미확인). NEXT_ACTIONS 2026-11-02.
 - **검증**: TEST_HISTORY 2026-11-02.
 
 ## 일자: 2026-10-29 — Redfish Summary 정합성 결함 수정 SA-01~19 — **재검증 대기** (main 미병합 · production 미승격)

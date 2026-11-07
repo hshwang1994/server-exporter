@@ -123,9 +123,9 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 
 | 항목 | 값 |
 |---|---|
-| production | `d464de4b` (`main` `447b6af7`에서 생성, 2026-10-19T22:31Z, 정규 승격 — CI #65 COMPLETE_PASS · gate G01~G20 PASS(G11~G15 · G18~G20 재실행) · main Job 매트릭스 #709~#719 · `CI-Stages: verified`. 승격 직후 production Job canary #314 ESXi · #315 Redfish · #316 OS · #317 Windows SUCCESS) |
-| 상태 | `PROVENANCE`. GitHub `production`, 사내 GitLab `main`, 로컬 `production`이 모두 `d464de4b`입니다(2026-11-02 확인). 사내 GitLab은 2026-11-02 고객사 형태로 바꿨습니다(8절). 기본 브랜치는 `main`이고 `production`은 지웠습니다. 진행 중인 작업 브랜치 5개는 작업이 끝나면 지울 예정이라 그동안 `git ls-remote --heads internal`에 `main` 외의 줄도 보입니다. `main`을 다시 보호하는 일과 미러링, Webhooks 확인이 남아 있습니다 |
-| 직전 production | `027409f4` (`main` `27c4b393`, 2026-10-19 정규 승격 — CI #63 · canary #310~#313) · `144c295f` (`main` `3e1e2aba`, 2026-10-18 정규 승격 — HBA 4채널 · link_status null · RAID 논리 볼륨) · `151cc395` (`main` `dd69aee1`, 2026-10-17 정규 승격 — InfiniBand 4채널 · CSUS 시리얼 접미사) · `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
+| production | `7e3b2e6b` (`main` `a38fa73c`에서 생성, 2026-11-07T10:28Z, 정규 승격 — CI #67 COMPLETE_PASS · gate G01~G20 PASS(G11~G15 · G18~G20 재실행) · main Job 매트릭스 #720~#729 · #731 · `CI-Stages: verified`. 승격 직후 production Job canary #321~#324 4/4 SUCCESS) |
+| 상태 | `PROVENANCE`. GitHub `production`, 사내 GitLab `main`, 로컬 `production`이 모두 `7e3b2e6b`입니다(2026-11-07 확인). 2026-11-02~04 사내 GitLab `main`에 직접 올라간 9커밋(`d464de4b..e808cf4d`)은 이력에 그대로 있습니다. 승격 때 GitHub `production`을 그 커밋까지 fast-forward(`push-sync`)하고, 복구 커밋 `e180a4ca`(`restore --to d464de4b`)로 생성본 상태를 되돌린 뒤 승격했습니다. 9커밋의 내용은 main `aa5b55c6`으로 들어와 이번 생성본에 포함됐습니다. 작업 브랜치 5개는 2026-11-07에 지워 사내 GitLab에는 `main` 하나만 남았습니다(커밋은 모두 GitHub `main` 이력에 있습니다). `main`을 다시 보호하는 일과 미러링, Webhooks 확인이 남아 있습니다 |
+| 직전 production | `e180a4ca` (복구 커밋 — `d464de4b` tree, 2026-11-07) ← `e808cf4d` (사내 GitLab 직접 수정 9커밋, 2026-11-02~04, prodgen 생성 아님) ← `d464de4b` (`main` `447b6af7`, 2026-10-19 정규 승격 — CI #65 · canary #314~#317) · `027409f4` (`main` `27c4b393`, 2026-10-19 정규 승격 — CI #63 · canary #310~#313) · `144c295f` (`main` `3e1e2aba`, 2026-10-18 정규 승격 — HBA 4채널 · link_status null · RAID 논리 볼륨) · `151cc395` (`main` `dd69aee1`, 2026-10-17 정규 승격 — InfiniBand 4채널 · CSUS 시리얼 접미사) · `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
 | 첫 production(baseline) | `4ce90a00` |
 
 승격 이력과 각 승격의 검증 빌드는 [../reference/decision-log.md](../reference/decision-log.md)와 [../reference/live-validation.md](../reference/live-validation.md)에 있습니다.
@@ -142,7 +142,7 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 6. `production`의 보호를 해제하고 지웁니다. 작업 브랜치도 지웁니다. 작업 브랜치는 GitHub에 같은 커밋으로 남아 있습니다.
 7. Settings → Repository → Mirroring repositories와 Settings → Webhooks를 봅니다. GitHub와의 미러링이나 jenkins-prod 연동이 남아 있으면 지웁니다. 미러링이 남아 있으면 지운 브랜치가 다시 생깁니다.
 
-2026-11-02 전환은 2~5단계를 다르게 했습니다. GitLab은 보호를 풀어도 기본 브랜치를 지울 수 없어서, 사용자 승인을 받아 보호를 푼 `main`을 GitHub `production` 커밋으로 한 번 강제 갱신했습니다. 갱신 전에 옛 `main` 커밋이 GitHub `main`에 들어 있어 잃는 커밋이 없는지 확인했고, 갱신 전 커밋을 lease로 고정해 GitLab `main`이 그 커밋일 때만 바뀌게 했습니다. 강제 push는 금지가 원칙이라 이 방법은 사용자가 승인한 그 1회에만 썼습니다. 6단계에서는 `production`만 지웠고, 작업 브랜치는 진행 중인 작업이 끝나면 지웁니다. `main` 다시 보호하기(5단계 뒷부분)와 7단계는 남아 있습니다.
+2026-11-02 전환은 2~5단계를 다르게 했습니다. GitLab은 보호를 풀어도 기본 브랜치를 지울 수 없어서, 사용자 승인을 받아 보호를 푼 `main`을 GitHub `production` 커밋으로 한 번 강제 갱신했습니다. 갱신 전에 옛 `main` 커밋이 GitHub `main`에 들어 있어 잃는 커밋이 없는지 확인했고, 갱신 전 커밋을 lease로 고정해 GitLab `main`이 그 커밋일 때만 바뀌게 했습니다. 강제 push는 금지가 원칙이라 이 방법은 사용자가 승인한 그 1회에만 썼습니다. 6단계에서는 `production`만 지웠고, 작업 브랜치 5개는 작업이 끝난 2026-11-07에 지웠습니다. `main` 다시 보호하기(5단계 뒷부분)와 7단계는 남아 있습니다.
 
 작업 PC의 git 설정도 맞춥니다. GitLab에 push하는 모든 사본에서 확인합니다.
 
