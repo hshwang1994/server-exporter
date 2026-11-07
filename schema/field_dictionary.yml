@@ -2325,8 +2325,9 @@ fields:
       - primary_speed_mbps (SA-10): is_primary NIC 의 속도. 그 값이 0 · null 이거나 대표 NIC 이 없으면 null(종전: 첫 link up NIC 의 속도).
       - port_count / adapter_count (type integer|null, SA-01 개수 원칙): 원천(EthernetInterfaces · NetworkAdapters)을 끝까지 읽었을 때만 정수(0 포함),
         미지원 · 404 · 실패 · 일부 멤버 실패 · 미수집이면 null(종전 0).
-      - adapter_count 와 network.adapters[] 는 제조사 · 모델이 없고 포트 수 · 기능 수가 0 이며 Controllers 의 기능 · 포트 링크도 최상위
-        NetworkDeviceFunctions 링크도 없는 카드를 뺀다(빈 슬롯 · 관리 카드 placeholder — 실측 HPE CSUS 3200 'Rmp', 최상위 Ports 링크만 있음; SA-15 문서화).
+      - adapter_count 와 network.adapters[] 는 제조사 · 모델이 없고 Controllers 의 ControllerCapabilities.NetworkPortCount · NetworkDeviceFunctionCount
+        합이 0 이며 Controllers 의 기능 · 포트 링크도 없고 최상위 NetworkDeviceFunctions 목록도 없거나 비어 있는(0건 · 404) 카드를 뺀다(빈 슬롯 ·
+        관리 카드 placeholder — 실측 HPE CSUS 3200 'Rmp'. 최상위 Ports 링크는 근거로 쓰지 않는다; SA-15 문서화).
       - groups[].model · manufacturer (SA-18 문서화): 그 NIC 이 속한 카드(network.adapters[])의 값이다. NIC Id 에서 '-N-N' · '-N' 접미를 뗀 값이 카드 Id 와
         같으면 그 카드, 아니면 NIC MAC 과 같은 주소(network.ports[] 의 AssociatedMACAddresses 첫 주소)를 가진 포트의 카드다. 둘 다 없으면 null.
     help_en: >-
@@ -2346,9 +2347,10 @@ fields:
         the first link-up NIC's speed).
       - port_count / adapter_count (type integer|null, SA-01 count rule): an integer (0 included) only when the source (EthernetInterfaces,
         NetworkAdapters) was read to the end; null when unsupported, 404, failed, partly failed or not collected (previously 0).
-      - adapter_count and network.adapters[] leave out a card with no manufacturer/model, zero port and function counts, no function/port
-        links under Controllers and no top-level NetworkDeviceFunctions link (empty slot or management-card placeholder — measured HPE CSUS
-        3200 'Rmp', which has only a top-level Ports link; documented as SA-15).
+      - adapter_count and network.adapters[] leave out a card with no manufacturer/model, a zero sum of ControllerCapabilities.NetworkPortCount
+        and NetworkDeviceFunctionCount over Controllers, no function/port links under Controllers and no top-level NetworkDeviceFunctions list
+        (missing, empty or 404) — an empty slot or management-card placeholder (measured HPE CSUS 3200 'Rmp'; a top-level Ports link is not
+        used as evidence; documented as SA-15).
       - groups[].model / manufacturer (documented as SA-18): taken from the card (network.adapters[]) the NIC belongs to — the card whose Id
         equals the NIC Id without a '-N-N' / '-N' suffix, else the card of the port whose address (first AssociatedMACAddresses entry of
         network.ports[]) equals the NIC MAC. null when neither matches.

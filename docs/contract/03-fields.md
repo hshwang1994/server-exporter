@@ -594,7 +594,7 @@ for e in response["errors"]:
 > **2026-10-29 (Summary 정합성 — SA-04 · SA-05 · SA-11)** — Redfish 는 **부분 합을 전체 합으로 쓰지 않는다**(null = 미제공 · 확정 불가, 0 = 확인한 0).
 > (1) memory: DIMM 합은 DIMM 목록을 다 읽고 모든 DIMM 의 `CapacityMiB` 를 알 때만 `total_mb` · `installed_mb` · `summary.grand_total_gb` 가 된다. 멤버 조회 실패
 > (5xx · 404 · `@odata.id` 없음 · 컬렉션 절단)나 용량 미상 DIMM 이 있으면 같은 System 의 `MemorySummary.TotalSystemMemoryGiB` 가 양수이고 아는 합 이상(용량 미상 DIMM 이
-> 있으면 아는 합 초과)일 때만 그 값을 쓰고, 아니면 `null` 이다 — notice `DIMM 합계를 확정하지 못함 … 부분 합을 쓰지 않음`. 종전에는 읽은 DIMM 의 합을 전체로 적었다.
+> 있으면 아는 합 초과)일 때만 그 값을 쓰고, 아니면 `null` 이다 — notice `DIMM 합계를 확정하지 못함 … 부분 합을 쓰지 않음`. 종전에는 읽은 DIMM 의 합이 `grand_total_gb` 가 됐고, 멤버 조회 실패면 `total_mb` · `installed_mb` 도 그 합이었다.
 > 그룹은 아는 DIMM 만 담으므로 이때 `grand_total_gb` 와 그룹 합이 다를 수 있다. 멤버 조회 실패는 종전처럼 `errors[]` 에도 남는다.
 > (2) cpu: `cores_physical` 은 CPU 목록을 다 읽고 모든 CPU 의 `TotalCores` 가 양수일 때만 합이다. 아니면 같은 System 의 `ProcessorSummary.CoreCount` 가 양의 정수이고
 > (아는 코어 합 + 코어 미상 CPU 수) 이상이며 `ProcessorSummary.Count`(있으면)가 목록 수 이상일 때 그 값, 그것도 아니면 `null`(notice `… 부분 합을 쓰지 않음`).
@@ -1002,9 +1002,9 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 > (합쳐진 그룹 없음 — 그룹 수 불변). iLO 7 · RMC 는 호스트 NIC 에 `SpeedMbps` 가 없어 원래 `null` 그룹이었다 — 링크 없는 NIC 의 그룹 키가 벤더에 따라 `0` 과 `null` 로
 > 갈리던 것이 `null` 로 같아졌다. (2) `primary_speed_mbps` 는 `is_primary` NIC 의 속도이고, 그 값이 `0` · `null` 이거나 대표 NIC 이 없으면 `null` 이다(종전: 첫 link up NIC 의
 > 속도 — 18대 Mock 은 두 정의의 값이 같다). (3) `port_count` · `adapter_count` 는 원천(EthernetInterfaces · NetworkAdapters)을 끝까지 읽었을 때만 정수(0 포함)이고,
-> 미지원 · 404 · 실패 · 일부 멤버 실패 · 미수집이면 `null` 이다(종전 0 — 9절 개수 원칙과 같다). (4) `adapters[]` 와 `adapter_count` 는 제조사 · 모델이 없고 포트 수 · 기능 수가
-> 0 이며 `Controllers` 의 기능 · 포트 링크도 최상위 `NetworkDeviceFunctions` 링크도 없는 카드를 뺀다(빈 슬롯 · 관리 카드 자리표시 — 실측 HPE CSUS 3200 `Rmp`, 최상위 `Ports`
-> 링크만 있음; 종전 동작 그대로 — 문서만 보강). (5) `groups[].model` · `manufacturer` 는 그 NIC 이 속한 카드(`adapters[]`)의 값이다 — NIC `Id` 에서 `-N-N` · `-N` 접미를 뗀 값이
+> 미지원 · 404 · 실패 · 일부 멤버 실패 · 미수집이면 `null` 이다(종전 0 — 9절 개수 원칙과 같다). (4) `adapters[]` 와 `adapter_count` 는 제조사 · 모델이 없고 `Controllers` 의
+> `ControllerCapabilities.NetworkPortCount` · `NetworkDeviceFunctionCount` 합이 0 이며 `Controllers` 의 기능 · 포트 링크도 없고 최상위 `NetworkDeviceFunctions` 목록도
+> 없거나 비어 있는(0건 · 404) 카드를 뺀다(빈 슬롯 · 관리 카드 자리표시 — 실측 HPE CSUS 3200 `Rmp`. 최상위 `Ports` 링크는 근거로 쓰지 않는다; 종전 동작 그대로 — 문서만 보강). (5) `groups[].model` · `manufacturer` 는 그 NIC 이 속한 카드(`adapters[]`)의 값이다 — NIC `Id` 에서 `-N-N` · `-N` 접미를 뗀 값이
 > 카드 `Id` 와 같으면 그 카드, 아니면 NIC MAC 과 같은 주소(`ports[]` 의 `AssociatedMACAddresses` 첫 주소)를 가진 포트의 카드, 둘 다 없으면 `null` 이다(종전 동작 — 문서만 보강).
 
 #### 6.4.1 본딩/티밍 토폴로지 (2026-06-15 — OS 채널, Additive)
