@@ -15,7 +15,7 @@
 - Schema 11 sections (`system hardware bmc cpu memory storage network firmware users power thermal`)
 - Jenkins pipeline: `Jenkinsfile_portal` 하나 (2026-09-28 에 비운영 `Jenkinsfile` · `Jenkinsfile_portal_test` · `test_sj` 는 삭제됐다).
   `Jenkinsfile_portal_Byid` 는 portal 의 동기화된 사본이다(`inventory_json` 기본값 1줄만 다름, 2026-10-09 ADR — 시험이 동기화를 강제).
-  `syjeong_test` 는 사내 GitLab 에서 만든 Portal 시험 파이프라인이다(2026-11-07 main 반영 · production 생성 대상, rule 80).
+  사내 GitLab 에서 만든 Portal 시험 파이프라인 `syjeong_test` 는 2026-11-07 main 에 들여왔다가 같은 날 사용자 지시로 지웠다(rule 80).
   cron·trigger 없음. grafana 파이프라인은 존재하지 않는다. Agent venv 는 `scripts/activate_ansible_venv.sh` 가 고른다
 
 > **세어 놓은 수는 적지 않는다.** adapter·fixture·baseline·테스트 개수, 파일 줄 수는
