@@ -22,7 +22,7 @@
 
 | 분류 | 경로 |
 |---|---|
-| 파이프라인 | `Jenkinsfile_portal`, `scripts/jenkins/se_finalize.groovy`. 사내 GitLab `main`에서 만든 Portal 시험 파이프라인 `syjeong_test`는 2026-11-07 사용자 지시로 생성 대상에서 뺐습니다. 지금 production `7e3b2e6b`에는 남아 있고, 다음 승격 때 빠집니다 |
+| 파이프라인 | `Jenkinsfile_portal`, `scripts/jenkins/se_finalize.groovy`. 사내 GitLab `main`에서 만든 Portal 시험 파이프라인 `syjeong_test`는 2026-11-07 사용자 지시로 생성 대상에서 뺐습니다. 같은 날 긴급 승격 `09fb6625`로 production에서도 지웠습니다 |
 | Ansible 설정과 인벤토리 | `ansible.cfg`, `os-gather/inventory.sh`, `esxi-gather/inventory.sh`, `redfish-gather/inventory.sh` |
 | playbook과 task | 세 채널의 `site.yml`, `tasks/**`, `common/tasks/**`, `common/vars/`의 운영 변수 파일 |
 | 어댑터 | `adapters/redfish/`, `adapters/os/`, `adapters/esxi/` |
@@ -123,9 +123,9 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 
 | 항목 | 값 |
 |---|---|
-| production | `7e3b2e6b` (`main` `a38fa73c`에서 생성, 2026-11-07T10:28Z, 정규 승격 — CI #67 COMPLETE_PASS · gate G01~G20 PASS(G11~G15 · G18~G20 재실행) · main Job 매트릭스 #720~#729 · #731 · `CI-Stages: verified`. 승격 직후 production Job canary #321~#324 4/4 SUCCESS) |
-| 상태 | `PROVENANCE`. GitHub `production`, 사내 GitLab `main`, 로컬 `production`이 모두 `7e3b2e6b`입니다(2026-11-07 확인). 2026-11-02~04 사내 GitLab `main`에 직접 올라간 9커밋(`d464de4b..e808cf4d`)은 이력에 그대로 있습니다. 승격 때 GitHub `production`을 그 커밋까지 fast-forward(`push-sync`)하고, 복구 커밋 `e180a4ca`(`restore --to d464de4b`)로 생성본 상태를 되돌린 뒤 승격했습니다. 9커밋의 내용은 main `aa5b55c6`으로 들어와 이번 생성본에 포함됐습니다. 작업 브랜치 5개는 2026-11-07에 지워 사내 GitLab에는 `main` 하나만 남았습니다(커밋은 모두 GitHub `main` 이력에 있습니다). `main`을 다시 보호하는 일과 미러링, Webhooks 확인이 남아 있습니다 |
-| 직전 production | `e180a4ca` (복구 커밋 — `d464de4b` tree, 2026-11-07) ← `e808cf4d` (사내 GitLab 직접 수정 9커밋, 2026-11-02~04, prodgen 생성 아님) ← `d464de4b` (`main` `447b6af7`, 2026-10-19 정규 승격 — CI #65 · canary #314~#317) · `027409f4` (`main` `27c4b393`, 2026-10-19 정규 승격 — CI #63 · canary #310~#313) · `144c295f` (`main` `3e1e2aba`, 2026-10-18 정규 승격 — HBA 4채널 · link_status null · RAID 논리 볼륨) · `151cc395` (`main` `dd69aee1`, 2026-10-17 정규 승격 — InfiniBand 4채널 · CSUS 시리얼 접미사) · `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
+| production | `09fb6625` (`main` `dcfe5930`에서 생성, 2026-11-07T12:02Z, **긴급 승격**(사용자 지시) — `syjeong_test` 삭제만, 나머지 파일은 `7e3b2e6b`와 같음. gate G01~G10 · G16~G18 · G20 PASS, G11~G15 · G19 SKIP(`Verdict: PARTIAL`) · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent`. 승격 직후 production Job canary #325 ESXi 6/6 SUCCESS. 다음 정규 승격으로 증거를 채웁니다) |
+| 상태 | `PROVENANCE`. GitHub `production`, 사내 GitLab `main`, 로컬 `production`이 모두 `09fb6625`입니다(2026-11-07 확인). 2026-11-02~04 사내 GitLab `main`에 직접 올라간 9커밋(`d464de4b..e808cf4d`)은 이력에 그대로 있습니다. 승격 때 GitHub `production`을 그 커밋까지 fast-forward(`push-sync`)하고, 복구 커밋 `e180a4ca`(`restore --to d464de4b`)로 생성본 상태를 되돌린 뒤 승격했습니다. 9커밋의 내용은 main `aa5b55c6`으로 들어와 이번 생성본에 포함됐습니다. 작업 브랜치 5개는 2026-11-07에 지워 사내 GitLab에는 `main` 하나만 남았습니다(커밋은 모두 GitHub `main` 이력에 있습니다). `main`을 다시 보호하는 일과 미러링, Webhooks 확인이 남아 있습니다 |
+| 직전 production | `7e3b2e6b` (`main` `a38fa73c`, 2026-11-07 정규 승격 — CI #67 · canary #321~#324) ← `e180a4ca` (복구 커밋 — `d464de4b` tree, 2026-11-07) ← `e808cf4d` (사내 GitLab 직접 수정 9커밋, 2026-11-02~04, prodgen 생성 아님) ← `d464de4b` (`main` `447b6af7`, 2026-10-19 정규 승격 — CI #65 · canary #314~#317) · `027409f4` (`main` `27c4b393`, 2026-10-19 정규 승격 — CI #63 · canary #310~#313) · `144c295f` (`main` `3e1e2aba`, 2026-10-18 정규 승격 — HBA 4채널 · link_status null · RAID 논리 볼륨) · `151cc395` (`main` `dd69aee1`, 2026-10-17 정규 승격 — InfiniBand 4채널 · CSUS 시리얼 접미사) · `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
 | 첫 production(baseline) | `4ce90a00` |
 
 승격 이력과 각 승격의 검증 빌드는 [../reference/decision-log.md](../reference/decision-log.md)와 [../reference/live-validation.md](../reference/live-validation.md)에 있습니다.

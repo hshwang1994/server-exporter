@@ -522,6 +522,11 @@ main `a38fa73c`(`fix/redfish-mock2-summary-20261028` `31f2db21` 의 merge commit
 직전 canary 대비 바뀐 JSON 경로와 경로별 개수는 네 채널 모두 위 매트릭스의 병합 전후 비교(#717 → #728 · #718 → #729 · #711 → #722 · #712 → #723)와 같다(파일시스템 사용률 개수만 시각차).
 수집 코드가 바뀐 채널은 Redfish 하나이고, 그 변화는 위 "병합 전 대비 바뀐 값" 목록 그대로다.
 
+### 긴급 승격 production `09fb6625` canary (production Job #325, 2026-11-07)
+
+`syjeong_test` 를 배포본에서 지운 긴급 승격(사용자 지시 — [decision-log.md](decision-log.md) 2026-11-07 (2)) 직후 #321 과 같은 입력으로 ESXi 1건을 돌렸다:
+SUCCESS 77초 · checkout `09fb6625` · Portal HTTP 200 · 6/6 success · errors 0 · 13키 · #321 대비 바뀐 값 0. 런타임 파일은 `7e3b2e6b` 와 `syjeong_test` 하나만 다르다.
+
 ## 2026-10-19 ESXi 전원·온도·팬 · Linux iSCSI · CSUS 단일 서버 · 3채널 summary — main `447b6af7` 매트릭스 #709~#719 · CI #65 · production `d464de4b` · canary (실장비)
 
 main `447b6af7`(2026-10-19 둘째 · 셋째 라운드 — CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 정비 · ESXi vSphere 하드웨어 센서 power/thermal · Linux iSCSI 이니시에이터)로

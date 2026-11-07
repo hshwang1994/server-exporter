@@ -1,15 +1,16 @@
 # TEST_HISTORY — server-exporter
 
-## 2026-11-07 (2) — `syjeong_test` 삭제 (main · 생성 대상)
+## 2026-11-07 (2) — `syjeong_test` 삭제 (main · 생성 대상) · 긴급 승격 production `09fb6625`
 
-> 정본: `docs/reference/decision-log.md` 2026-11-07 (2). 사용자 지시로 CI · main Job 매트릭스 · canary · 전체 pytest 는 돌리지 않았다. Windows 작업 PC · Python 3.13.
+> 정본: `docs/reference/decision-log.md` 2026-11-07 (2). 사용자 지시로 CI · main Job 매트릭스 · 전체 pytest 는 돌리지 않았다. Windows 작업 PC · Python 3.13.
 
 | 구분 | 결과 |
 |---|---|
 | 생성 확인 | 같은 tree 의 임시 커밋 개체(브랜치에 올리지 않음)로 `prodgen build` — ok · class B 0 · **196 파일**(전 197, `syjeong_test` 빠짐) · tree hash `a12e2487` |
 | 관련 단위 시험 | `test_manifest_and_provenance.py` · `test_overlay_excluded_paths_marked.py` · `test_env_guard.py` · `test_workspace_cleanup.py` · `test_bootstrap_vault_encrypt.py` — 26 passed · 1 skipped |
 | 정적 검사 | PROJECT_MAP fingerprint 일치 · 하네스 일관성 통과 · 문서 참조 rc 2(종전부터 있는 죽은 참조 1건, 이번 변경과 무관) |
-| production | 승격 안 함(같은 main SHA 의 CI 증거 없음) — `7e3b2e6b`(= GitLab `main`)에는 다음 정규 승격 때까지 남는다 |
+| 긴급 승격 (사용자 지시 "긴급승격") | main `dcfe5930` → production **`09fb6625`**(parent `7e3b2e6b`) — prodgen `promote()` 와 같은 함수(build · run_gates · remote_baseline · classify_production · commit-tree · `_publish`)를 부르고 CI · E2E 확인만 뺀 스크립트. dry-run 뒤 실행. build ok · 196 파일 · class B 0 · tree `a12e2487` · gate G01~G10 · G16~G18 · G20 PASS · G11~G15 · G19 SKIP(`Verdict: PARTIAL`) · 직전 production 과의 파일 차이 `syjeong_test` 삭제 하나(가드) · GitHub `production` = GitLab `main` = 로컬 · drift-check PROVENANCE(기록된 생성기로 같은 tree) · `push-sync --dry-run` 할 일 0 · force 0 |
+| canary | production Job #325 ESXi 6(#321 과 같은 입력, eventUuid 새 값) — SUCCESS 77 s · checkout `09fb6625` · Portal HTTP 200 · 6/6 success · errors 0 · 13키 · #321 대비 바뀐 값 0 |
 
 ## 2026-11-07 — Redfish Summary 수정 main 병합 · GitLab 9건 반영 · 정규 승격 (main `a38fa73c` → production `7e3b2e6b`)
 

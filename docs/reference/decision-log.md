@@ -26,7 +26,7 @@
 | CSUS 3200 단일 서버 · summary 거짓 값 | CSUS 3200 은 Partition0 = 서버(다른 x86 과 같은 JSON), `multi_node` 는 유지, 시리얼 `-NNN` 제거는 OS · Redfish · **ESXi** · **Superdome Flex** 까지. `power.summary` 용량 모르면 null, `adapter_count` 는 FC 전용 카드 제외, RMC 의 `LogicalProcessorCount` 는 코어 수(adapter 플래그), Redfish 는 정보가 없을 때만 PCIeDevices · 섀시 Drives · NetworkInterfaces · 다중 섀시 Power/Thermal 을 읽는다. "노출 vs 요청" 범위 감사 회귀 3종 상시 | 2026-10-19 (2) |
 | 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개. 중단 원인은 Jenkins 의 분류로만(경과시간 · 노드 상태로 확정 안 함), 보존은 handler 한 곳에서 1회 | 2026-10-05~07 · 2026-10-12 |
 | 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가. 404 는 서버가 돌려준 것만 확정 거부, 플러그인이 합성한 404(이름 풀이 실패)는 통신 실패 | 2026-10-03 · 2026-10-05 · 2026-10-10 · 2026-10-12 |
-| production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, GitHub `production` = 사내 GitLab `main`(GitLab 은 고객사 형태 — `main` 하나), 승격 직후 canary. 사용자 지시 긴급 승격은 같은 생성 tree + 사실 trailer(`Emergency-Promotion`) 로 하고 정규 재승격으로 증거를 채운다 | 2026-10-03 · 2026-10-04 · 2026-10-14 · 2026-10-15 · 2026-11-02 |
+| production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, GitHub `production` = 사내 GitLab `main`(GitLab 은 고객사 형태 — `main` 하나), 승격 직후 canary. 사용자 지시 긴급 승격은 같은 생성 tree + 사실 trailer(`Emergency-Promotion`) 로 하고 정규 재승격으로 증거를 채운다 | 2026-10-03 · 2026-10-04 · 2026-10-14 · 2026-10-15 · 2026-11-02 · 2026-11-07 (2) |
 | Jenkinsfile 사본 | `Jenkinsfile_portal_Byid` 유지 · portal 과 동기화(시험 강제) | 2026-10-09 |
 | Add-on | 전역 `ADDON_REPO_URL` 하나로 켜고 빌드마다 받는다, 실패는 UNSTABLE + Add-on 없이 수집 | 2026-09-29 · 2026-09-30 |
 | Runner 선택 | `loc` 의 agent_label && target_type 능력 라벨, venv 는 `activate_ansible_venv.sh` 가 고른다 | 2026-09-28 · 2026-09-30 |
@@ -48,7 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
-| 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) |
+| 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) · 긴급 승격 production `09fb6625` |
 | 2026-11-07 — Redfish Summary 수정 main 병합(merge commit) · 사내 GitLab `main` 직접 수정 9건 반영(`target_type` string · `syjeong_test` 생성 대상) |
 | 2026-11-02 — 사내 GitLab 을 고객사 형태로(`main` 하나 = GitHub production) · jenkins-prod 는 GitHub · dual push 폐기 |
 | 2026-10-28 — Redfish 2차 Mock 구현 독립 검증 결함 정정: XCC 3 NIC 링크 같은 MAC 포트 보충 · HBA up 값 표준 링크 값 한정 · 전원 Off notice 네트워크 · 사전/계약 원천 정정 |
@@ -115,12 +115,16 @@
 ### 사용자 지시
 
 - 승격 · 브랜치 정리 보고 뒤 "syjeong_test 파일 지워라 CI다돌릴필요없고 지우고 바로 push 하면됨."
+- production(= 사내 GitLab `main`)에는 다음 승격 때까지 남는다는 보고에 "긴급승격".
 
 ### 결정
 
 1. `syjeong_test` 파일과 `production_manifest.yml` 의 두 항목(`runtime_roots` · `include`)을 지운다. 아래 2026-11-07 결정 2(생성 대상에 넣기)를 이 지시가 바꾼다.
 2. CI · main Job 매트릭스 · canary 는 돌리지 않는다(사용자 지시). 생성기가 새 main 으로 tree 를 만들 수 있는지만 확인한다(`prodgen build`).
-3. production 승격은 하지 않는다 — 정규 승격의 전제(같은 main SHA 의 CI 증거)가 없다. production `7e3b2e6b`(= 사내 GitLab `main`)에는 이 파일이 다음 정규 승격 때까지 남고, 그 승격이 지운다.
+3. production 승격은 하지 않는다 — 정규 승격의 전제(같은 main SHA 의 CI 증거)가 없다. production `7e3b2e6b`(= 사내 GitLab `main`)에는 이 파일이 다음 정규 승격 때까지 남고, 그 승격이 지운다. → 결정 4 로 바뀜.
+4. **긴급 승격 (실행됨 — production `09fb6625`)**: 사용자 지시("긴급승격")로 main `dcfe5930` 의 prodgen 생성 tree 를 `7e3b2e6b` 위에 append 했다(ff · force 없음). `prodgen promote()` 와 같은 함수(build · run_gates · remote_baseline · classify_production · commit-tree · `_publish`)를 부르고 CI 단계 결과 · E2E 증거 확인만 뺐다. 직전 production 과의 파일 차이가 `syjeong_test` 삭제 하나가 아니면 멈추는 가드를 두었다.
+   trailer 는 사실만: `Verdict: PARTIAL`(G01~G10 · G16~G18 · G20 PASS, G11~G15 · G19 SKIP) · `CI-Build: manual` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion: user-approved 2026-11-07`.
+   GitHub `production` = 사내 GitLab `main` = 로컬 `09fb6625` · drift-check PROVENANCE · canary production Job #325 ESXi 6/6 SUCCESS. 정규 재승격으로 증거를 채운다(선례 2026-10-14 · 2026-10-15). 결정 주체: 사용자.
 
 ## 2026-11-07 — Redfish Summary 수정 main 병합 · 사내 GitLab `main` 직접 수정 9건 반영
 
