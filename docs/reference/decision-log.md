@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-11-02
+> 최종 갱신: 2026-11-07
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -48,6 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-11-07 — Redfish Summary 수정 main 병합(merge commit) · 사내 GitLab `main` 직접 수정 9건 반영(`target_type` string · `syjeong_test` 생성 대상) |
 | 2026-11-02 — 사내 GitLab 을 고객사 형태로(`main` 하나 = GitHub production) · jenkins-prod 는 GitHub · dual push 폐기 |
 | 2026-10-28 — Redfish 2차 Mock 구현 독립 검증 결함 정정: XCC 3 NIC 링크 같은 MAC 포트 보충 · HBA up 값 표준 링크 값 한정 · 전원 Off notice 네트워크 · 사전/계약 원천 정정 |
 | 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2): FIX 1~11 · 결정 11 A안 · Lenovo XCC3 재선택 · 전원 Off · firmware category · XCC3 모양 · 전원/온도 의미 · CSUS 섀시 gating · 계약/사전 정정 |
@@ -107,6 +108,28 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-11-07 — Redfish Summary 수정 main 병합 · 사내 GitLab `main` 직접 수정 9건 반영
+
+> 정본: 독립 재검증 보고서 `C:\github\ClovirONE\se-final-20261107\FINAL_INDEPENDENT_REVIEW.md` · `MERGE_READINESS.md`(저장소 밖) · `tests/evidence/2026-10-29-redfish-summary-fix/`.
+
+### 사용자 지시
+
+- "최종 독립 검증 PASS를 확인했습니다. 이제 main 병합과 production 승격까지 진행하는 것을 승인합니다." — GitLab 에 따로 있는 9개 커밋(`Jenkinsfile_portal` 포함)을 잃지 않게 통합하고, 문서 충돌 4건과 D-01~D-03 을 정정하고, 기존 운영 절차로 승격한다. force push · 브랜치 삭제는 하지 않고 기존 독립 검증 증거는 보존한다.
+
+### 결정
+
+1. GitLab `main` 의 9커밋(`d464de4b..e808cf4d`, 관리자 2026-11-02~04 웹 편집)은 같은 결과를 main 에 커밋 1개로 들여온다(`aa5b55c6`). 내용은 `Jenkinsfile_portal` 의 `target_type` choice(기본 `os`) → string(기본 `''`)과 `syjeong_test`(Portal 시험 파이프라인) 추가다. 입력 확인 단계의 값 검사(`allowed.contains`)는 그대로라 빈 값과 다른 값은 지금도 빌드를 멈춘다. `Jenkinsfile_portal_Byid` 는 같은 커밋에서 맞췄다(2026-10-09 결정).
+2. `syjeong_test` 는 production 생성 대상에 넣는다(`production_manifest.yml` — groovy). GitLab `main` 이 배포본이라 생성 대상이 아니면 다음 승격이 이 파일을 지운다. 배포본에서는 다른 groovy 파일처럼 설명 주석이 지워진다.
+3. Summary 브랜치는 merge commit(`--no-ff`, `d7cc7264`)으로 병합한다. 독립 재검증을 받은 SHA `31f2db21` 이 main 이력에 그대로 남는다. 기록 문서 4개의 충돌은 양쪽 항목을 모두 남긴다.
+4. GitLab 의 9커밋 이력은 force 없이 남긴다. 승격 때 `push-sync` 로 GitHub `production` 을 GitLab `main` 까지 fast-forward 하고, `restore --to d464de4b`(마지막 생성 커밋의 tree 를 새 커밋으로 — provenance 회복)와 `promote` 를 이어서 올린다.
+
+### 대안 (Considered)
+
+- 9커밋 cherry-pick: 같은 파일을 여러 번 고친 웹 편집이라 결과가 커밋 1개와 같고, 중간 상태(빈 파일 등)만 늘어 기각.
+- `syjeong_test` 를 생성 대상에서 빼기: 다음 승격이 GitLab `main` 에서 이 파일을 지워 "유실하지 않도록" 지시와 어긋나 기각.
+- squash 병합(rule 93 R5 기본값): 재검증한 SHA 와 커밋 90개의 이력이 main 에서 끊겨 기각(main 에 merge commit 선례 있음).
+- GitLab `main` 을 `d464de4b` 로 되돌리기: force push 가 필요해 기각.
 
 ## 2026-11-02 — 사내 GitLab 을 고객사 형태로 (`main` 하나 = GitHub production)
 

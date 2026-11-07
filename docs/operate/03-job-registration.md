@@ -69,7 +69,7 @@ Job을 저장한 뒤 한 번 실행하면 Jenkins가 파라미터 화면을 만�
 | 파라미터 | 필수 | 설명 |
 |---|---|---|
 | `loc` | 필수 | 실행 위치. `common/vars/locations.yml`의 키 (`ic`, `cj`, `yi`, `git`) |
-| `target_type` | 필수 (기본 `os`) | `os`, `esxi`, `redfish` |
+| `target_type` | 필수 | `os`, `esxi`, `redfish` 중 하나. 문자열 파라미터이고 기본값은 비어 있습니다(2026-11-02부터, 종전에는 기본 `os`인 선택 파라미터). 비어 있거나 다른 값이면 입력 확인 단계에서 빌드를 멈춥니다 |
 | `inventory_json` | 필수 | 대상 목록 JSON 배열. os와 esxi는 `service_ip`, redfish는 `bmc_ip`, 둘 다 없으면 `ip`를 읽습니다. 표준 JSON만 받고 IPv4만, 중복 불가. 형식은 [../contract/01-input.md](../contract/01-input.md) |
 | `deploymentEnvironmentId` | 필수 | Portal 배포 환경 ID. 전송 본문에 그대로 들어갑니다 |
 | `eventUuid` | 선택 | Portal 이벤트 UUID. 전송 본문에 그대로 들어갑니다 |

@@ -1,5 +1,14 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Redfish Summary 수정 main 병합 · GitLab 9건 반영 (2026-11-07) — 남은 항목
+
+> 정본: `docs/reference/decision-log.md` 2026-11-07 · `docs/ai/CURRENT_STATE.md` 2026-11-07. main 병합(`d7cc7264`) · GitLab 9건(`aa5b55c6`) · D-01~D-03(`6ab65234`).
+
+- [ ] **[HIGH / AI — 진행 중] production 승격 + canary** — 정규 절차(main Job 매트릭스 → CI → `push-sync` → `restore --to d464de4b` → `promote` → canary). 결과는 이 항목 · CURRENT_STATE · TEST_HISTORY 2026-11-07 에 갱신.
+- [ ] **[HIGH / 사용자 — GitLab 관리 화면] GitLab `main` 재보호** — 2026-11-02 보호를 푼 뒤 관리자 웹 편집 9건(2026-11-02~04)이 배포본 브랜치에 직접 들어왔다. 아래 2026-11-02 절의 재보호 항목과 같은 일이다. 재보호 전까지는 승격 전에 `git ls-remote internal refs/heads/main` 이 GitHub `production` 과 같은지 먼저 본다(다르면 같은 방식으로 main 에 들여온 뒤 승격).
+- [ ] **[LOW / 사용자] `syjeong_test` 용도 확인** — Portal 시험 파이프라인(`clovirAnsible.run`). 쓰는 Job 과 계속 둘지(배포본 포함 유지) 결정. 지우면 다음 승격이 GitLab `main` 에서도 지운다.
+- [INFO] `target_type` 은 string(기본 `''`)이다 — Portal 이 값을 늘 보내므로 동작 변화 없음. 빈 값 · 다른 값은 입력 확인 단계가 멈춘다.
+
 ## 사내 GitLab 고객사 형태 전환 (2026-11-02) — 남은 항목
 
 > 정본: `docs/ai/decisions/ADR-2026-11-02-gitlab-customer-form.md`(실행 기록) · `docs/operate/09-production-branch.md` 7 · 8절. 저장소 쪽(prodgen · 하네스 · 문서)은 main 에 들어갔고 GitLab 정리는 2026-11-02 실행했다. 배포본 변경 0 — 승격 해당 없음.
@@ -14,15 +23,15 @@
 - [WARN] GitLab 을 받아 둔 다른 사본(있다면)에는 GitLab `main` 이 강제 갱신된 것으로 보인다(옛 개발 `main` → production 커밋, 서로 조상 아님). 그 사본에서 GitLab `main` 을 추적하는 브랜치로 `git pull` 하면 분기됐다며 멈추거나(git 설정에 따라) 옛 개발 이력과 병합된다 — GitLab 은 받기 전용으로 쓰고 개발은 GitHub `main` 에서 한다.
 - [INFO] Add-on 저장소(사내 GitLab `clovirone-server-gathering-addon`, jenkins-prod `ADDON_REPO_URL`)는 사용자 지시(2026-11-02 "지금 범위가 아님")로 그대로 둔다 — 종전 LOW 항목은 지웠다.
 - [INFO] 다음 승격: prodgen 소스 변경으로 `generator_hash` 가 바뀌었다 — 이 커밋 이전 SHA 의 CI 보고서는 `--verify-report` 로 재사용되지 않는다. CI Promote 의 GitLab 경로(`se-gitlab-push` 가 있을 때만)는 그대로 두었고 같은 매핑을 쓴다.
-- [INFO] fix 브랜치(`fix/redfish-mock2-summary-20261028`)를 main 에 병합할 때 `CURRENT_STATE` · `NEXT_ACTIONS` · `TEST_HISTORY` · `decision-log` 의 맨 위 항목이 겹친다 — 양쪽 다 남기면 된다.
+- [INFO] (2026-11-07 처리) fix 브랜치 병합 때 `CURRENT_STATE` · `NEXT_ACTIONS` · `TEST_HISTORY` · `decision-log` 의 맨 위 항목이 겹쳤다 — 양쪽 다 남겼다.
 
 ## Redfish Summary 정합성 수정 (2026-10-29) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md`(9 · 10절) · 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`, main 미병합) · `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`. 제품 동작 변경은 Redfish 2파일 + ESXi `filter_plugins/power_summary.py`(SA-06).
 
-- [ ] **[HIGH / 사용자 — 새 독립 세션] 독립 재검증** — handoff 6절 명령(Tier 1 · 2 · 합성 · A/B/C · 변이 · 보존)과 감사 12절 7단계(감사 도구 `recheck.py` · 합성 10종 재실행 — 이 세션은 독립성을 위해 돌리지 않음). handoff 10절 질문 5건(S 번호 정의 · 합성 정오표 수용 · SA-12 합집합 · CM 36 · FD 표기).
+- [x] **[DONE 2026-11-07 — PASS] 독립 재검증** — 보고서 `C:\github\ClovirONE\se-final-20261107\FINAL_INDEPENDENT_REVIEW.md`(저장소 밖). LOW 3건(D-01~D-03)은 `6ab65234` 에서 정정. 종전 기록: handoff 6절 명령(Tier 1 · 2 · 합성 · A/B/C · 변이 · 보존)과 감사 12절 7단계(감사 도구 `recheck.py` · 합성 10종 재실행 — 이 세션은 독립성을 위해 돌리지 않음). handoff 10절 질문 5건(S 번호 정의 · 합성 정오표 수용 · SA-12 합집합 · CM 36 · FD 표기).
 - [ ] **[HIGH / 운영 담당자] 공식 runner ci_gate (NOT_RUN)** — 아래 2026-10-28 절과 같은 방법(Runner 셸에서 이 브랜치 clone → `scripts/ai/ci_gate.sh`). 그 전까지 Tier 0 은 "로컬 Linux 등가" 로만 보고한다.
-- [ ] **[HIGH / 사용자 승인] `main` 병합(squash, rule 93 R2 4요소) → `prodgen promote` + canary** — 재검증 PASS · 공식 runner PASS 뒤, 병합과 승격을 각각 승인. 이 브랜치는 2026-10-28 정정 브랜치(`104bcaf0`)를 포함한다. 호출자 공지: handoff 3.1 · 3.4절(값이 null 로 나오는 조건이 넓어진 키 목록).
+- [x] **[DONE 2026-11-07 — main 병합 `d7cc7264`(merge commit — 사유 decision-log 2026-11-07) · 승격은 맨 위 2026-11-07 절]** `main` 병합 → `prodgen promote` + canary — 재검증 PASS · 공식 runner PASS 뒤, 병합과 승격을 각각 승인. 이 브랜치는 2026-10-28 정정 브랜치(`104bcaf0`)를 포함한다. 호출자 공지: handoff 3.1 · 3.4절(값이 null 로 나오는 조건이 넓어진 키 목록).
 - [ ] **[MED / 운영 담당자] Portal 등 소비자의 null 처리 확인** — 새로 null 이 나올 수 있는 키: `multi_node` 개수 · `fabrics[].switch_count` · `endpoint_count` · `network.summary.adapter_count` · `port_count` · cpu 그룹 `total_cores` · `cores_per_socket` · `storage.summary.grand_total_gb`(파티션 summary 포함).
 - [x] **[DONE 2026-11-01 — 사용자 결정 a안] 용량 미상 디스크가 섞인 storage 합계** — 현행 유지: 용량을 확인한 디스크만 합하고 용량 미상 디스크(`total_mb` null · 0)는 그룹 · 합에서 뺀다. 그 디스크 때문에 합을 null 로 만들지 않는다. 한계(실제 전체 용량보다 작을 수 있음 · Redfish Storage/섀시 경로의 빈 슬롯 필터)는 `docs/contract/03-fields.md` 6.3 의 2026-11-01 메모. 제품 코드 · 기존 시험 변경 0(`test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped` 그대로). 증거(handoff)는 바꾸지 않았다 — handoff 9절의 이 행은 결정 전 기록이다.
 - [ ] **[MED / 실장비] SA-12 섀시 드라이브 합집합** — 섀시에만 드라이브가 노출되는 장비(NVMe direct-attach 등) · golden recording 에 없는 새 경로 8 fixture 의 실장비 응답 · 선택 링크가 5xx 를 줄 때의 동작 · HPE 에뮬레이터 4세트 경로(NO_MIRROR).
@@ -41,9 +50,9 @@
 
 > 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/REVIEW_FIX_HANDOFF.md`(9절) · 브랜치 `fix/redfish-mock2-review-20261028`(분기 `f92ebe6a`, main 미병합). 제품 동작 변경 3곳(R1 NIC 링크 보충 · R2 HBA up 값 · R3 전원 Off 문구).
 
-- [ ] **[HIGH / 사용자 — 새 독립 세션] 재검증** — 새 브랜치 최종 SHA 에서 `REVIEW_FIX_HANDOFF.md` 4절 명령(Tier 0/1/2 · 대조 · 재집계)을 다시 돌린다. 이 세션은 자기 결과를 PASS 로 확정하지 않았다.
+- [x] **[DONE 2026-11-07 — Summary 브랜치(이 브랜치 포함) 최종 독립 재검증 PASS]** 재검증 — 새 브랜치 최종 SHA 에서 `REVIEW_FIX_HANDOFF.md` 4절 명령(Tier 0/1/2 · 대조 · 재집계)을 다시 돌린다. 이 세션은 자기 결과를 PASS 로 확정하지 않았다.
 - [ ] **[HIGH / 운영 담당자] 공식 runner ci_gate (NOT_RUN)** — `clovirone-server-gather-ci` 는 `*/main` 수동 빌드라 새 브랜치를 그대로 못 돌린다. Runner 셸에서 새 브랜치 clone 뒤 `. scripts/activate_ansible_venv.sh && bash scripts/ai/ci_gate.sh`, 또는 브랜치 지정 시험 Job 사본. 확인: venv `include-system-site-packages = false` · Gate PATH 에 pwsh 없음 · `core.autocrlf` · `core.fileMode` · `RESULT: PASS` · JUnit 보관. 그 전까지 Tier 0 은 "Linux 공식 등가 PASS, 공식 runner NOT_RUN" 이다.
-- [ ] **[HIGH / 사용자 승인] `main` 병합(squash, rule 93 R2 4요소) → `prodgen promote` + canary** — 재검증 PASS · 공식 runner PASS 뒤. 호출자 공지 추가: SR650 V4 `network.interfaces[].link_status` unknown → up/down · `is_primary` · `summary.groups[].link_up_count` · `primary_speed_mbps`(R1), HBA `LinkStatus` 값 `Enabled`/`Active` → down + notice(R2, 미러 · fixture 실측 0).
+- [x] **[DONE 2026-11-07 — main 병합 `d7cc7264`(merge commit — 사유 decision-log 2026-11-07) · 승격은 맨 위 2026-11-07 절]** `main` 병합 → `prodgen promote` + canary — 재검증 PASS · 공식 runner PASS 뒤. 호출자 공지 추가: SR650 V4 `network.interfaces[].link_status` unknown → up/down · `is_primary` · `summary.groups[].link_up_count` · `primary_speed_mbps`(R1), HBA `LinkStatus` 값 `Enabled`/`Active` → down + notice(R2, 미러 · fixture 실측 0).
 - [ ] **[MED / 사용자 승인 — 보호 경로] 03-network-002 잔여 2 NIC** — sr650_v4_02 `NIC6` · _04 `NIC4` 는 `unknown`(본딩 영구 주소 — 포트 `AssociatedMACAddresses` 둘째 값 · NDF `PermanentMACAddress` · `PhysicalNetworkPortAssignment` 로만 이어진다). 재개 조건: 모듈이 그 값을 내보내는 변경 승인 + golden 원장(G-26 이후) + 18 미러 조인 대조(`01-f01-nic-link-fill.md` 5절).
 - [ ] **[MED / 실장비 + 사용자 승인] 05-thermal-003 (b) Sensor 보충** — `DataSourceUri` → Sensor GET 으로 health · state · upper_critical. 재개 조건: Sensor 에 `Status` · `Thresholds` 값이 있는 실장비 캡처 + 요청 예산 승인(CSUS 7대 +377 GET, 미러 Sensor 값 0).
 - [ ] **[LOW / 조건부] OEM 포트별 링크 정규화** — 표준 `LinkStatus` 가 없거나 미확정일 때, 포트별 OEM 필드가 Link Up 을 뜻한다는 근거(벤더 공식 문서 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가 확인되면 `_extract_oem_*` 계열 + origin 주석으로 별도 정규화(사용자 결정 Q1). 카드 수준 값(CSUS H3Alert 등)은 대상이 아니다(`02-hba-link-policy.md` 5절).

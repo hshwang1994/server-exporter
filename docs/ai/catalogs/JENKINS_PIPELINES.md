@@ -11,6 +11,11 @@
 >   `Jenkinsfile_ci` · `scripts/run_gather.sh` · `scripts/ai/ci_gate.sh` 의 사람이 읽는 문장만 바꿨다. stage 이름 · 순서 · 개수, 판정 · 호출 순서,
 >   `[Trusted] … len= jhash=` · `[기술 기록] 수집 시도 …` · `OUTPUT`/`CHECKPOINT`/`ADDON_*` 는 그대로다. 콘솔 문구를 읽는 곳(Harness `unstable_contains` ·
 >   sh label `수집 결과 정리` · `scripts/ai/prodgen/evidence.py` 표식)은 같은 커밋에서 맞췄다 — 정본 `docs/reference/decision-log.md` 2026-10-09.
+> 실측 2026-11-07 — 사내 GitLab 관리자가 2026-11-02~04 GitLab `main`(= production 배포본)에 직접 올린 커밋 9개(`d464de4b..e808cf4d`)를 main 에 들여왔다(`aa5b55c6`).
+>   ① `Jenkinsfile_portal` 의 `target_type` 을 choice(기본 `os`) → string(기본 `''`)으로 바꿨다 — 값 검사는 입력 확인 단계(`allowed.contains`)가 그대로 하므로
+>   빈 값 · 다른 값은 여전히 멈춘다. `Jenkinsfile_portal_Byid` 도 같은 커밋에서 맞췄다. ② `syjeong_test`(Portal 시험 파이프라인 — `clovirAnsible.run` 호출,
+>   주석이 지워진 portal 사본에서 시작)를 추가했다. GitLab `main` 이 이 파일을 잃지 않도록 production 생성 대상(`production_manifest.yml` groovy)에 넣었다.
+>   jenkins-prod 에서 이 파일을 쓰는 Job 은 확인하지 않았다(저장소의 Job 정의에는 없다). 정본 `docs/reference/decision-log.md` 2026-11-07.
 
 ## Stage 매트릭스 (실측 — `Jenkinsfile_portal`)
 

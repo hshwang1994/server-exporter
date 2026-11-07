@@ -1,5 +1,17 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-11-07 — Redfish Summary 수정 main 병합 · 사내 GitLab `main` 직접 수정 9건 반영
+
+> 정본: `docs/reference/decision-log.md` 2026-11-07 · 독립 재검증 보고서 `C:\github\ClovirONE\se-final-20261107\FINAL_INDEPENDENT_REVIEW.md` · `MERGE_READINESS.md`(저장소 밖, 읽기 전용) · `tests/evidence/2026-10-29-redfish-summary-fix/`.
+
+- **계기**: 사용자 — 2026-11-07 최종 독립 재검증 PASS 확인 뒤 main 병합 · production 승격 승인(기존 커밋 유실 금지 · force push 금지 · 브랜치 삭제 금지 · 기존 증거 보존).
+- **GitLab 9건(`aa5b55c6`)**: 사내 GitLab 관리자가 2026-11-02~04 GitLab `main`(= 배포본) `d464de4b..e808cf4d` 에 직접 올린 커밋을 같은 결과로 main 에 반영 — `Jenkinsfile_portal` `target_type` choice(기본 `os`) → string(기본 `''`, 값 검사는 입력 확인 그대로) · `Jenkinsfile_portal_Byid` 동기화 · `syjeong_test`(Portal 시험 파이프라인) 추가 · `production_manifest.yml` 에 `syjeong_test`(groovy). GitLab 의 9커밋 이력은 승격 때 fast-forward 로 남긴다.
+- **병합(`d7cc7264`, merge commit `--no-ff`)**: `fix/redfish-mock2-summary-20261028` @ `31f2db21` — 재검증 대상 SHA 를 main 이력에 그대로 남긴다. 충돌 4파일(CURRENT_STATE · NEXT_ACTIONS · TEST_HISTORY · decision-log)은 양쪽 항목을 모두 남겼다. 브랜치 대비 제품 코드 차이는 GitLab 9건의 4파일뿐.
+- **문서 정정(`6ab65234`)**: 재검증 LOW 3건 — D-01 handoff 9절 a안 결정 표기 · D-02 SA-15 빈 카드 조건(포트 수 출처 = Controllers 의 ControllerCapabilities, 최상위 Ports 링크는 근거 아님 — 사전 help · 03-fields) · D-03 SA-05 종전 동작 문장. 사전은 help 문장만(키 · 타입 · priority 불변).
+- **하네스 · 운영 문서**: rule 00 · 80 관찰 줄(`syjeong_test`) · JENKINS_PIPELINES · 03-job-registration 5절(`target_type`) · 09-production-branch 2절.
+- **승격**: 진행 중 — 결과는 이 항목과 TEST_HISTORY 2026-11-07 에 갱신한다.
+- **브랜치 · 증거**: 작업 브랜치 삭제 0(사용자 지시) · 재검증 산출물(`se-final-20261107\`) 보존.
+
 ## 일자: 2026-11-02 — 사내 GitLab 을 고객사 형태로 (`main` 하나 = GitHub production) · dual push 폐기
 
 > 정본: `docs/ai/decisions/ADR-2026-11-02-gitlab-customer-form.md` · rule 93 R7 · `docs/operate/09-production-branch.md` 1절 · 8절 · `docs/reference/decision-log.md` 2026-11-02. 수집 코드 · 배포본(runtime tree) 변경 0 — 승격 해당 없음.
