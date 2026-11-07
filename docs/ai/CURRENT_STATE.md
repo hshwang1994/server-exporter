@@ -12,6 +12,7 @@
 - **승격**: production `7e3b2e6b`(정규 — CI #67 COMPLETE_PASS · main Job 매트릭스 #720~#729 · #731 · canary production Job #321~#324 4/4 SUCCESS — 직전 canary 대비 바뀐 경로가 매트릭스와 같음). 순서: `push-sync`(GitHub `production` `d464de4b` → `e808cf4d` fast-forward — GitLab 9커밋 이력 보존) → `restore --to d464de4b`(`e180a4ca`) → `promote --sha a38fa73c`. 로컬 = GitHub `production` = GitLab `main` · drift-check PROVENANCE · force 0.
 - **CI 재실행**: #66 FAILURE — GitHub 저장소가 비공개라 Prodgen Drift · Verify(G20)의 자격 없는 셸 `git fetch` · `ls-remote` 가 실패(Gate · G01~G19 는 PASS). 사용자가 저장소를 공개로 되돌린 뒤 같은 SHA 로 #67 SUCCESS. 다시 비공개로 하려면 `Jenkinsfile_ci` 두 단계에 자격 연결이 먼저다(NEXT_ACTIONS 2026-11-07).
 - **후속 지시**: 사용자 — "승격까지 너가 알아서해라 나의 개입없이" · "프로젝트 공개로 변경했음. 계속 진행해라" · main 병합부터 승격 · 검증 · 브랜치 삭제까지 한 번에.
+- **`syjeong_test` 삭제 (승격 뒤, 사용자 지시)**: "syjeong_test 파일 지워라 CI다돌릴필요없고 지우고 바로 push 하면됨" — 파일과 `production_manifest.yml` 의 두 항목(runtime_roots · include)을 지웠다. CI · 매트릭스 미실행(사용자 지시), 생성 확인만(`prodgen build`). production `7e3b2e6b`(= GitLab `main`)에는 다음 정규 승격 때까지 남는다.
 - **브랜치 · 증거**: 작업 브랜치 5개(`docs/redfish-mock2-audit-20261026` · `feature/gathering-addon` · `fix/redfish-mock2-20261027` · `fix/redfish-mock2-review-20261028` · `fix/redfish-mock2-summary-20261028`)는 사용자 지시로 GitHub · 사내 GitLab · 로컬에서 삭제(모두 `origin/main` 의 조상 · 정리 뒤 `push-sync --dry-run` 할 일 0). 지금 GitHub = `main` · `production`, GitLab = `main` 하나 · 재검증 산출물(`se-final-20261107\`)과 독립 검증 worktree 3개(detached) 보존.
 
 ## 일자: 2026-11-02 — 사내 GitLab 을 고객사 형태로 (`main` 하나 = GitHub production) · dual push 폐기

@@ -10,7 +10,6 @@ main_branch: main
 
 runtime_roots:
   - Jenkinsfile_portal
-  - syjeong_test
   - ansible.cfg
   - .gitattributes
   - .gitignore
@@ -35,10 +34,6 @@ include:
     language: groovy
     mode: "100644"
     note: Jenkinsfile_portal reads it with readTrusted on every build (seLoadFinalizeLib) — required
-  - path: syjeong_test
-    language: groovy
-    mode: "100644"
-    note: Portal test pipeline (clovirAnsible.run) created directly on internal GitLab main 2026-11-02~03; kept so the GitLab main tree does not lose it (2026-11-07 user instruction)
   - path: ansible.cfg
     language: ini
     mode: "100644"

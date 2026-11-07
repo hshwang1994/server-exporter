@@ -8,7 +8,7 @@
 - [ ] **[MED / 사용자 결정] GitHub 저장소를 다시 비공개로 할 때** — 먼저 `Jenkinsfile_ci` Prodgen Drift(`git fetch -q origin production`) · Prodgen Verify(`prodgen verify --remote origin` → G20 `ls-remote`)를 Prodgen Promote 처럼 `withCredentials([usernamePassword(credentialsId: 'hshwang token', …)])` + `scripts/ai/prodgen/git_askpass.sh` 로 감싼다(`tests/unit/test_jenkinsfile_ci.py` 의 `CREDENTIAL_STAGES` 에 Drift 추가). 그 전에 비공개로 바꾸면 CI #66 처럼 승격 증거가 안 나온다. Harness · 수집 Job 은 checkout 자격만 써서 영향 없음.
 - [ ] **[LOW / 운영 담당자] 시험 장비 `10.100.64.132`** — main Job S2 에서 도달 불가(2026-11-07 #721: 5985 · 22 "호스트로 갈 루트가 없음" · 5986 시간 초과 · ICMP 무응답. 2026-10-19 #710 은 success). 장비 전원 · 네트워크 확인. 시나리오 판정(혼합 배치)에는 영향 없음.
 - [ ] **[HIGH / 사용자 — GitLab 관리 화면] GitLab `main` 재보호** — 2026-11-02 보호를 푼 뒤 관리자 웹 편집 9건(2026-11-02~04)이 배포본 브랜치에 직접 들어왔다. 아래 2026-11-02 절의 재보호 항목과 같은 일이다. 재보호 전까지는 승격 전에 `git ls-remote internal refs/heads/main` 이 GitHub `production` 과 같은지 먼저 본다(다르면 같은 방식으로 main 에 들여온 뒤 승격).
-- [ ] **[LOW / 사용자] `syjeong_test` 용도 확인** — Portal 시험 파이프라인(`clovirAnsible.run`). 쓰는 Job 과 계속 둘지(배포본 포함 유지) 결정. 지우면 다음 승격이 GitLab `main` 에서도 지운다.
+- [x] **[DONE 2026-11-07 — 사용자 결정: 삭제]** `syjeong_test` 용도 확인 — 사용자 지시("syjeong_test 파일 지워라 CI다돌릴필요없고 지우고 바로 push 하면됨")로 main 과 생성 대상(`production_manifest.yml`)에서 지웠다. CI · 매트릭스는 돌리지 않았다(사용자 지시). production `7e3b2e6b`(= GitLab `main`)에는 남아 있고 다음 정규 승격이 지운다 — 그 승격 뒤 GitLab `main` 에 이 파일이 없는지 확인.
 - [INFO] `target_type` 은 string(기본 `''`)이다 — Portal 이 값을 늘 보내므로 동작 변화 없음. 빈 값 · 다른 값은 입력 확인 단계가 멈춘다.
 
 ## 사내 GitLab 고객사 형태 전환 (2026-11-02) — 남은 항목

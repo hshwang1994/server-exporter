@@ -1,5 +1,16 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-07 (2) — `syjeong_test` 삭제 (main · 생성 대상)
+
+> 정본: `docs/reference/decision-log.md` 2026-11-07 (2). 사용자 지시로 CI · main Job 매트릭스 · canary · 전체 pytest 는 돌리지 않았다. Windows 작업 PC · Python 3.13.
+
+| 구분 | 결과 |
+|---|---|
+| 생성 확인 | 같은 tree 의 임시 커밋 개체(브랜치에 올리지 않음)로 `prodgen build` — ok · class B 0 · **196 파일**(전 197, `syjeong_test` 빠짐) · tree hash `a12e2487` |
+| 관련 단위 시험 | `test_manifest_and_provenance.py` · `test_overlay_excluded_paths_marked.py` · `test_env_guard.py` · `test_workspace_cleanup.py` · `test_bootstrap_vault_encrypt.py` — 26 passed · 1 skipped |
+| 정적 검사 | PROJECT_MAP fingerprint 일치 · 하네스 일관성 통과 · 문서 참조 rc 2(종전부터 있는 죽은 참조 1건, 이번 변경과 무관) |
+| production | 승격 안 함(같은 main SHA 의 CI 증거 없음) — `7e3b2e6b`(= GitLab `main`)에는 다음 정규 승격 때까지 남는다 |
+
 ## 2026-11-07 — Redfish Summary 수정 main 병합 · GitLab 9건 반영 · 정규 승격 (main `a38fa73c` → production `7e3b2e6b`)
 
 > 정본: `docs/reference/decision-log.md` 2026-11-07 · `docs/reference/live-validation.md` 2026-11-07. main `a38fa73c` = merge commit `d7cc7264`(`31f2db21`) + GitLab 9건 `aa5b55c6` + 문서 정정 3커밋. 실장비 검증은 main Job 매트릭스와 production canary 다.

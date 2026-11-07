@@ -22,7 +22,7 @@
 
 | 분류 | 경로 |
 |---|---|
-| 파이프라인 | `Jenkinsfile_portal`, `scripts/jenkins/se_finalize.groovy`, `syjeong_test`(사내 GitLab `main`에서 만든 Portal 시험 파이프라인. GitLab `main`이 이 파일을 잃지 않도록 넣었습니다, 2026-11-07) |
+| 파이프라인 | `Jenkinsfile_portal`, `scripts/jenkins/se_finalize.groovy`. 사내 GitLab `main`에서 만든 Portal 시험 파이프라인 `syjeong_test`는 2026-11-07 사용자 지시로 생성 대상에서 뺐습니다. 지금 production `7e3b2e6b`에는 남아 있고, 다음 승격 때 빠집니다 |
 | Ansible 설정과 인벤토리 | `ansible.cfg`, `os-gather/inventory.sh`, `esxi-gather/inventory.sh`, `redfish-gather/inventory.sh` |
 | playbook과 task | 세 채널의 `site.yml`, `tasks/**`, `common/tasks/**`, `common/vars/`의 운영 변수 파일 |
 | 어댑터 | `adapters/redfish/`, `adapters/os/`, `adapters/esxi/` |

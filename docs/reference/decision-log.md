@@ -48,6 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) |
 | 2026-11-07 — Redfish Summary 수정 main 병합(merge commit) · 사내 GitLab `main` 직접 수정 9건 반영(`target_type` string · `syjeong_test` 생성 대상) |
 | 2026-11-02 — 사내 GitLab 을 고객사 형태로(`main` 하나 = GitHub production) · jenkins-prod 는 GitHub · dual push 폐기 |
 | 2026-10-28 — Redfish 2차 Mock 구현 독립 검증 결함 정정: XCC 3 NIC 링크 같은 MAC 포트 보충 · HBA up 값 표준 링크 값 한정 · 전원 Off notice 네트워크 · 사전/계약 원천 정정 |
@@ -109,6 +110,18 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
+## 2026-11-07 (2) — `syjeong_test` 삭제
+
+### 사용자 지시
+
+- 승격 · 브랜치 정리 보고 뒤 "syjeong_test 파일 지워라 CI다돌릴필요없고 지우고 바로 push 하면됨."
+
+### 결정
+
+1. `syjeong_test` 파일과 `production_manifest.yml` 의 두 항목(`runtime_roots` · `include`)을 지운다. 아래 2026-11-07 결정 2(생성 대상에 넣기)를 이 지시가 바꾼다.
+2. CI · main Job 매트릭스 · canary 는 돌리지 않는다(사용자 지시). 생성기가 새 main 으로 tree 를 만들 수 있는지만 확인한다(`prodgen build`).
+3. production 승격은 하지 않는다 — 정규 승격의 전제(같은 main SHA 의 CI 증거)가 없다. production `7e3b2e6b`(= 사내 GitLab `main`)에는 이 파일이 다음 정규 승격 때까지 남고, 그 승격이 지운다.
+
 ## 2026-11-07 — Redfish Summary 수정 main 병합 · 사내 GitLab `main` 직접 수정 9건 반영
 
 > 정본: 독립 재검증 보고서 `C:\github\ClovirONE\se-final-20261107\FINAL_INDEPENDENT_REVIEW.md` · `MERGE_READINESS.md`(저장소 밖) · `tests/evidence/2026-10-29-redfish-summary-fix/`.
@@ -122,7 +135,7 @@
 ### 결정
 
 1. GitLab `main` 의 9커밋(`d464de4b..e808cf4d`, 관리자 2026-11-02~04 웹 편집)은 같은 결과를 main 에 커밋 1개로 들여온다(`aa5b55c6`). 내용은 `Jenkinsfile_portal` 의 `target_type` choice(기본 `os`) → string(기본 `''`)과 `syjeong_test`(Portal 시험 파이프라인) 추가다. 입력 확인 단계의 값 검사(`allowed.contains`)는 그대로라 빈 값과 다른 값은 지금도 빌드를 멈춘다. `Jenkinsfile_portal_Byid` 는 같은 커밋에서 맞췄다(2026-10-09 결정).
-2. `syjeong_test` 는 production 생성 대상에 넣는다(`production_manifest.yml` — groovy). GitLab `main` 이 배포본이라 생성 대상이 아니면 다음 승격이 이 파일을 지운다. 배포본에서는 다른 groovy 파일처럼 설명 주석이 지워진다.
+2. `syjeong_test` 는 production 생성 대상에 넣는다(`production_manifest.yml` — groovy). GitLab `main` 이 배포본이라 생성 대상이 아니면 다음 승격이 이 파일을 지운다. 배포본에서는 다른 groovy 파일처럼 설명 주석이 지워진다. → 같은 날 사용자 지시로 파일과 생성 대상 항목을 지웠다(2026-11-07 (2)).
 3. Summary 브랜치는 merge commit(`--no-ff`, `d7cc7264`)으로 병합한다. 독립 재검증을 받은 SHA `31f2db21` 이 main 이력에 그대로 남는다. 기록 문서 4개의 충돌은 양쪽 항목을 모두 남긴다.
 4. GitLab 의 9커밋 이력은 force 없이 남긴다. 승격 때 `push-sync` 로 GitHub `production` 을 GitLab `main` 까지 fast-forward 하고, `restore --to d464de4b`(마지막 생성 커밋의 tree 를 새 커밋으로 — provenance 회복)와 `promote` 를 이어서 올린다.
 5. 저장소를 공개로 바꾼 뒤 CI 를 다시 돌린다(#67). `Jenkinsfile_ci` 의 Prodgen Drift · Verify 가 자격증명 없이 GitHub 를 읽는 구조는 이번에 고치지 않는다 — Job 정의와 시험을 함께 바꿔야 해 병합 범위 밖이다. 다시 비공개로 하려면 먼저 두 단계에 자격을 연결해야 한다([../operate/03-job-registration.md](../operate/03-job-registration.md) 8절).
