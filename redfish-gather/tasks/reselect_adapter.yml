@@ -10,6 +10,9 @@
       firmware: >-
         {{ ((_rf_raw_collect.data | default({}, true)).get('bmc') | default({}, true)).get('firmware_version', '')
            | default('', true) }}
+      bmc_model: >-
+        {{ ((_rf_raw_collect.data | default({}, true)).get('bmc') | default({}, true)).get('model', '')
+           | default('', true) }}
   no_log: true
 
 - name: "redfish | reselect | 종전 adapter 기억"

@@ -85,6 +85,8 @@
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).manager_layout | default('') }}
             _rf_adapter_firmware_scope: >-
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).firmware_inventory_scope | default('') }}
+            _rf_adapter_pcie_link_registries: >-
+              {{ ((_selected_adapter | default({})).vendor_notes | default({})).pcie_port_link_condition_registries | default([]) }}
 
         - name: "redfish | collect standard"
           ansible.builtin.include_tasks: tasks/collect_standard.yml
@@ -199,7 +201,7 @@
                  or ((_va | default({})).vendor_output_display | default({})).get(_rf_vendor | default(''), _rf_vendor | default(none)) }}
             _diagnosis: >-
               {{ _diagnosis | combine({
-                   'auth_success': true,
+                   'auth_success': (none if (((_rf_used_account | default({})).role | default('primary')) == 'anonymous') else true),
                    'details': ((_diagnosis | default({}, true)).details | default({})
                                 if (((_diagnosis | default({}, true)).details | default({}))
                                     is mapping) else {}) | combine({
@@ -213,7 +215,7 @@
                      'auth': _rf_attempts_meta | default({}),
                      'account_service': _rf_account_service_meta | default({}),
                      'multi_node_layout': (_rf_adapter_manager_layout | default('')) or none,
-                     'notices': ((_rf_raw_collect | default({})).notices | default([])),
+                     'notices': (((_rf_raw_collect | default({})).notices | default([])) + (_rf_norm_notices | default([]))),
                      'rmc_activation_check':
                        (true if ((_rf_adapter_manager_layout | default('')) in ['rmc_primary', 'rmc_primary_ilo_secondary']
                                  and (_rf_collect_ok | default(false) | bool))
@@ -393,7 +395,8 @@
                                                   'account_service':
                                                     _rf_account_service_meta | default({}),
                                                   'notices':
-                                           ((_rf_raw_collect | default({})).notices | default([]))})}) }}
+                                           (((_rf_raw_collect | default({})).notices | default([]))
+                                            + (_rf_norm_notices | default([])))})}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "redfish | rescue | set failed vars"

@@ -55,3 +55,7 @@ _lb.json
 b[0-9].log
 b[0-9][0-9].log
 
+
+tests/redfish-probe/mirror_replay/**/*.pem
+tests/redfish-probe/mirror_replay/**/*.key
+tests/redfish-probe/mirror_replay/_tls/

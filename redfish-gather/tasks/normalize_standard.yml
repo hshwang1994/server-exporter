@@ -12,6 +12,9 @@
     _rf_d_power:   "{{ _rf_raw_collect.data.power       | default(none) }}"
     _rf_d_thermal: "{{ _rf_raw_collect.data.thermal     | default({'temperatures':[],'fans':[]}) }}"
     _rf_d_netad:   "{{ _rf_raw_collect.data.network_adapters | default({'adapters':[],'ports':[],'fc_hbas':[],'infiniband':[]}) }}"
+    _rf_fw_links:  "{{ _rf_raw_collect.firmware_links | default({}) }}"
+    _rf_ndf_mtu:   "{{ _rf_raw_collect.ndf_mtu_by_mac | default({}) }}"
+    _rf_storage_inv: "{{ _rf_raw_collect.storage_inventory | default({}) }}"
   no_log: true
 
 - name: "redfish | normalize_standard | filter procs to CPU only (B01)"
@@ -43,11 +46,24 @@
       {%- endif -%}
   no_log: true
 
-- name: "redfish | normalize_standard | interfaces"
+- name: "redfish | normalize_standard | interfaces (bundle)"
   ansible.builtin.set_fact:
-    _rf_norm_interfaces: >-
-      {%- set ns = namespace(out=[], primary_marked=false) -%}
+    _rf_norm_interfaces_bundle: >-
+      {%- set ns = namespace(out=[], primary_marked=false, fc_excluded=0, fc_addrs=[], eth_ports={}) -%}
+      {%- for p in (_rf_d_netad.ports | default([])) -%}
+        {%- set pt = (p.port_type | default('') | string | trim | lower) -%}
+        {%- set paddr = (p.associated_address | default('') | string | upper | replace(':','') | replace('-','')) -%}
+        {%- if paddr and ('fibre' in pt or pt == 'fc' or 'fcoe' in pt or 'infin' in pt or pt == 'ib') -%}
+          {%- set _ = ns.fc_addrs.append(paddr) -%}
+        {%- elif paddr -%}
+          {%- set _ = ns.eth_ports.update({paddr: (ns.eth_ports.get(paddr, []) + [p])}) -%}
+        {%- endif -%}
+      {%- endfor -%}
       {%- for nic in (_rf_d_network | default([])) -%}
+        {%- set nic_hex = (nic.mac | default('') | string | upper | replace(':','') | replace('-','')) -%}
+        {%- if (nic_hex | length) == 16 or (nic_hex and nic_hex in ns.fc_addrs) -%}
+          {%- set ns.fc_excluded = ns.fc_excluded + 1 -%}
+        {%- else -%}
         {%- set addrs = [] -%}
         {%- for a in (nic.ipv4 | default([])) -%}
           {%- if a.address is defined and a.address not in [none,'0.0.0.0',''] -%}
@@ -58,7 +74,28 @@
               'origin':a.address_origin|default(none)}) -%}
           {%- endif -%}
         {%- endfor -%}
+        {%- for a in (nic.ipv6 | default([])) -%}
+          {%- if a.address is defined and a.address not in [none,'::',''] -%}
+            {%- set _ = addrs.append({
+              'family':'ipv6','address':a.address,'prefix_length':a.prefix_length|default(none),
+              'subnet_mask':none,'gateway':none,'origin':a.address_origin|default(none)}) -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- set mtu = nic.mtu|default(none) -%}
+        {%- if mtu is none and nic_hex and (_rf_ndf_mtu | default({})).get(nic_hex) is not none -%}
+          {%- set mtu = (_rf_ndf_mtu | default({})).get(nic_hex) -%}
+        {%- endif -%}
         {%- set link = (nic.link_status|lower) if nic.link_status is defined and nic.link_status is not none else 'unknown' -%}
+        {%- set speed = nic.speed_mbps|default(none) -%}
+        {%- set eports = ns.eth_ports.get(nic_hex, []) if nic_hex else [] -%}
+        {%- if eports and link == 'unknown' -%}
+          {%- set plinks = eports | map(attribute='link_status') | map('default', '') | map('string') | map('lower') | unique | list -%}
+          {%- if plinks | length == 1 and plinks[0] in ['up', 'down'] -%}{%- set link = plinks[0] -%}{%- endif -%}
+          {%- if speed is none -%}
+            {%- set pspeeds = eports | map(attribute='current_link_speed_mbps') | map('default', none) | unique | list -%}
+            {%- if pspeeds | length == 1 -%}{%- set speed = pspeeds[0] -%}{%- endif -%}
+          {%- endif -%}
+        {%- endif -%}
         {%- set is_pri = false -%}
         {%- if not ns.primary_marked and link in ['linkup','up'] and addrs|length > 0 -%}
           {%- set is_pri = true -%}
@@ -69,12 +106,13 @@
           'name':        nic.name|default(none),
           'kind':        'server_nic',
           'mac':         nic.mac|default(none),
-          'mtu':         nic.mtu|default(none),
-          'speed_mbps':  nic.speed_mbps|default(none),
+          'mtu':         mtu,
+          'speed_mbps':  speed,
           'link_status': link,
           'is_primary':  is_pri,
           'addresses':   addrs
         }) -%}
+        {%- endif -%}
       {%- endfor -%}
       {%- if not ns.primary_marked -%}
         {%- for nic in ns.out -%}
@@ -84,7 +122,19 @@
           {%- endif -%}
         {%- endfor -%}
       {%- endif -%}
-      {{ ns.out }}
+      {{ {'interfaces': ns.out, 'fc_excluded': ns.fc_excluded} }}
+  no_log: true
+
+- name: "redfish | normalize_standard | interfaces"
+  ansible.builtin.set_fact:
+    _rf_norm_interfaces: "{{ _rf_norm_interfaces_bundle.interfaces }}"
+    _rf_norm_iface_fc_excluded: "{{ _rf_norm_interfaces_bundle.fc_excluded | int }}"
+    _rf_norm_notices: >-
+      {%- set n = [] -%}
+      {%- if (_rf_norm_interfaces_bundle.fc_excluded | int) > 0 -%}
+        {%- set _ = n.append({'section': 'network', 'message': ('호스트 EthernetInterfaces ' ~ (_rf_norm_interfaces_bundle.fc_excluded | int) ~ '건은 FC/IB 포트 주소(8옥텟 또는 network_adapters.ports 의 FC/IB 주소)라 network.interfaces 에서 제외 (storage.hbas/infiniband 로 요약)')}) -%}
+      {%- endif -%}
+      {{ n }}
   no_log: true
 
 - name: "redfish | normalize_standard | aggregate gateways + dns_servers"
@@ -171,6 +221,7 @@
               'device':     drv.name|default(none),
               'model':      drv.model|default(none),
               'serial':     drv.serial|default(none),
+              'wwn':        drv.wwn|default(none),
               'total_mb':   ((drv.capacity_bytes|int)/1048576)|round(0,'floor')|int
                             if drv.capacity_bytes else none,
               'media_type': drv.media_type|default(none),
@@ -201,28 +252,139 @@
       {{ out }}
   no_log: true
 
+- name: "redfish | normalize_standard | cpu · memory 총량 근거 (SA-04 · SA-05)"
+  ansible.builtin.set_fact:
+    _rf_cpu_basis: >-
+      {%- set ns = namespace(known=0, unknown=0) -%}
+      {%- for p in (_rf_d_cpus | default([])) -%}
+        {%- set _c = p.total_cores | default(none) -%}
+        {%- set _ci = (_c | int) if (_c is not none and ((_c | string) | trim | length) > 0) else 0 -%}
+        {%- if _ci > 0 -%}{%- set ns.known = ns.known + _ci -%}{%- else -%}{%- set ns.unknown = ns.unknown + 1 -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set _n = (_rf_d_cpus | default([])) | length -%}
+      {%- set _failed = 'processors' in (_rf_raw_collect.failed_sections | default([])) -%}
+      {%- set _cs = _rf_d_system.cpu_summary | default({}, true) -%}
+      {%- set _cnt = _cs.count | default(none) -%}
+      {%- set _cnt = (_cnt | int) if (_cnt is not none and ((_cnt | string) | trim | length) > 0) else none -%}
+      {%- set _cnt_ok = (_cnt is none) or (_cnt >= _n) -%}
+      {%- set _cc = _cs.core_count | default(none) -%}
+      {%- set _cc = (_cc | int) if (_cc is not none and ((_cc | string) | trim | length) > 0) else 0 -%}
+      {%- set _list_ok = (_n > 0) and not _failed -%}
+      {%- set _cores_ok = _list_ok and ns.unknown == 0 -%}
+      {%- set _cc_ok = (_cc > 0) and _cnt_ok and (_cc >= (ns.known + ns.unknown)) -%}
+      {{ {
+        'partial': _failed or (_n > 0 and ns.unknown > 0),
+        'list_failed': _failed,
+        'unknown_cores': ns.unknown,
+        'sockets': (_n if _list_ok else (_cnt if (_cnt is not none and _cnt_ok) else none)),
+        'cores': (ns.known if _cores_ok else (_cc if _cc_ok else none))
+      } }}
+    _rf_mem_basis: >-
+      {%- set ns = namespace(known=0, unknown=0) -%}
+      {%- for sl in (_rf_d_memory.slots | default([])) -%}
+        {%- set _c = sl.capacity_mb | default(none) -%}
+        {%- if _c is none or ((_c | string) | trim | length) == 0 -%}{%- set ns.unknown = ns.unknown + 1 -%}
+        {%- else -%}{%- set ns.known = ns.known + (_c | int) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set _tm = _rf_d_memory.total_mib | default(none) -%}
+      {%- set _g = (_rf_d_system.memory_summary | default({}, true)).total_gib | default(none) -%}
+      {%- set _g = (_g | int) if (_g is not none and ((_g | string) | trim | length) > 0) else 0 -%}
+      {%- set _g_ok = (_g > 0) and (((_g * 1024) > ns.known) if ns.unknown > 0 else ((_g * 1024) >= ns.known)) -%}
+      {%- set _failed = 'memory' in (_rf_raw_collect.failed_sections | default([])) -%}
+      {{ {
+        'complete': _tm is not none,
+        'partial': (_tm is none) and (((_rf_d_memory.slots | default([])) | length) > 0 or _failed),
+        'unknown_capacity': ns.unknown,
+        'summary_gib': (_g if _g_ok else none)
+      } }}
+  no_log: true
+
+- name: "redfish | normalize_standard | cpu · memory 총량 notice (SA-04 · SA-05)"
+  ansible.builtin.set_fact:
+    _rf_norm_notices: >-
+      {%- set n = (_rf_norm_notices | default([])) | list -%}
+      {%- set cb = _rf_cpu_basis -%}
+      {%- if cb.partial -%}
+        {%- set why = [] -%}
+        {%- if cb.list_failed -%}{%- set _ = why.append('CPU 목록을 다 읽지 못함') -%}{%- endif -%}
+        {%- if cb.unknown_cores > 0 -%}{%- set _ = why.append('코어 수(TotalCores) 미상 CPU ' ~ cb.unknown_cores ~ '개(그 모델 그룹의 total_cores · cores_per_socket = null)') -%}{%- endif -%}
+        {%- set how = ['cores_physical ' ~ (('= ProcessorSummary.CoreCount ' ~ cb.cores) if cb.cores is not none else '= null')] -%}
+        {%- if cb.list_failed -%}{%- set _ = how.append('sockets ' ~ (('= ProcessorSummary.Count ' ~ cb.sockets) if cb.sockets is not none else '= null')) -%}{%- endif -%}
+        {%- set _ = n.append({'section': 'cpu', 'message': ((why | join(' · ')) ~ ' — 부분 합을 쓰지 않음: ' ~ (how | join(', ')))}) -%}
+      {%- endif -%}
+      {%- set mb = _rf_mem_basis -%}
+      {%- if mb.partial -%}
+        {%- set why = 'DIMM 합계를 확정하지 못함' ~ ((' (용량 CapacityMiB 미상 DIMM ' ~ mb.unknown_capacity ~ '개)') if mb.unknown_capacity > 0 else ' (DIMM 목록을 다 읽지 못함)') -%}
+        {%- set how = (('= MemorySummary.TotalSystemMemoryGiB ' ~ mb.summary_gib) if mb.summary_gib is not none else '= null') -%}
+        {%- set _ = n.append({'section': 'memory', 'message': (why ~ ' — 부분 합을 쓰지 않음: total_mb · installed_mb · summary.grand_total_gb ' ~ how)}) -%}
+      {%- endif -%}
+      {{ n }}
+  no_log: true
+
+- name: "redfish | normalize_standard | storage 합계 근거 (SA-07)"
+  ansible.builtin.set_fact:
+    _rf_storage_basis: >-
+      {%- set _inv = _rf_storage_inv | default({}, true) -%}
+      {%- set _disks = _rf_norm_physical_disks | default([]) -%}
+      {%- set _attempted = ('storage' in (_rf_raw_collect.collected | default([])))
+                           or ('storage' in (_rf_raw_collect.failed_sections | default([]))) -%}
+      {%- set _enum = ((_inv.enumerated | default(false)) is sameas true) or ((_disks | length) > 0) -%}
+      {%- set _incomplete = (_inv.incomplete | default(false)) is sameas true -%}
+      {{ {
+        'attempted': _attempted,
+        'enumerated': _enum,
+        'incomplete': _incomplete,
+        'countable': _attempted and _enum and (not _incomplete)
+      } }}
+  no_log: true
+
+- name: "redfish | normalize_standard | storage 합계 notice (SA-07)"
+  ansible.builtin.set_fact:
+    _rf_norm_notices: >-
+      {%- set n = (_rf_norm_notices | default([])) | list -%}
+      {%- set sb = _rf_storage_basis -%}
+      {%- if sb.attempted and not sb.countable -%}
+        {%- if not sb.enumerated -%}
+          {%- set why = '드라이브 목록 원천(Storage Drives · 섀시 Drives 등)을 하나도 읽지 못함 — 디스크 0개를 확인할 근거가 없음' -%}
+        {%- else -%}
+          {%- set why = '드라이브 목록을 다 읽지 못함 — 부분 합을 쓰지 않음' -%}
+        {%- endif -%}
+        {%- set _ = n.append({'section': 'storage', 'message': (why ~ ': summary.grand_total_gb = null')}) -%}
+      {%- endif -%}
+      {{ n }}
+  no_log: true
+
 
 - name: "redfish | normalize_standard | compute group summaries"
   ansible.builtin.set_fact:
     _rf_summary_cpu: >-
-      {%- set ns = namespace(groups=[], seen={}) -%}
+      {%- set ns = namespace(groups=[], seen={}, unk={}) -%}
       {%- for p in (_rf_d_cpus | default([])) -%}
         {%- set m = p.model | default(none) -%}
-        {%- set cores = (p.total_cores | int) if ((p.total_cores | default(none)) is not none and ((p.total_cores | string) | trim | length) > 0) else none -%}
+        {%- set _c = p.total_cores | default(none) -%}
+        {%- set cores = (_c | int) if (_c is not none and ((_c | string) | trim | length) > 0 and (_c | int) > 0) else none -%}
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
-          {%- set known = ns.groups[idx].total_cores -%}
-          {%- set _new_total = ((known if known is not none else 0) + cores) if (cores is not none) else known -%}
+          {%- if cores is none -%}{%- set _ = ns.unk.update({idx: true}) -%}{%- endif -%}
+          {%- set _new_total = none if ns.unk.get(idx, false) else (ns.groups[idx].total_cores + cores) -%}
           {%- set _new_sockets = ns.groups[idx].sockets + 1 -%}
           {%- set _ = ns.groups[idx].update({'sockets': _new_sockets, 'total_cores': _new_total,
                                               'cores_per_socket': (_new_total // _new_sockets) if _new_total is not none else none}) -%}
         {%- else -%}
-          {%- set _ = ns.seen.update({m: ns.groups | length}) -%}
+          {%- set _gi = ns.groups | length -%}
+          {%- if cores is none -%}{%- set _ = ns.unk.update({_gi: true}) -%}{%- endif -%}
+          {%- set _ = ns.seen.update({m: _gi}) -%}
+          {%- set _mf_raw = p.manufacturer | default(none) -%}
+          {%- set _mf_s = (_mf_raw | string | trim) if _mf_raw is not none else '' -%}
+          {%- set _mf_l = _mf_s | lower -%}
+          {%- set _mf = 'Intel' if ('intel' in _mf_l) else ('AMD' if ('amd' in _mf_l or 'advanced micro devices' in _mf_l) else (_mf_s if _mf_s else none)) -%}
           {%- set _ = ns.groups.append({
             'model': m,
-            'manufacturer': p.manufacturer | default(none),
+            'manufacturer': _mf,
             'max_speed_mhz': p.speed_mhz | default(none),
             'architecture': p.architecture | default(p.instruction_set | default(none)),
+            'l2_cache_kb': p.l2_cache_kb | default(none),
+            'l3_cache_kb': p.l3_cache_kb | default(none),
             'sockets': 1,
             'cores_per_socket': cores,
             'total_cores': cores
@@ -256,7 +418,7 @@
       {%- set _ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(none) -%}
       {%- set _fb = ((_tm | int) / 1024) | round(0, 'common') | int if (_tm is not none and (_tm | int) > 0)
                     else ((_ms_gib | int) if (_ms_gib is not none and (_ms_gib | int) > 0) else none) -%}
-      {{ {'groups': ns.groups, 'grand_total_gb': (ns.total if ns.total > 0 else _fb)} }}
+      {{ {'groups': ns.groups, 'grand_total_gb': ((ns.total if ns.total > 0 else _fb) if _rf_mem_basis.complete else _rf_mem_basis.summary_gib)} }}
     _rf_summary_storage: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for d in (_rf_norm_physical_disks | default([])) -%}
@@ -277,7 +439,7 @@
           {%- set ns.total = ns.total + cap_gb -%}
         {%- endif -%}
       {%- endfor -%}
-      {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
+      {{ {'groups': ns.groups, 'grand_total_gb': (ns.total if _rf_storage_basis.countable else none)} }}
     _rf_summary_network: >-
       {%- set ns = namespace(groups=[], seen={}, adp_map={}, adp_mac_map={}, port_lt={}, primary_sp=none, adp_lts={}) -%}
       {%- for a in (_rf_d_netad.adapters | default([])) -%}
@@ -306,9 +468,10 @@
       {%- for n in (_rf_norm_interfaces | default([])) -%}
         {%- set sp = n.speed_mbps | default(none) -%}
         {%- set link_up = (n.link_status | default('') | lower) in ['linkup','up'] -%}
-        {%- if link_up and ns.primary_sp is none and sp -%}
+        {%- if ((n.is_primary | default(false)) is sameas true) and ns.primary_sp is none and sp -%}
           {%- set ns.primary_sp = sp -%}
         {%- endif -%}
+        {%- set gsp = none if (sp is not none and sp == 0) else sp -%}
         {%- set nic_mac = (n.mac | default('') | string | upper | replace(':','') | replace('-','')) -%}
         {%- set adp_id = (n.id | default('') | regex_replace('-[0-9]+-[0-9]+$','') | regex_replace('-[0-9]+$','')) -%}
         {%- set adp = ns.adp_map[adp_id] | default({}) -%}
@@ -316,40 +479,49 @@
         {%- set md = adp.model | default(none) -%}
         {%- set mfr = adp.manufacturer | default(none) -%}
         {%- set lt = ns.port_lt.get(nic_mac, 'ethernet') -%}
-        {%- set key = (sp|string)~'|'~(md|string)~'|'~(mfr|string)~'|'~(lt|string) -%}
+        {%- set key = (gsp|string)~'|'~(md|string)~'|'~(mfr|string)~'|'~(lt|string) -%}
         {%- if key in ns.seen -%}
           {%- set idx = ns.seen[key] -%}
           {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
         {%- else -%}
           {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-          {%- set _ = ns.groups.append({'speed_mbps': sp, 'model': md, 'manufacturer': mfr, 'link_type': lt, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
+          {%- set _ = ns.groups.append({'speed_mbps': gsp, 'model': md, 'manufacturer': mfr, 'link_type': lt, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
         {%- endif -%}
       {%- endfor -%}
+      {%- set _col = (_rf_raw_collect.collected | default([])) | list -%}
       {{ {
         'groups': ns.groups,
-        'adapter_count': ns.adapter_count,
-        'port_count': (_rf_norm_interfaces | default([])) | length,
+        'adapter_count': (ns.adapter_count if 'network_adapters' in _col else none),
+        'port_count': (((_rf_norm_interfaces | default([])) | length) if 'network' in _col else none),
         'primary_speed_mbps': ns.primary_sp
       } }}
     _rf_firmware_categorized: >-
+      {%- set ctrl_models = (_rf_norm_controllers | default([])) | map(attribute='controller_model', default='') | select('string') | map('lower') | map('trim') | reject('equalto', '') | list -%}
       {%- set out = [] -%}
       {%- for fw in (_rf_d_firmware | default([])) -%}
         {%- set fid = fw.id | default('') | string -%}
         {%- set fname = fw.name | default('') | string -%}
         {%- set lid = (fid ~ '|' ~ fname) | lower -%}
+        {%- set links = (_rf_fw_links | default({})).get(fid) | default({}, true) -%}
         {%- set cat = 'other' -%}
-        {%- if 'bios' in lid or 'system rom' in lid -%}{%- set cat = 'bios' -%}
-        {%- elif 'cpld' in lid -%}{%- set cat = 'cpld' -%}
-        {%- elif 'tpm' in lid -%}{%- set cat = 'tpm' -%}
+        {%- if links.bios | default(false) -%}{%- set cat = 'bios' -%}
+        {%- elif links.bmc | default(false) -%}{%- set cat = 'bmc' -%}
         {%- elif 'diagnostic' in lid -%}{%- set cat = 'diagnostic' -%}
+        {%- elif 'bios' in lid or 'system rom' in lid or 'uefi' in lid -%}{%- set cat = 'bios' -%}
+        {%- elif 'cpld' in lid or 'programmable logic' in lid or 'fpga' in lid -%}{%- set cat = 'cpld' -%}
+        {%- elif 'tpm' in lid -%}{%- set cat = 'tpm' -%}
         {%- elif 'usc' in lid or 'lifecycle' in lid -%}{%- set cat = 'lifecycle' -%}
         {%- elif 'driver' in lid -%}{%- set cat = 'driver_pack' -%}
         {%- elif 'ubm' in lid or 'bc bp' in lid -%}{%- set cat = 'backplane' -%}
-        {%- elif 'disk' in lid or 'drive' in lid or 'nvme' in lid or 'ssd' in lid or 'hdd' in lid or 'boss' in lid -%}{%- set cat = 'drive' -%}
+        {%- elif 'disk' in lid -%}{%- set cat = 'drive' -%}
         {%- elif 'backplane' in lid -%}{%- set cat = 'backplane' -%}
+        {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
+        {%- elif 'drive' in lid or 'nvme' in lid or 'ssd' in lid or 'hdd' in lid or 'boss' in lid -%}{%- set cat = 'drive' -%}
         {%- elif 'service' in lid -%}{%- set cat = 'service_module' -%}
         {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}
-        {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
+        {%- elif 'fibre channel' in lid or 'fc hba' in lid or 'fc adapter' in lid or ' hba' in lid -%}{%- set cat = 'other' -%}
+        {%- elif 'video' in lid or 'graphics' in lid -%}{%- set cat = 'other' -%}
+        {%- elif (fname | lower | trim) in (ctrl_models | default([])) -%}{%- set cat = 'storage_controller' -%}
         {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid or 'gbe' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'psu' in lid or 'power supply' in lid -%}{%- set cat = 'psu' -%}
         {%- elif 'controller' in lid -%}{%- set cat = 'storage_controller' -%}
@@ -392,7 +564,7 @@
         'warning_count': ns.warning,
         'ok_count': ns.ok,
         'unknown_health_count': ns.unknown_health,
-        'health_rollup': ('Critical' if ns.critical > 0 else ('Warning' if ns.warning > 0 else ('OK' if ns.ok > 0 else 'Unknown'))),
+        'health_rollup': (none if ns.psu_total == 0 else ('Critical' if ns.critical > 0 else ('Warning' if ns.warning > 0 else ('OK' if ns.ok > 0 else 'Unknown')))),
         'consumed_watts': _consumed,
         'consumed_capacity_pct': (((_consumed | int) * 100 / ns.cap_total) | round(1)) if (_cap_known and ns.cap_total > 0 and _consumed is not none) else none
       } }}
@@ -480,22 +652,20 @@
         oem:          "{{ _rf_d_system.oem          | default({}) }}"
       bmc: "{{ _rf_d_bmc_clean }}"
       cpu:
-        sockets:         "{{ _rf_d_cpus | length if _rf_d_cpus else (_rf_d_system.cpu_summary | default({})).count | default(none) }}"
-        cores_physical: >-
-          {%- set s = (_rf_d_cpus | map(attribute='total_cores') | select | list | sum) if _rf_d_cpus else 0 -%}
-          {{ s if s else (_rf_d_system.cpu_summary | default({})).core_count | default(none) }}
-        logical_threads: >-
-          {%- set lpc = (_rf_d_system.cpu_summary | default({})).logical_processor_count | default(none) -%}
-          {%- set s = (_rf_d_cpus | map(attribute='total_threads') | select | list | sum) if _rf_d_cpus else 0 -%}
-          {%- set _lpc_means = (((_selected_adapter | default({})).vendor_notes | default({})).processor_summary_logical_count | default('', true)) | string | trim | lower -%}
-          {%- if _lpc_means == 'cores' -%}
-          {{ s if s else (lpc if (lpc is not none and (lpc | int) > 0) else none) }}
-          {%- else -%}
-          {{ lpc if (lpc is not none and (lpc | int) > 0) else (s if s else none) }}
-          {%- endif -%}
+        sockets:         "{{ _rf_cpu_basis.sockets }}"
+        cores_physical:  "{{ _rf_cpu_basis.cores }}"
         model: >-
           {%- set _m = _rf_d_cpus | map(attribute='model') | select | list | first | default(none) -%}
           {{ _m if _m else (_rf_d_system.cpu_summary | default({})).model | default(none) }}
+        manufacturer: >-
+          {%- set _mf_raw = _rf_d_cpus | map(attribute='manufacturer', default=none) | select | list | first | default(none) -%}
+          {%- set _mf = (_mf_raw | string | trim) if _mf_raw is not none else '' -%}
+          {%- set _mf_l = _mf | lower -%}
+          {%- if 'intel' in _mf_l -%}Intel
+          {%- elif 'amd' in _mf_l or 'advanced micro devices' in _mf_l -%}AMD
+          {%- elif _mf -%}{{ _mf }}
+          {%- else -%}{{ none }}
+          {%- endif -%}
         max_speed_mhz: >-
           {{ _rf_d_cpus | map(attribute='speed_mhz') | select | list | first | default(none) }}
         turbo_max_mhz: >-
@@ -505,14 +675,14 @@
         summary: "{{ _rf_summary_cpu | default({'groups': []}) }}"
       memory:
         total_mb: >-
-          {%- set s = _rf_d_memory.total_mib | default(0) | int -%}
-          {%- set ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(0) | int -%}
-          {{ s if s else (ms_gib * 1024 if ms_gib else none) }}
+          {%- set s = _rf_d_memory.total_mib | default(none) -%}
+          {%- set sb = _rf_mem_basis.summary_gib -%}
+          {{ (s | int) if (s is not none and (s | int) > 0) else ((sb * 1024) if sb is not none else none) }}
         total_basis:  "physical_installed"
         installed_mb: >-
-          {%- set s = _rf_d_memory.total_mib | default(0) | int -%}
-          {%- set ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(0) | int -%}
-          {{ s if s else (ms_gib * 1024 if ms_gib else none) }}
+          {%- set s = _rf_d_memory.total_mib | default(none) -%}
+          {%- set sb = _rf_mem_basis.summary_gib -%}
+          {{ (s | int) if (s is not none and (s | int) > 0) else ((sb * 1024) if sb is not none else none) }}
         visible_mb:   null
         free_mb:      null
         slots:        "{{ _rf_d_memory.slots | default([]) }}"

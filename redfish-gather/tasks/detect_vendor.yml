@@ -60,4 +60,9 @@
           )
           or (_rf_probe_result.probe_facts | default({}, true)).get('model_hint', '')
         }}
+      bmc_model: >-
+        {{
+          ((_rf_probe_result.data | default({}, true)).get('bmc') | default({}, true)).get('model', '')
+          | default('', true)
+        }}
   no_log: true

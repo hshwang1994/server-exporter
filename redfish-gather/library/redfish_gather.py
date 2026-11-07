@@ -57,6 +57,8 @@ def _normalize_port_speed(pdata):
     cur_gbps = _safe(pdata, 'CurrentSpeedGbps')
     cur_gbps_num = _safe_num(cur_gbps)
     speed_mbps = _safe_int(_safe(pdata, 'CurrentLinkSpeedMbps'))
+    if speed_mbps == 0:
+        speed_mbps = None
     if speed_mbps is None and cur_gbps_num:
         speed_mbps = _safe_int(round(cur_gbps_num * MBPS_PER_GBPS))
     if cur_gbps_num:
@@ -832,6 +834,13 @@ def _walk_cut_text(first_path, cut):
     return '%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존' % (first_path, arg[0], arg[2] or arg[1])
 
 
+def _walk_complete(state):
+    if not isinstance(state, dict) or state.get('cut') is not None:
+        return False
+    return not (state.get('non_object') or state.get('members_absent')
+                or state.get('members_not_list') or state.get('duplicates'))
+
+
 def _walk_cut_detail(cut):
     if not cut:
         return ''
@@ -844,8 +853,10 @@ def _walk_cut_detail(cut):
 
 
 def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
-                        section, errors):
+                        section, errors, state_out=None):
     members, state = _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl)
+    if state_out is not None:
+        state_out['complete'] = _walk_complete(state) and len(members) <= MAX_COLLECTION_MEMBERS
     first_path = _str(path).split('?', 1)[0]
     truncated = state['cut'] is not None
     if truncated:
@@ -1215,23 +1226,30 @@ def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, ver
     return _safe(members[0], '@odata.id'), st, None
 
 
-def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
+def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl, state_out=None):
+    if state_out is not None:
+        state_out['complete'] = False
     if not coll_uri:
         return [], None, 'collection uri 없음'
     st, coll, err = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if err or st != 200:
         return [], st, err or f'HTTP {st}'
+    walk = {}
     raw_members = _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout,
-                                      verify_ssl, 'multi_node', None)
+                                      verify_ssl, 'multi_node', None, state_out=walk)
     if not isinstance(raw_members, list):
         raw_members = []
     out = []
+    dropped = 0
     for m in raw_members:
         uri = _safe(m, '@odata.id')
         if not uri or not isinstance(uri, str):
+            dropped += 1
             continue
         mid = uri.rstrip('/').rsplit('/', 1)[-1] if '/' in uri else uri
         out.append({'uri': uri, 'id': mid})
+    if state_out is not None:
+        state_out['complete'] = bool(walk.get('complete')) and not dropped
     if not out:
         return [], st, 'members 없음'
     return out, st, None
@@ -1494,12 +1512,12 @@ def _extract_oem_lenovo(data, chassis_data=None):
         'product_name':         product_name,
         'system_status':        _safe(sys_oem, 'SystemStatus'),
         'fru_serial':           _safe(cha_oem, 'FruSerialNumber'),
-        'machine_type':         _safe(cha_oem, 'MachineType'),
+        'machine_type':         _safe(cha_oem, 'MachineType') or _safe(data, 'SubModel'),
         'machine_level':        _safe(cha_oem, 'MachineLevel'),
         'product_id':           _safe(cha_oem, 'ProductId'),
         'system_id':            _safe(cha_oem, 'SystemId'),
         'health_summary':       _safe(sys_oem, 'HealthSummary'),
-        'led_indicator':        _safe(cha_oem, 'LEDIndicators') or _safe(cha_oem, 'IndicatorLED'),
+        'led_indicator':        _safe(cha_oem, 'LEDIndicators') or _safe(cha_oem, 'IndicatorLED') or _safe(data, 'IndicatorLED'),
     }
 
 
@@ -1577,18 +1595,30 @@ def _normalize_dimm_label(raw_label):
     return normalized
 
 
+_LINK_UP_VALUES = frozenset(('linkup', 'up', 'connected'))
+_LINK_DOWN_VALUES = frozenset(('linkdown', 'down', 'nolink', 'disconnected', 'disabled', 'inactive', 'offline'))
+_LINK_EMPTY_VALUES = frozenset(('', 'none', 'unknown', 'null'))
+
+
 def _normalize_link_status(value):
     if value is None:
         return 'unknown'
     s = str(value).strip().lower()
-    if not s or s in ('none', 'unknown', 'null'):
-        return 'unknown'
-    if s in ('linkup', 'up', 'connected', 'enabled', 'active'):
+    if s in _LINK_UP_VALUES:
         return 'up'
-    if s in ('linkdown', 'down', 'nolink', 'disconnected', 'disabled',
-             'inactive', 'offline', 'starting', 'training'):
+    if s in _LINK_DOWN_VALUES:
         return 'down'
-    return s
+    return 'unknown'
+
+
+def _link_status_unmapped(value):
+    if value is None:
+        return None
+    raw = str(value).strip()
+    low = raw.lower()
+    if low in _LINK_EMPTY_VALUES or low in _LINK_UP_VALUES or low in _LINK_DOWN_VALUES:
+        return None
+    return raw
 
 
 def _valid_iso_date(s):
@@ -1677,12 +1707,15 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     if bios_link_out is not None:
         bios_link_out['retrieved'] = True
         bios_link_out['link'] = _safe(data, 'Bios', '@odata.id')
+        bios_link_out['power_state'] = _safe(data, 'PowerState')
 
     chassis_data = None
     if chassis_uri:
         cst, cdata, _cerr = _get(bmc_ip, _p(chassis_uri), username, password, timeout, verify_ssl)
         if not _cerr and cst == 200:
             chassis_data = cdata
+            if bios_link_out is not None and isinstance(cdata, dict):
+                bios_link_out.setdefault('chassis_bodies', {})[_p(chassis_uri)] = cdata
 
     hostname = _safe(data, 'HostName')
     if isinstance(hostname, str) and not hostname.strip():
@@ -1719,7 +1752,8 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
         'uuid':           _ne('UUID'),
         'hostname':       hostname,
         'power_state':    _safe(data, 'PowerState'),
-        'health':         _safe(data, 'Status', 'Health'),
+        'health':         (_safe(data, 'Status', 'Health') if _safe(data, 'Status', 'Health') not in (None, '')
+                           else _safe(data, 'Status', 'HealthRollup')),
         'state':          _safe(data, 'Status', 'State'),
         'led_state':      led_state,
         'bios_version':   _ne('BiosVersion'),
@@ -1806,6 +1840,9 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
                                code=_CODE_BIOS_NON_BLOCKING))
             return out, errors
 
+        if isinstance(link_info, dict):
+            link_info['active_software_image'] = _safe(data, 'Links', 'ActiveSoftwareImage', '@odata.id')
+
         odata_type = data.get('@odata.type')
         if odata_type is not None and not (
                 isinstance(odata_type, str) and odata_type.startswith(_BIOS_ODATA_TYPE_PREFIX)):
@@ -1838,7 +1875,7 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
 
 
 def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_ssl,
-               manager_layout=None, is_first=True, manager_id=None):
+               manager_layout=None, is_first=True, manager_id=None, links_out=None):
     if not manager_uri:
         return {}, [_err('bmc', 'manager_uri 없음')]
 
@@ -1847,6 +1884,8 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     if err or st != 200:
         errors.append(_err('bmc', f'BMC 수집 실패: {err or st}'))
         return {}, errors
+    if isinstance(links_out, dict):
+        links_out['active_software_image'] = _safe(data, 'Links', 'ActiveSoftwareImage', '@odata.id')
 
     bmc_names = {'dell': 'iDRAC', 'hpe': 'iLO', 'lenovo': 'XCC', 'supermicro': 'BMC',
                  'cisco': 'CIMC',
@@ -1854,6 +1893,10 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                  'quanta': 'BMC'}
     _mid = manager_id if manager_id is not None else _safe(data, 'Id')
     rmc_label = _classify_rmc_label(manager_uri, _mid, manager_layout, is_first)
+    if rmc_label is None and _safe(data, 'ManagerType') in ('RackManager', 'EnclosureManager'):
+        _mid_s = _str(_safe(data, 'Id')).strip()
+        rmc_label = (_mid_s if (0 < len(_mid_s) <= 16 and _mid_s.replace('-', '').replace('_', '').isalnum())
+                     else _str(_safe(data, 'ManagerType')))
     result = {
         'name':             rmc_label or bmc_names.get(vendor, 'BMC'),
         'firmware_version': _safe(data, 'FirmwareVersion'),
@@ -1876,6 +1919,7 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         'datetime_offset':  _safe(data, 'DateTimeLocalOffset'),
         'oem': {},
     }
+    nic_cands = []
 
     bmc_name_servers = []
     bmc_static_name_servers = []
@@ -1900,9 +1944,11 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                                            detail={'status_code': nst2}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
                 nic_first_ip = None
+                nic_ips = []
                 for addr in _dicts(_safe(ndata, 'IPv4Addresses')):
                     ip = _safe(addr, 'Address')
                     if ip and isinstance(ip, str) and ip not in ('0.0.0.0', ''):
+                        nic_ips.append(ip)
                         if nic_first_ip is None:
                             nic_first_ip = ip
                         gw = _safe(addr, 'Gateway')
@@ -1916,14 +1962,20 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                     if isinstance(ns, str) and ns and ns not in _ns_placeholders and ns not in bmc_static_name_servers:
                         bmc_static_name_servers.append(ns)
                 if nic_first_ip:
-                    if not result['ip']:
-                        result['ip'] = nic_first_ip
-                    if not result['mac_address']:
-                        _mac = _safe(ndata, 'MACAddress') or _safe(ndata, 'PermanentMACAddress')
-                        result['mac_address'] = _mac.lower() if isinstance(_mac, str) else None
-                    if not result['dns_name']:
-                        result['dns_name'] = _safe(ndata, 'FQDN') or _safe(ndata, 'HostName')
+                    _mac = _safe(ndata, 'MACAddress') or _safe(ndata, 'PermanentMACAddress')
+                    nic_cands.append({
+                        'ips': nic_ips, 'ip': nic_first_ip,
+                        'mac': _mac.lower() if isinstance(_mac, str) else None,
+                        'dns': _safe(ndata, 'FQDN') or _safe(ndata, 'HostName'),
+                        'host_if': _safe(ndata, 'Links', 'HostInterface') is not None,
+                        'enabled': _safe(ndata, 'InterfaceEnabled'),
+                    })
 
+    if nic_cands:
+        _pick = (next((c for c in nic_cands if bmc_ip in c['ips']), None)
+                 or next((c for c in nic_cands if not c['host_if'] and c['enabled'] is not False), None)
+                 or nic_cands[0])
+        result['ip'], result['mac_address'], result['dns_name'] = _pick['ip'], _pick['mac'], _pick['dns']
     result['_network_meta'] = {
         'name_servers':        bmc_name_servers,
         'static_name_servers': bmc_static_name_servers,
@@ -1945,6 +1997,13 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         result['oem'] = {
             'ilo_version': _safe(oem, 'Firmware', 'Current', 'VersionString'),
         }
+        if result.get('timezone') is None:
+            _dt_link = _safe(oem, 'Links', 'DateTimeService', '@odata.id')
+            if isinstance(_dt_link, str) and _dt_link.strip():
+                _st_dt, _dt, _e_dt = _get(bmc_ip, _p(_dt_link), username, password, timeout, verify_ssl)
+                if _st_dt == 200 and isinstance(_dt, dict):
+                    _tz = _safe(_dt, 'TimeZone', 'Value') or _safe(_dt, 'TimeZone', 'Name')
+                    result['timezone'] = _strip_or_none(_tz) if isinstance(_tz, str) else None
     elif vendor == 'supermicro':
         oem = _safe(data, 'Oem', 'Supermicro') or {}
         result['oem'] = {'bmc_ip': _safe(oem, 'BMCIPv4Address')}
@@ -1963,6 +2022,54 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         }
 
     return result, errors
+
+
+def _cache_string_kb(value):
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    m = re.match(r'^\s*([\d.]+)\s*(KB|MB|GB)?\s*$', str(value), re.I)
+    if not m:
+        return None
+    try:
+        kb = float(m.group(1)) * {'KB': 1, 'MB': 1024, 'GB': 1024 * 1024}[(m.group(2) or 'KB').upper()]
+    except ValueError:
+        return None
+    return int(round(kb)) if kb > 0 else None
+
+
+def _processor_cache_kb(pdata):
+    oem = _safe(pdata, 'Oem')
+    if not isinstance(oem, dict):
+        return None, None
+    found = {}
+    for o in oem.values():
+        if not isinstance(o, dict):
+            continue
+        for c in _dicts(o.get('Cache')):
+            name = _str(c.get('Name')).strip().upper()
+            lvl = 'L2' if name.startswith('L2') else ('L3' if name.startswith('L3') else None)
+            kb = _safe_int(c.get('InstalledSizeKB'))
+            if lvl and kb:
+                found.setdefault(lvl, kb)
+        for c in _dicts(o.get('CacheInfo')):
+            lvl = _str(c.get('CacheLevel')).strip().upper()
+            kb = _safe_int(c.get('InstalledSizeKByte'))
+            if lvl in ('L2', 'L3') and kb:
+                found.setdefault(lvl, kb)
+        dp = o.get('DellProcessor')
+        if isinstance(dp, dict):
+            for n in range(1, 5):
+                lvl = _str(dp.get('Cache%dLevel' % n)).strip().upper()
+                kb = _safe_int(dp.get('Cache%dInstalledSizeKB' % n))
+                if lvl in ('L2', 'L3') and kb:
+                    found.setdefault(lvl, kb)
+        for lvl, key in (('L2', 'L2CacheSize'), ('L3', 'L3CacheSize')):
+            kb = _cache_string_kb(o.get(key))
+            if kb:
+                found.setdefault(lvl, kb)
+    return found.get('L2'), found.get('L3')
 
 
 def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -2006,10 +2113,27 @@ def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ss
             'serial_number':     _ne_p('SerialNumber'),
             'part_number':       _ne_p('PartNumber'),
         })
+        _l2, _l3 = _processor_cache_kb(pdata)
+        if _l2 is not None:
+            processors[-1]['l2_cache_kb'] = _l2
+        if _l3 is not None:
+            processors[-1]['l3_cache_kb'] = _l3
     if not processors and _absent > 0:
         errors.append(_err('processors',
                            f'모든 CPU({_absent})가 Absent/Disabled (펌웨어 오류 또는 미장착 가능)'))
     return processors, errors
+
+
+def _memory_rank_count(mdata):
+    rc = _safe_int(_safe(mdata, 'RankCount'))
+    if rc is not None:
+        return rc
+    label = _safe(mdata, 'Oem', 'Hpe', 'Label')
+    if isinstance(label, str):
+        m = re.search(r'(?<![\w.])(\d+)Rx\d+(?![\w])', label)
+        if m:
+            return int(m.group(1))
+    return None
 
 
 def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -2020,16 +2144,25 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         errors.append(_err('memory', f'Memory 컬렉션 실패: {err or st}'))
         return {'total_mib': None, 'slots': []}, errors
 
-    slots, total_mib, cap_unknown = [], 0, 0
+    slots, total_mib, cap_unknown, empty_slots = [], 0, 0, 0
+    walk, unread, no_uri = {}, 0, 0
     for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
-                                      'memory', errors):
+                                      'memory', errors, state_out=walk):
         uri = _safe(member, '@odata.id')
-        if not uri: continue
+        if not uri:
+            unread += 1
+            no_uri += 1
+            continue
         st, mdata, merr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if merr or st != 200:
             errors.append(_err('memory', f'Memory {uri} 실패: {merr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            unread += 1
             continue
         if _safe(mdata, 'Status', 'State') == 'Absent':
+            continue
+        if (_safe(mdata, 'Status') is None and not _safe(mdata, 'CapacityMiB')
+                and not any(_strip_or_none(_safe(mdata, k)) for k in ('Manufacturer', 'PartNumber', 'SerialNumber'))):
+            empty_slots += 1
             continue
         cap_int = _safe_int(_safe(mdata, 'CapacityMiB'))
         if cap_int is not None:
@@ -2041,7 +2174,6 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             'id':              _safe(mdata, 'Id'),
             'name':            _strip_or_none(_safe(mdata, 'Name')),
             'locator':         (_safe(mdata, 'DeviceLocator')
-                                or (str(_mloc_slot) if _mloc_slot else None)
                                 or _safe(mdata, 'Location', 'PartLocation', 'ServiceLabel')
                                 or (str(_mloc_slot) if _mloc_slot is not None else None)),
             'capacity_mb':     cap_int,
@@ -2051,7 +2183,7 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             'manufacturer':    _normalize_jedec(_safe(mdata, 'Manufacturer')),
             'serial':          _strip_or_none(_safe(mdata, 'SerialNumber')),
             'part_number':     _strip_or_none(_safe(mdata, 'PartNumber')),
-            'rank_count':      _safe_int(_safe(mdata, 'RankCount')),
+            'rank_count':      _memory_rank_count(mdata),
             'data_width_bits': _safe_int(_safe(mdata, 'DataWidthBits')),
             'bus_width_bits':  _safe_int(_safe(mdata, 'BusWidthBits')),
             'error_correction': _safe(mdata, 'ErrorCorrection'),
@@ -2065,20 +2197,31 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         else:
             _notice('memory', f'CapacityMiB 부재 DIMM {cap_unknown}/{len(slots)} — 합계 미산출(slot 은 보존)')
         total_mib = None
+    if unread or not walk.get('complete'):
+        if no_uri:
+            _notice('memory', f'@odata.id 없는 Memory 멤버 {no_uri}개 — 읽지 못함, 합계 미산출(slot 은 보존)')
+        total_mib = None
+    if empty_slots:
+        _notice('memory', f'빈 DIMM 슬롯 {empty_slots}개 제외 (Status 없음 · CapacityMiB 0 · 제조사/부품/시리얼 없음)')
     return {'total_mib': total_mib, 'slots': slots}, errors
 
 
-def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl):
+def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl, inv=None):
     controllers = []
     errors = []
+    no_uri = 0
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
+            no_uri += 1
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
             errors.append(_err('storage', f'SimpleStorage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
+        if isinstance(_safe(sdata, 'Devices'), list):
+            _inv_set(inv, 'enumerated')
         drives = []
         for dev in _dicts(_safe(sdata, 'Devices')):
             cap_int = _safe_int(_safe(dev, 'CapacityBytes'))
@@ -2098,6 +2241,9 @@ def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_
             'id': _safe(sdata, 'Id'), 'name': _safe(sdata, 'Name'),
             'health': _safe(sdata, 'Status', 'Health'), 'drives': drives,
         })
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 SimpleStorage 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return controllers, errors
 
 
@@ -2143,16 +2289,43 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
     }, errors
 
 
-def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl):
+def _drive_wwn(ddata):
+    for ident in _dicts(_safe(ddata, 'Identifiers')):
+        fmt = _str(ident.get('DurableNameFormat')).strip().upper()
+        dn = _str(ident.get('DurableName')).strip().lower()
+        if fmt not in ('NAA', 'EUI') or not dn:
+            continue
+        for pre in ('naa.', 'eui.', '0x'):
+            if dn.startswith(pre):
+                dn = dn[len(pre):]
+        if dn:
+            return ('naa.' if fmt == 'NAA' else 'eui.') + dn
+    return None
+
+
+def _inv_set(inv, key):
+    if isinstance(inv, dict):
+        inv[key] = True
+
+
+def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl, inv=None):
     drives = []
     errors = []
-    for d_member in _capped(_safe(sdata, 'Drives') or [], 'storage', errors):
+    raw = _safe(sdata, 'Drives')
+    if isinstance(raw, list):
+        _inv_set(inv, 'enumerated')
+        if len(raw) > MAX_COLLECTION_MEMBERS:
+            _inv_set(inv, 'incomplete')
+    no_uri = 0
+    for d_member in _capped(raw or [], 'storage', errors):
         d_uri = _safe(d_member, '@odata.id')
         if not d_uri:
+            no_uri += 1
             continue
         dst, ddata, derr = _get(bmc_ip, _p(d_uri), username, password, timeout, verify_ssl)
         if derr or dst != 200:
             errors.append(_err('storage', f'Drive {d_uri} 실패: {derr or dst}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
         drive_name = _str(_safe(ddata, 'Name'))
         cap_int = _safe_int(_safe(ddata, 'CapacityBytes'), default=0)
@@ -2177,6 +2350,12 @@ def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_s
             'failure_predicted':      _safe(ddata, 'FailurePredicted'),
             'predicted_life_percent': life_pct,
         })
+        _wwn = _drive_wwn(ddata)
+        if _wwn:
+            drives[-1]['wwn'] = _wwn
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 Drive 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return drives, errors
 
 
@@ -2252,22 +2431,35 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
     return volumes, errors
 
 
-def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None):
+def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None,
+                             inv=None, refs=None):
     controllers = []
     volumes = []
     errors = []
     pcie_cache = None
+    no_uri = 0
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
+            no_uri += 1
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
             errors.append(_err('storage', f'Storage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
+        if isinstance(refs, dict):
+            for _enc in _dicts(_safe(sdata, 'Links', 'Enclosures')):
+                _eu = _safe(_enc, '@odata.id')
+                if isinstance(_eu, str) and _eu:
+                    refs['enclosures'].append(_eu)
+            for _dm in _dicts(_safe(sdata, 'Drives')):
+                _du = _safe(_dm, '@odata.id')
+                if isinstance(_du, str) and _du:
+                    refs['drive_uris'].add(_p(_du))
         ctrl_info, c_errs = _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout, verify_ssl)
         errors.extend(c_errs)
-        drives, d_errs = _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl)
+        drives, d_errs = _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl, inv)
         errors.extend(d_errs)
         ctrl_name = ctrl_info.get('controller_name') or _safe(sdata, 'Name')
         ctrl_entry = {
@@ -2288,10 +2480,13 @@ def _gather_standard_storage(bmc_ip, members, username, password, timeout, verif
         vols, v_errs = _extract_storage_volumes(sdata, _safe(sdata, 'Id'), bmc_ip, username, password, timeout, verify_ssl)
         volumes.extend(vols)
         errors.extend(v_errs)
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 Storage 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return controllers, volumes, errors
 
 
-def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
+def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, inv=None):
     base = _p(system_uri) + '/SmartStorage'
     st, ss_root, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
     errors = []
@@ -2300,6 +2495,7 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
         return [], [], errors
 
     controllers = []
+    unread = 0
     for coll_key in ('ArrayControllers', 'HostBusAdapters'):
         coll_link = _safe(ss_root, coll_key, '@odata.id')
         if not coll_link:
@@ -2307,28 +2503,36 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
         cst, coll, cerr = _get(bmc_ip, _p(coll_link), username, password, timeout, verify_ssl)
         if cerr or cst != 200:
             errors.append(_err('storage', f'SmartStorage.{coll_key} 실패: {cerr or cst}'))
+            _inv_set(inv, 'incomplete')
             continue
+        cwalk = {}
         for member in _collection_members(bmc_ip, _p(coll_link), coll, username, password, timeout,
-                                          verify_ssl, 'storage', errors):
+                                          verify_ssl, 'storage', errors, state_out=cwalk):
             ctrl_uri = _safe(member, '@odata.id')
             if not ctrl_uri:
+                unread += 1
                 continue
             ctrl_st, ctrl_data, ctrl_err = _get(bmc_ip, _p(ctrl_uri), username, password, timeout, verify_ssl)
             if ctrl_err or ctrl_st != 200:
                 errors.append(_err('storage', f'SmartStorage controller {ctrl_uri} 실패: {ctrl_err or ctrl_st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                _inv_set(inv, 'incomplete')
                 continue
             drives = []
             pd_link = _safe(ctrl_data, 'PhysicalDrives', '@odata.id') or _safe(ctrl_data, 'Links', 'PhysicalDrives', '@odata.id')
             if pd_link:
                 pst, pcoll, _perr = _get(bmc_ip, _p(pd_link), username, password, timeout, verify_ssl)
                 if pst == 200:
+                    _inv_set(inv, 'enumerated')
+                    pwalk = {}
                     for pd_m in _collection_members(bmc_ip, _p(pd_link), pcoll, username, password,
-                                                    timeout, verify_ssl, 'storage', errors):
+                                                    timeout, verify_ssl, 'storage', errors, state_out=pwalk):
                         pd_uri = _safe(pd_m, '@odata.id')
                         if not pd_uri:
+                            unread += 1
                             continue
                         pdst, pddata, _pderr = _get(bmc_ip, _p(pd_uri), username, password, timeout, verify_ssl)
                         if pdst != 200:
+                            unread += 1
                             continue
                         cap_gb_field = _safe_int(_safe(pddata, 'CapacityGB'))
                         cap_mib_field = _safe_int(_safe(pddata, 'CapacityMiB'))
@@ -2353,6 +2557,10 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                             'capacity_gb':    capacity_gb,
                             'health':         _safe(pddata, 'Status', 'Health'),
                         })
+                    if not pwalk.get('complete'):
+                        _inv_set(inv, 'incomplete')
+                else:
+                    unread += 1
             ctrl_id = _safe(ctrl_data, 'Id')
             controllers.append({
                 'id':                      ctrl_id,
@@ -2366,6 +2574,11 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                 'controller_manufacturer': _safe(ctrl_data, 'Manufacturer') or 'HPE',
                 'controller_health':       _safe(ctrl_data, 'Status', 'Health'),
             })
+        if not cwalk.get('complete'):
+            _inv_set(inv, 'incomplete')
+    if unread and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'SmartStorage 디스크 경로 {unread}건을 읽지 못함 — 디스크 합계 미산출')
     return controllers, [], errors
 
 
@@ -2458,46 +2671,111 @@ def _identify_controller_from_pcie(ctrl_entry, sdata, pcie_devices, bmc_ip, user
     return True
 
 
-def _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl):
-    controllers, errors = [], []
-    for cu in _capped([u for u in (chassis_uris or []) if isinstance(u, str) and u], 'storage', errors):
+def _chassis_drives_union(bmc_ip, chassis_uris, refs, controllers, username, password, timeout, verify_ssl, inv=None):
+    controllers_out, errors = [], []
+    refs = refs if isinstance(refs, dict) else {}
+    known_serials, had_drives = set(), False
+    for c in (controllers or []):
+        for d in ((c.get('drives') or []) if isinstance(c, dict) else []):
+            if isinstance(d, dict):
+                had_drives = True
+                sn = _str(d.get('serial')).strip().upper()
+                if sn:
+                    known_serials.add(sn)
+    seen = set(refs.get('drive_uris') or ())
+    targets, tseen = [], set()
+    for u in list(chassis_uris or []) + list(refs.get('enclosures') or []):
+        if isinstance(u, str) and u and _p(u) not in tseen:
+            tseen.add(_p(u))
+            targets.append(u)
+    no_uri, excluded = 0, 0
+    for cu in _capped(targets, 'storage', errors):
         st, cdata, cerr = _get(bmc_ip, _p(cu), username, password, timeout, verify_ssl)
         if cerr or st != 200 or not isinstance(cdata, dict):
             if st != 404:
                 errors.append(_err('storage', f'Chassis {cu} 실패: {cerr or st}', _extended_info(cdata),
                                    code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                _inv_set(inv, 'incomplete')
             continue
+        members = []
         link = _safe(cdata, 'Drives', '@odata.id')
-        if not isinstance(link, str) or not link:
+        if isinstance(link, str) and link:
+            st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+            if err2 or st2 != 200 or not isinstance(coll, dict):
+                if st2 != 404:
+                    errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
+                                       code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    _inv_set(inv, 'incomplete')
+            else:
+                walk = {}
+                members.extend(_collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl,
+                                                   'storage', errors, state_out=walk))
+                _inv_set(inv, 'enumerated')
+                if not walk.get('complete'):
+                    _inv_set(inv, 'incomplete')
+        linked = _safe(cdata, 'Links', 'Drives')
+        if isinstance(linked, list):
+            members.extend(linked)
+            _inv_set(inv, 'enumerated')
+        new = []
+        for m in members:
+            du = _safe(m, '@odata.id')
+            if not isinstance(du, str) or not du:
+                no_uri += 1
+                continue
+            if _p(du) in seen:
+                continue
+            seen.add(_p(du))
+            new.append({'@odata.id': du})
+        if not new:
             continue
-        st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
-        if err2 or st2 != 200 or not isinstance(coll, dict):
-            if st2 != 404:
-                errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
-                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
-            continue
-        members = _collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl, 'storage', errors)
-        if not members:
-            continue
-        drives, d_errs = _extract_storage_drives({'Drives': members}, bmc_ip, username, password, timeout, verify_ssl)
+        drives, d_errs = _extract_storage_drives({'Drives': new}, bmc_ip, username, password, timeout, verify_ssl, inv)
         errors.extend(d_errs)
-        if not drives:
+        kept = []
+        for d in drives:
+            sn = _str(d.get('serial')).strip().upper()
+            if sn:
+                if sn in known_serials:
+                    continue
+                known_serials.add(sn)
+            elif had_drives:
+                excluded += 1
+                continue
+            kept.append(d)
+        if not kept:
             continue
         cid = _id_text(_safe(cdata, 'Id')) or _p(cu).rstrip('/').rsplit('/', 1)[-1]
-        controllers.append({
+        controllers_out.append({
             'id':     'Chassis.%s' % cid,
             'name':   '%s Drives' % (_strip_or_none(_safe(cdata, 'Name')) or cid),
             'health': _safe(cdata, 'Status', 'Health') or _safe(cdata, 'Status', 'HealthRollup'),
-            'drives': drives,
+            'drives': kept,
         })
-        _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(drives)))
-    return controllers, errors
+        if had_drives:
+            _notice('storage', '섀시 %s 의 드라이브 %d건 — Storage 가 가리키지 않아 추가' % (cid, len(kept)))
+        else:
+            _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(kept)))
+    if no_uri:
+        _inv_set(inv, 'incomplete')
+        _notice('storage', '@odata.id 없는 섀시 Drive 멤버 %d개 — 읽지 못함, 디스크 합계 미산출' % no_uri)
+    if excluded:
+        _inv_set(inv, 'incomplete')
+        _notice('storage', 'SerialNumber 없는 섀시 전용 드라이브 %d건 — Storage 드라이브와 같은지 판정할 수 없어 더하지 않음, '
+                           '디스크 합계 미산출' % excluded)
+    return controllers_out, errors
 
 
-def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None):
+def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None, inventory_out=None):
     path = _p(system_uri) + '/Storage'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
     errors = []
+    inv = {'enumerated': False, 'incomplete': False}
+    refs = {'enclosures': [], 'drive_uris': set()}
+
+    def _done(val):
+        if isinstance(inventory_out, dict):
+            inventory_out.update(inv)
+        return val, errors
 
     use_simple = False
     if err or st != 200:
@@ -2509,32 +2787,36 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, 
             _notice('storage', 'Storage 미지원, SimpleStorage fallback 사용')
         else:
             ctrls, vols, smart_errors = _gather_smart_storage(
-                bmc_ip, system_uri, username, password, timeout, verify_ssl
+                bmc_ip, system_uri, username, password, timeout, verify_ssl, inv
             )
             if ctrls:
                 _notice('storage', 'Storage/SimpleStorage 미지원, SmartStorage (HPE OEM legacy) fallback 사용')
                 errors.extend(smart_errors)
-                return {'controllers': ctrls, 'volumes': vols}, errors
+                return _done({'controllers': ctrls, 'volumes': vols})
             errors.append(_err('storage', f'Storage/SimpleStorage/SmartStorage 모두 실패: {err or st}'))
-            return {'controllers': [], 'volumes': []}, errors
+            return _done({'controllers': [], 'volumes': []})
 
+    walk = {}
     members = _collection_members(bmc_ip, (simple_path if use_simple else path), coll, username,
-                                  password, timeout, verify_ssl, 'storage', errors)
+                                  password, timeout, verify_ssl, 'storage', errors, state_out=walk)
+    if not walk.get('complete'):
+        inv['incomplete'] = True
     if use_simple:
-        controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl)
+        controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl, inv)
         errors.extend(sub_errors)
         if not controllers and not errors:
             errors.append(_err('storage',
                                'SimpleStorage 경로가 응답했지만 디스크 정보가 비어 있음'))
-        return {'controllers': controllers, 'volumes': []}, errors
+        return _done({'controllers': controllers, 'volumes': []})
     controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl,
-                                                                chassis_uris=chassis_uris)
+                                                                chassis_uris=chassis_uris, inv=inv, refs=refs)
     errors.extend(sub_errors)
-    if chassis_uris and not any((c.get('drives') if isinstance(c, dict) else None) for c in controllers):
-        extra_ctrls, extra_errs = _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl)
+    if chassis_uris or refs['enclosures']:
+        extra_ctrls, extra_errs = _chassis_drives_union(bmc_ip, chassis_uris, refs, controllers,
+                                                        username, password, timeout, verify_ssl, inv)
         controllers.extend(extra_ctrls)
         errors.extend(extra_errs)
-    return {'controllers': controllers, 'volumes': volumes}, errors
+    return _done({'controllers': controllers, 'volumes': volumes})
 
 
 def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -2546,6 +2828,7 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         return [], errors
 
     nics = []
+    link_unmapped = []
     for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
                                       'network', errors):
         uri = _safe(member, '@odata.id')
@@ -2560,15 +2843,29 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             for a in _dicts(_safe(ndata, 'IPv4Addresses'))
             if a.get('Address') not in (None, '0.0.0.0', '')
         ]
+        ipv6_addrs = [
+            {'address': a.get('Address').strip(), 'prefix_length': _safe_int(a.get('PrefixLength')),
+             'address_origin': a.get('AddressOrigin')}
+            for a in _dicts(_safe(ndata, 'IPv6Addresses'))
+            if isinstance(a.get('Address'), str) and a.get('Address').strip() not in ('', '::')
+        ]
         _nmac = _safe(ndata, 'MACAddress')
+        _nlink = _safe(ndata, 'LinkStatus')
+        _nraw = _link_status_unmapped(_nlink)
+        if _nraw is not None:
+            link_unmapped.append('%s=%s' % (_id_text(_safe(ndata, 'Id')) or _p(uri), _nraw))
         nics.append({
             'id': _safe(ndata, 'Id'), 'name': _safe(ndata, 'Name') or _safe(ndata, 'Id') or '',
             'mac': _nmac.lower() if isinstance(_nmac, str) else _nmac, 'speed_mbps': _safe_int(_safe(ndata, 'SpeedMbps')),
             'mtu': _safe_int(_safe(ndata, 'MTUSize')),
-            'link_status': _normalize_link_status(_safe(ndata, 'LinkStatus')),
+            'link_status': _normalize_link_status(_nlink),
             'health': _safe(ndata, 'Status', 'Health'),
             'ipv4': ipv4_addrs,
         })
+        if ipv6_addrs:
+            nics[-1]['ipv6'] = ipv6_addrs
+    if link_unmapped:
+        _notice('network', '%s: NIC 링크 상태 값 미확정, unknown 으로 기록 (link_status) — %s' % (path, ', '.join(link_unmapped)))
     return nics, errors
 
 
@@ -2784,14 +3081,24 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             'port_guid':    _normalize_ib_guid(_safe(ib, 'PortGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentPortGUID')),
             'port_uri':     _p(port_uri) if port_uri else None,
             'port_uris':    port_uris,
+            'mtu':          _safe_int(_safe(nd, 'Ethernet', 'MTUSize')),
+            'macs':         [m.strip().upper().replace(':', '').replace('-', '')
+                             for m in (_safe(nd, 'Ethernet', 'MACAddress'), _safe(nd, 'Ethernet', 'PermanentMACAddress'))
+                             if isinstance(m, str) and m.strip()],
         })
     return ndfs
+
+
+_HBA_LINK_UP_VALUES = frozenset(('linkup', 'up', 'connected'))
+_HBA_LINK_DOWN_VALUES = frozenset(('linkdown', 'down', 'nolink', 'disconnected', 'disabled', 'inactive', 'offline',
+                                   'starting', 'training'))
 
 
 def _hba_link_status(pdata):
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return 'down'
-    return 'up' if _normalize_link_status(pdata.get('LinkStatus')) == 'up' else 'down'
+    raw = pdata.get('LinkStatus')
+    return 'up' if isinstance(raw, str) and raw.strip().lower() in _HBA_LINK_UP_VALUES else 'down'
 
 
 def _hba_link_missing(pdata):
@@ -2802,7 +3109,8 @@ def _hba_link_unresolved(pdata):
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return None
     raw = pdata.get('LinkStatus')
-    if _normalize_link_status(raw) in ('up', 'down'):
+    s = '' if raw is None else str(raw).strip().lower()
+    if s in _HBA_LINK_DOWN_VALUES or (s in _HBA_LINK_UP_VALUES and _hba_link_status(pdata) == 'up'):
         return None
     return 'null' if raw is None else str(raw).strip()
 
@@ -3036,8 +3344,23 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
     return sources, tried, fails, state['empty']
 
 
+def _pcie_port_link_condition(pcie_body, registries):
+    regs = {str(r).strip() for r in (registries or []) if str(r).strip()}
+    if not regs or not isinstance(pcie_body, dict):
+        return None
+    for c in _dicts(_safe(pcie_body, 'Status', 'Conditions')):
+        mid = _str(c.get('MessageId')).strip()
+        parts = mid.split('.')
+        if len(parts) < 2 or parts[0] not in regs or parts[-1] not in ('LinkUp', 'LinkDown'):
+            continue
+        args = c.get('MessageArgs') if isinstance(c.get('MessageArgs'), list) else []
+        return (parts[-1], _str(c.get('Timestamp')).strip() or None, _str(args[0]).strip() if args else None)
+    return None
+
+
 def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                 username, password, timeout, verify_ssl):
+                                 username, password, timeout, verify_ssl, pcie_link_registries=None, mtu_out=None,
+                                 link_out=None):
     adp_uri = _safe(member, '@odata.id')
     if not adp_uri:
         return 'skipped'
@@ -3047,17 +3370,22 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
         return 'fetch_failed'
 
     adapter_id = _safe(adata, 'Id')
+    r16_pcie_body = None
+    out_fc_added = False
     fw_ver = None
     ctrls = _safe(adata, 'Controllers', default=[]) or []
     if ctrls and isinstance(ctrls, list):
         fw_ver = _safe(ctrls[0], 'FirmwarePackageVersion')
         if not fw_ver:
-            for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
+            _r16_links = _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices'))
+            for _pd in _r16_links:
                 _pd_uri = _safe(_pd, '@odata.id')
                 if not _pd_uri:
                     continue
                 _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
                 if _ps == 200 and isinstance(_pdata, dict):
+                    if len(_r16_links) == 1 and r16_pcie_body is None:
+                        r16_pcie_body = _pdata
                     fw_ver = _safe(_pdata, 'FirmwareVersion')
                     if fw_ver:
                         break
@@ -3101,6 +3429,11 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     _ports_before = len(out['ports'])
 
     ndfs = pre_ndfs if pre_ndfs is not None else _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
+    if isinstance(mtu_out, dict):
+        for _nd in ndfs:
+            if isinstance(_nd, dict) and _nd.get('mtu'):
+                for _m in (_nd.get('macs') or []):
+                    mtu_out.setdefault(_m, _nd['mtu'])
     ndf_by_port = {}
     for i, n in enumerate(ndfs):
         for u in (n.get('port_uris') or ([n['port_uri']] if n.get('port_uri') else [])):
@@ -3109,6 +3442,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     ndf_matched = set()
     port_ctx_by_id = {}
     link_missing, link_unresolved, wwpn_missing, wwpn_derived = [], [], [], []
+    fc_port_n, eth_port_n = 0, 0
 
     ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
                   or _safe(adata, 'Ports', '@odata.id'))
@@ -3184,6 +3518,10 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                 if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
                     primary_addr = ndf['wwpn']
 
+                if cls in ('FibreChannel', 'FCoE'):
+                    fc_port_n += 1
+                elif cls == 'Ethernet':
+                    eth_port_n += 1
                 port_hbas = []
                 if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE') and not (not cand and prefixed_orphan):
                     hba_link = _hba_link_status(pdata)
@@ -3226,6 +3564,9 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                     'health':                  _safe(pdata, 'Status', 'Health'),
                     'associated_address':      primary_addr,
                 }
+                _praw = _link_status_unmapped(_safe(pdata, 'LinkStatus'))
+                if _praw is not None and link_out is not None:
+                    link_out.append('%s/%s=%s' % (_id_text(adapter_id), pid_s, _praw))
                 out['ports'].append(port_info)
                 cur = out['adapters'][adapter_idx]
                 if (cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand')
@@ -3238,6 +3579,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
                 if port_hbas:
                     out['fc_hbas'].extend(port_hbas)
+                    out_fc_added = True
                 elif ib_dec == 'ib':
                     _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
                                     [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
@@ -3287,11 +3629,18 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
             if hba.get('wwpn') and hba['wwpn'] in {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
                 continue
             out['fc_hbas'].append(hba)
+            out_fc_added = True
     _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
 
     if link_missing:
-        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
-                % (adapter_id, ', '.join(link_missing)))
+        _lm_msg = ('네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
+                   % (adapter_id, ', '.join(link_missing)))
+        _cond = (_pcie_port_link_condition(r16_pcie_body, pcie_link_registries)
+                 if (out_fc_added and eth_port_n == 0 and r16_pcie_body is not None) else None)
+        if _cond is not None:
+            _lm_msg += (' — 링크 단절을 확인한 값 아님; 카드 %s 조건 %s(%s, 카드 단위)'
+                        % (_cond[2] or _str(adapter_id), _cond[0], _cond[1] or 'Timestamp 없음'))
+        _notice('network_adapters', _lm_msg)
     if link_unresolved:
         _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 값 미확정, down 으로 기록 (storage.hbas link_status)'
                 % (adapter_id, ', '.join(link_unresolved)))
@@ -3309,7 +3658,8 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
 
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
-                                    verify_ssl, system_uri=None, extra_chassis_uris=None):
+                                    verify_ssl, system_uri=None, extra_chassis_uris=None, pcie_link_registries=None,
+                                    mtu_out=None):
     out = {'adapters': [], 'ports': [], 'fc_hbas': [], 'infiniband': []}
     errors = []
     if not chassis_uri and not system_uri:
@@ -3361,17 +3711,22 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             items.append((origin, m))
 
     card_fail = 0
+    link_unmapped = []
     for origin, member in _capped(items, 'network_adapters', errors):
         snap = {k: len(v) for k, v in out.items()}
         ports_snap = set(seen_ports)
+        link_snap = len(link_unmapped)
         try:
             result = _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                                  username, password, timeout, verify_ssl)
+                                                  username, password, timeout, verify_ssl,
+                                                  pcie_link_registries=pcie_link_registries, mtu_out=mtu_out,
+                                                  link_out=link_unmapped)
         except Exception as e:
             sys.stderr.write("[redfish_gather] network_adapters 카드 예외: %s\n%s\n"
                              % (type(e).__name__, traceback.format_exc(limit=3)))
             for k, n in snap.items():
                 del out[k][n:]
+            del link_unmapped[link_snap:]
             for key in [k for k, idx in ib_idx_by_port.items() if idx >= snap['infiniband']]:
                 del ib_idx_by_port[key]
             seen_ports.clear()
@@ -3385,6 +3740,9 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     if items and card_fail and not out['adapters'] and _is_404_only_error(errors):
         _notice('network_adapters', 'NetworkAdapters 목록 %d건 중 읽은 카드 0건(404 %d건), 네트워크 카드(FC HBA 포함) 정보 미수집'
                 % (len(items), card_fail))
+    if link_unmapped:
+        _notice('network_adapters', '네트워크 포트 링크 상태 값 미확정, unknown 으로 기록 (network.ports link_status) — %s'
+                % ', '.join(link_unmapped))
     return out, errors
 
 
@@ -3404,7 +3762,7 @@ def _is_pending_fw_id(fw_id):
     return bool(isinstance(fw_id, str) and 'pending' in fw_id.lower())
 
 
-def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
+def gather_firmware(bmc_ip, username, password, timeout, verify_ssl, links_out=None, dates_out=None):
     path = 'UpdateService/FirmwareInventory'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
     errors = []
@@ -3466,6 +3824,9 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
                 _notice('firmware', f'{fw_id or member_uri}: Version 비어 있음(N/A) — 목록에서 제외')
                 continue
             ver = None
+        if ver is None and _str(_safe(member, 'Status', 'State')).strip().lower() == 'disabled':
+            _notice('firmware', f'{fw_id or member_uri}: Disabled · Version 없음(예정된 업데이트 없음) — 목록에서 제외')
+            continue
         component = _safe(member, 'SoftwareId')
         if isinstance(component, str) and component.lower() == 'null':
             component = None
@@ -3473,6 +3834,12 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         if post_key in seen_fw_keys:
             continue
         seen_fw_keys.add(post_key)
+        if isinstance(links_out, dict) and any(
+                isinstance(ri, dict) and _str(ri.get('@odata.id')).rstrip('/').lower().endswith('/bios')
+                for ri in _dicts(_safe(member, 'RelatedItem'))):
+            links_out.setdefault(_fw_dedup_key(fw_id), {})['bios'] = True
+        if isinstance(dates_out, dict) and _safe(member, 'ReleaseDate') is not None:
+            dates_out.setdefault(_fw_dedup_key(fw_id), _safe(member, 'ReleaseDate'))
         fw_list.append({
             'id':         fw_id,
             'name':       _safe(member, 'Name'),
@@ -3507,11 +3874,11 @@ def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, ver
             if _str(_safe(mv, 'MetricId')).strip().lower() == 'totalpowerconsumedwatts':
                 num = _safe_num(_safe(mv, 'MetricValue'))
                 if num is not None:
-                    return _safe_int(num)
+                    return _safe_round_int(num)
     return None
 
 
-def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     errors = []
     ps_path = _p(chassis_uri) + '/PowerSubsystem'
     st, ps_data, perr = _get(bmc_ip, ps_path, username, password, timeout, verify_ssl)
@@ -3522,6 +3889,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     psus = []
     psu_input_total = 0
     psu_input_seen = False
+    psu_output_total = 0
+    psu_output_seen = False
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
         if st_c != 200:
@@ -3540,25 +3909,37 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                         errors.append(_err('power', f'PowerSupply {m_uri} 실패: {_err_m or st_m}',
                                            detail={'status_code': st_m}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
+                m_state = _safe(mdata, 'Status', 'State')
+                m_cap, m_fw = _psu_absent_placeholders_to_none(
+                    m_state, _safe_int(_safe(mdata, 'PowerCapacityWatts')),
+                    _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'))
                 psus.append({
                     'name':             _safe(mdata, 'Name'),
-                    'model':            _safe(mdata, 'Model'),
-                    'serial':           _safe(mdata, 'SerialNumber'),
-                    'manufacturer':     _safe(mdata, 'Manufacturer'),
-                    'part_number':      _safe(mdata, 'PartNumber'),
-                    'power_capacity_w': _safe_int(_safe(mdata, 'PowerCapacityWatts')),
-                    'firmware_version': _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'),
+                    'model':            _strip_or_none(_safe(mdata, 'Model')),
+                    'serial':           _strip_or_none(_safe(mdata, 'SerialNumber')),
+                    'manufacturer':     _strip_or_none(_safe(mdata, 'Manufacturer')),
+                    'part_number':      _strip_or_none(_safe(mdata, 'PartNumber')),
+                    'power_capacity_w': m_cap,
+                    'firmware_version': m_fw,
                     'health':           _safe(mdata, 'Status', 'Health'),
-                    'state':            _safe(mdata, 'Status', 'State'),
+                    'state':            m_state,
                 })
                 metrics_link = _safe(mdata, 'Metrics', '@odata.id')
                 if metrics_link:
                     st_mm, mm, _e_mm = _get(bmc_ip, _p(metrics_link), username, password, timeout, verify_ssl)
                     if st_mm == 200 and isinstance(mm, dict):
-                        ipw = _safe_int(_safe(mm, 'InputPowerWatts', 'Reading'))
+                        ipw = _safe_round_int(_safe(mm, 'InputPowerWatts', 'Reading'))
                         if ipw is not None:
                             psu_input_total += ipw
                             psu_input_seen = True
+                        opw = _safe_round_int(_safe(mm, 'OutputPowerWatts', 'Reading'))
+                        if opw is not None:
+                            psu_output_total += opw
+                            psu_output_seen = True
+                        if _str(m_state).strip().lower() != 'absent':
+                            _psu_zero_input_notice(_safe(mdata, 'Name'), _safe(mdata, 'Id'),
+                                                   ipw if isinstance(_safe(mm, 'InputPowerWatts'), dict) else None,
+                                                   _safe_int(_safe(mm, 'InputVoltage', 'Reading')) if isinstance(_safe(mm, 'InputVoltage'), dict) else None)
 
     pc_capacity = None
     psu_caps = [p['power_capacity_w'] for p in psus
@@ -3576,23 +3957,22 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
 
     if power_control is not None:
         em_path = _p(chassis_uri) + '/EnvironmentMetrics'
-        st_em, em_data, _err_em = _get(bmc_ip, em_path, username, password, timeout, verify_ssl)
+        if _chassis_has_link(chassis_body, 'EnvironmentMetrics') is False:
+            st_em, em_data, _err_em = 404, {}, 'HTTP 404: Not Found (섀시 본문에 EnvironmentMetrics 링크 없음 — 요청 생략)'
+        else:
+            st_em, em_data, _err_em = _get(bmc_ip, em_path, username, password, timeout, verify_ssl)
         if st_em == 200 and isinstance(em_data, dict):
             pw = em_data.get('PowerWatts') if isinstance(em_data.get('PowerWatts'), dict) else None
             if pw:
-                pc_consumed = _safe_int(pw.get('Reading'))
-                pc_min = _safe_int(pw.get('ReadingRangeMin'))
-                pc_max = _safe_int(pw.get('ReadingRangeMax'))
+                pc_consumed = _safe_round_int(pw.get('Reading'))
                 if pc_consumed is not None:
                     power_control['power_consumed_watts'] = pc_consumed
-                if pc_min is not None:
-                    power_control['min_consumed_watts'] = pc_min
-                if pc_max is not None:
-                    power_control['max_consumed_watts'] = pc_max
         if power_control['power_consumed_watts'] is None:
             tpc = _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
             if tpc is not None:
                 power_control['power_consumed_watts'] = tpc
+        if power_control['power_consumed_watts'] is None and psu_output_seen:
+            power_control['power_consumed_watts'] = psu_output_total
         if power_control['power_consumed_watts'] is None and psu_input_seen:
             power_control['power_consumed_watts'] = psu_input_total
 
@@ -3622,17 +4002,29 @@ def _merge_power_dual(legacy_result, subsystem_result):
     return {'power_supplies': merged_psus, 'power_control': pc}
 
 
-def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _chassis_has_link(chassis_body, name):
+    if not isinstance(chassis_body, dict):
+        return None
+    link = chassis_body.get(name)
+    return isinstance(link, dict) and bool(_safe(link, '@odata.id'))
+
+
+def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     errors = []
     if not chassis_uri:
         errors.append(_err('power', 'chassis_uri 없음 (detect_vendor 에서 Chassis 미발견)'))
         return {}, errors
 
+    has_legacy, has_new = _chassis_has_link(chassis_body, 'Power'), _chassis_has_link(chassis_body, 'PowerSubsystem')
+    if has_legacy is False and has_new is False:
+        return {}, [_err('power', 'Power/PowerSubsystem 미지원: HTTP 404 (섀시 본문에 링크 없음 — 요청 생략)')]
+    if has_legacy is False and has_new:
+        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=chassis_body)
     power_path = _p(chassis_uri) + '/Power'
     st, pdata, perr = _get(bmc_ip, power_path, username, password, timeout, verify_ssl)
 
     if st == 404:
-        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
+        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=chassis_body)
 
     if perr or st != 200:
         errors.append(_err('power', f'Power 정보 실패: {perr or st}'))
@@ -3645,16 +4037,22 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
             ranges = _safe(psu, 'InputRanges') or []
             if isinstance(ranges, list) and ranges and isinstance(ranges[0], dict):
                 psu_capacity = _safe_int(ranges[0].get('OutputWattage'))
+        psu_state = _safe(psu, 'Status', 'State')
+        psu_capacity, psu_fw = _psu_absent_placeholders_to_none(psu_state, psu_capacity, _safe(psu, 'FirmwareVersion'))
+        if _str(psu_state).strip().lower() != 'absent':
+            _psu_zero_input_notice(_safe(psu, 'Name'), _safe(psu, 'MemberId'),
+                                   _safe_round_int(psu.get('PowerInputWatts')) if 'PowerInputWatts' in psu else None,
+                                   _safe_int(psu.get('LineInputVoltage')) if 'LineInputVoltage' in psu else None)
         psus.append({
             'name':             _safe(psu, 'Name'),
-            'model':            _safe(psu, 'Model'),
-            'serial':           _safe(psu, 'SerialNumber'),
-            'manufacturer':     _safe(psu, 'Manufacturer'),
-            'part_number':      _safe(psu, 'PartNumber'),
+            'model':            _strip_or_none(_safe(psu, 'Model')),
+            'serial':           _strip_or_none(_safe(psu, 'SerialNumber')),
+            'manufacturer':     _strip_or_none(_safe(psu, 'Manufacturer')),
+            'part_number':      _strip_or_none(_safe(psu, 'PartNumber')),
             'power_capacity_w': psu_capacity,
-            'firmware_version': _safe(psu, 'FirmwareVersion'),
+            'firmware_version': psu_fw,
             'health':           _safe(psu, 'Status', 'Health'),
-            'state':            _safe(psu, 'Status', 'State'),
+            'state':            psu_state,
         })
 
     pc_list = (pdata.get('PowerControl') if isinstance(pdata, dict) else None) or []
@@ -3662,26 +4060,75 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     pm = pc0.get('PowerMetrics') or {}
     pc_capacity = _safe_int(_safe(pc0, 'PowerCapacityWatts'))
     if pc_capacity is None:
-        psu_caps = [p['power_capacity_w'] for p in psus if p['power_capacity_w'] is not None]
+        psu_caps = [p['power_capacity_w'] for p in psus
+                    if p['power_capacity_w'] is not None and _str(p.get('state')).strip().lower() != 'absent']
         if psu_caps:
             pc_capacity = sum(psu_caps)
     power_control = {
-        'power_consumed_watts':  _safe_int(_safe(pc0, 'PowerConsumedWatts')),
+        'power_consumed_watts':  _safe_round_int(_safe(pc0, 'PowerConsumedWatts')),
         'power_capacity_watts':  pc_capacity,
         'interval_in_min':       _safe(pm, 'IntervalInMin'),
-        'min_consumed_watts':    _safe_int(_safe(pm, 'MinConsumedWatts')),
-        'avg_consumed_watts':    _safe_int(_safe(pm, 'AverageConsumedWatts')),
-        'max_consumed_watts':    _safe_int(_safe(pm, 'MaxConsumedWatts')),
+        'min_consumed_watts':    _safe_round_int(_safe(pm, 'MinConsumedWatts')),
+        'avg_consumed_watts':    _safe_round_int(_safe(pm, 'AverageConsumedWatts')),
+        'max_consumed_watts':    _safe_round_int(_safe(pm, 'MaxConsumedWatts')),
     } if pc0 else None
 
     return {'power_supplies': psus, 'power_control': power_control}, errors
 
 
-def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _psu_absent_placeholders_to_none(state, capacity_w, firmware_version):
+    if _str(state).strip().lower() != 'absent':
+        return capacity_w, firmware_version
+    if capacity_w == 0:
+        capacity_w = None
+    if isinstance(firmware_version, str) and firmware_version.strip() in ('', '0.00'):
+        firmware_version = None
+    return capacity_w, firmware_version
+
+
+def _sensor_is_absent(entry):
+    state = _safe(entry, 'Status', 'State')
+    return isinstance(state, str) and state.strip().lower() == 'absent'
+
+
+def _notice_absent_sensors(absent_temps, absent_fans):
+    if absent_temps or absent_fans:
+        _notice('thermal', 'Absent 센서 %d건 제외 (온도 %d · 팬 %d) — 미장착 슬롯' % (absent_temps + absent_fans, absent_temps, absent_fans))
+
+
+def _psu_zero_input_notice(name, member_id, input_watts, input_volts):
+    zero_w = input_watts == 0
+    zero_v = input_volts == 0
+    if not (zero_w or zero_v):
+        return
+    label = '%s' % (name or 'PSU')
+    if member_id not in (None, ''):
+        label = '%s[%s]' % (label, member_id)
+    parts = []
+    if zero_w:
+        parts.append('입력 전력 0 W')
+    if zero_v:
+        parts.append('입력 전압 0 V')
+    _notice('power', '전원 공급 장치 %s: %s 관측' % (label, ' / '.join(parts)))
+
+
+def _sensor_reading_if_enabled(entry, reading):
+    state = _safe(entry, 'Status', 'State')
+    if isinstance(state, str) and state.strip() and state.strip() != 'Enabled':
+        return None
+    return reading
+
+
+def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     errors = []
     if not chassis_uri:
         return {}, [_err('thermal', 'chassis_uri 없음')]
 
+    has_legacy, has_new = _chassis_has_link(chassis_body, 'Thermal'), _chassis_has_link(chassis_body, 'ThermalSubsystem')
+    if has_legacy is False and has_new is False:
+        return {}, [_err('thermal', 'Thermal/ThermalSubsystem 미지원: HTTP 404 (섀시 본문에 링크 없음 — 요청 생략)')]
+    if has_legacy is False and has_new:
+        return _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     thermal_path = _p(chassis_uri) + '/Thermal'
     st, tdata, terr = _get(bmc_ip, thermal_path, username, password, timeout, verify_ssl)
 
@@ -3692,10 +4139,14 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         return {}, [_err('thermal', f'Thermal 정보 실패: {terr or st}')]
 
     temps = []
+    absent_temps, absent_fans = 0, 0
     for t in _dicts(_safe(tdata, 'Temperatures')):
+        if _sensor_is_absent(t):
+            absent_temps += 1
+            continue
         temps.append({
             'name':             _safe(t, 'Name'),
-            'reading_celsius':  _safe_round_int(_safe(t, 'ReadingCelsius')),
+            'reading_celsius':  _sensor_reading_if_enabled(t, _safe_round_int(_safe(t, 'ReadingCelsius'))),
             'health':           _safe(t, 'Status', 'Health'),
             'state':            _safe(t, 'Status', 'State'),
             'upper_critical':   _safe_round_int(_safe(t, 'UpperThresholdCritical')),
@@ -3703,16 +4154,20 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         })
     fans = []
     for f in _dicts(_safe(tdata, 'Fans')):
+        if _sensor_is_absent(f):
+            absent_fans += 1
+            continue
         reading = _safe(f, 'Reading')
         if reading is None:
             reading = _safe(f, 'ReadingRPM')
         fans.append({
             'name':          _safe(f, 'Name'),
-            'reading':       _safe_int(reading),
+            'reading':       _sensor_reading_if_enabled(f, _safe_int(reading)),
             'reading_units': _safe(f, 'ReadingUnits'),
             'health':        _safe(f, 'Status', 'Health'),
             'state':         _safe(f, 'Status', 'State'),
         })
+    _notice_absent_sensors(absent_temps, absent_fans)
     return {'temperatures': temps, 'fans': fans}, errors
 
 
@@ -3755,14 +4210,19 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
         return {}, [_err('thermal', 'ThermalSubsystem 미지원: ' + (f'HTTP {st}' if st else str(terr)))]
 
     temps = []
+    absent_temps, absent_fans = 0, 0
     tm_link = _safe(ts, 'ThermalMetrics', '@odata.id')
     if tm_link:
         mst, tm, _e = _get(bmc_ip, _p(tm_link), username, password, timeout, verify_ssl)
         if mst == 200:
             for tr in _dicts(_safe(tm, 'TemperatureReadingsCelsius')):
+                if _sensor_is_absent(tr):
+                    absent_temps += 1
+                    continue
+                _ds = _str(_safe(tr, 'DataSourceUri')).rstrip('/').split('/')[-1] if _safe(tr, 'DataSourceUri') else None
                 temps.append({
-                    'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name'),
-                    'reading_celsius':  _safe_round_int(_safe(tr, 'Reading')),
+                    'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name') or _ds or None,
+                    'reading_celsius':  _sensor_reading_if_enabled(tr, _safe_round_int(_safe(tr, 'Reading'))),
                     'health':           _safe(tr, 'Status', 'Health'),
                     'state':            _safe(tr, 'Status', 'State'),
                     'upper_critical':   None,
@@ -3782,10 +4242,15 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                 fst2, fdata, _e2 = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
                 if fst2 != 200:
                     continue
+                if _sensor_is_absent(fdata):
+                    absent_fans += 1
+                    continue
+                _sp_reading = _safe_int(_safe(fdata, 'SpeedPercent', 'Reading'))
+                _sp_rpm = _safe_int(_safe(fdata, 'SpeedPercent', 'SpeedRPM')) if _sp_reading is None else None
                 fans.append({
                     'name':          _safe(fdata, 'Name'),
-                    'reading':       _safe_int(_safe(fdata, 'SpeedPercent', 'Reading')),
-                    'reading_units': 'Percent' if _safe(fdata, 'SpeedPercent') else None,
+                    'reading':       _sensor_reading_if_enabled(fdata, _sp_reading if _sp_reading is not None else _sp_rpm),
+                    'reading_units': ('Percent' if _sp_reading is not None else ('RPM' if _sp_rpm is not None else None)) if _safe(fdata, 'SpeedPercent') else None,
                     'health':        _safe(fdata, 'Status', 'Health'),
                     'state':         _safe(fdata, 'Status', 'State'),
                 })
@@ -3795,10 +4260,11 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
             bmc_ip, chassis_uri, fan_uris, username, password, timeout, verify_ssl)
         if rpm_map:
             for i, f in enumerate(fans):
-                if f['reading'] is None and i < len(fan_uris):
+                if f['reading'] is None and i < len(fan_uris) and f.get('state') in (None, 'Enabled'):
                     hit = rpm_map.get(fan_uris[i])
                     if hit:
                         f['reading'], f['reading_units'] = hit[0], hit[1]
+    _notice_absent_sensors(absent_temps, absent_fans)
     if not temps and not fans:
         return {}, errors
     return {'temperatures': temps, 'fans': fans}, errors
@@ -3858,9 +4324,9 @@ def _is_empty_result(val):
 
 
 def _make_section_runner(all_errors, collected, failed, unsupported=None):
-    def _run(section, fn, *args):
+    def _run(section, fn, *args, **kwargs):
         try:
-            val, errs = fn(*args)
+            val, errs = fn(*args, **kwargs)
             if unsupported is not None and _is_404_only_error(errs) and _is_empty_result(val):
                 unsupported.append(section)
                 return val
@@ -3919,9 +4385,11 @@ def gather_manager_logs(bmc_ip, manager_uri, username, password, timeout, verify
 def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
                           timeout, verify_ssl, manager_layout=None):
     out = {'managers': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, managers_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, managers_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.managers',
             f'Managers 컬렉션 실패: {err}'))
@@ -3950,7 +4418,7 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     return out
 
 
-def _summarize_partition_disks(physical_disks):
+def _summarize_partition_disks(physical_disks, inventory=None):
     groups, seen, total = [], {}, 0
     for d in (physical_disks or []):
         cap_mb = _safe_int(d.get('total_mb'), 0)
@@ -3968,10 +4436,13 @@ def _summarize_partition_disks(physical_disks):
             groups.append({'unit_capacity_gb': cap_gb, 'model': md, 'media_type': mt,
                            'protocol': pr, 'quantity': 1, 'group_total_gb': cap_gb})
         total += cap_gb
-    return {'groups': groups, 'grand_total_gb': total}
+    inv = inventory if isinstance(inventory, dict) else {}
+    enumerated = inv.get('enumerated') is True or bool(physical_disks)
+    countable = enumerated and inv.get('incomplete') is not True
+    return {'groups': groups, 'grand_total_gb': total if countable else None}
 
 
-def _normalize_storage_raw(raw):
+def _normalize_storage_raw(raw, inventory=None):
     raw = raw if isinstance(raw, dict) else {}
     controllers_out, physical, seen = [], [], set()
     for ctrl in (raw.get('controllers') or []):
@@ -4022,7 +4493,7 @@ def _normalize_storage_raw(raw):
     return {
         'filesystems': [], 'physical_disks': physical, 'datastores': [],
         'controllers': controllers_out, 'logical_volumes': logical,
-        'summary': _summarize_partition_disks(physical),
+        'summary': _summarize_partition_disks(physical, inventory),
         'hbas': [], 'infiniband': [],
     }
 
@@ -4040,6 +4511,11 @@ def _normalize_network_raw(raw_nics):
                 addrs.append({'family': 'ipv4', 'address': addr, 'prefix_length': None,
                               'subnet_mask': a.get('subnet_mask'), 'gateway': a.get('gateway'),
                               'origin': a.get('address_origin')})
+        for a in _as_list(nic.get('ipv6')):
+            addr = a.get('address') if isinstance(a, dict) else None
+            if addr and addr not in ('::', ''):
+                addrs.append({'family': 'ipv6', 'address': addr, 'prefix_length': a.get('prefix_length'),
+                              'subnet_mask': None, 'gateway': None, 'origin': a.get('address_origin')})
         interfaces.append({
             'id': nic.get('id') or nic.get('name'), 'name': nic.get('name'),
             'kind': 'server_nic', 'mac': nic.get('mac'), 'mtu': nic.get('mtu'),
@@ -4057,35 +4533,66 @@ def _normalize_network_raw(raw_nics):
             'adapters': [], 'ports': [], 'summary': {'groups': []}}
 
 
-def _normalize_cpu_raw(procs):
+_CPU_MFR_CANON = (
+    (('intel',), 'Intel'),
+    (('amd', 'advanced micro devices'), 'AMD'),
+)
+
+
+def _canon_cpu_manufacturer(value):
+    text = str(value).strip() if value is not None else ''
+    low = text.lower()
+    for tokens, name in _CPU_MFR_CANON:
+        if any(t in low for t in tokens):
+            return name
+    return text or None
+
+
+def _cpu_known_cores(proc):
+    c = _safe_int(proc.get('total_cores'))
+    return c if (c is not None and c > 0) else None
+
+
+def _normalize_cpu_raw(procs, raw_sys=None, failed=False):
     procs = procs if isinstance(procs, list) else []
     cpus = [p for p in procs if isinstance(p, dict)
             and (str(p.get('processor_type') or '').strip().upper() in ('CPU', 'CORE', ''))]
-    cores = sum(_safe_int(p.get('total_cores'), 0) for p in cpus)
-    threads = sum(_safe_int(p.get('total_threads'), 0) for p in cpus)
+    known = [_cpu_known_cores(p) for p in cpus]
+    known_sum, unknown = sum(c for c in known if c is not None), sum(1 for c in known if c is None)
+    cs = _safe(raw_sys, 'cpu_summary') if isinstance(raw_sys, dict) else None
+    cnt, cc = _safe_int(_safe(cs, 'count')), _safe_int(_safe(cs, 'core_count'))
+    cnt_ok = cnt is None or cnt >= len(cpus)
+    list_ok = bool(cpus) and not failed
+    cc_ok = cc is not None and cc > 0 and cnt_ok and cc >= known_sum + unknown
     models = [p.get('model') for p in cpus if p.get('model')]
     speeds = [p.get('speed_mhz') for p in cpus if p.get('speed_mhz')]
     archs = [p.get('architecture') for p in cpus if p.get('architecture')]
     isets = [p.get('instruction_set') for p in cpus if p.get('instruction_set')]
-    groups, seen = [], {}
-    for p in cpus:
+    groups, seen, unk = [], {}, set()
+    for p, tc in zip(cpus, known):
         m = p.get('model') or None
-        tc = _safe_int(p.get('total_cores'), 0)
         if m in seen:
-            g = groups[seen[m]]
+            i = seen[m]
+            g = groups[i]
             g['sockets'] += 1
-            g['total_cores'] += tc
-            g['cores_per_socket'] = g['total_cores'] // g['sockets']
+            if tc is None:
+                unk.add(i)
+            if i in unk:
+                g['total_cores'] = g['cores_per_socket'] = None
+            else:
+                g['total_cores'] += tc
+                g['cores_per_socket'] = g['total_cores'] // g['sockets']
         else:
             seen[m] = len(groups)
-            groups.append({'model': m, 'manufacturer': p.get('manufacturer'),
+            if tc is None:
+                unk.add(seen[m])
+            groups.append({'model': m, 'manufacturer': _canon_cpu_manufacturer(p.get('manufacturer')),
                            'max_speed_mhz': p.get('speed_mhz'),
                            'architecture': p.get('architecture') or p.get('instruction_set'),
                            'sockets': 1, 'cores_per_socket': tc, 'total_cores': tc})
     return {
-        'sockets': (len(cpus) or None),
-        'cores_physical': (cores or None),
-        'logical_threads': (threads or None),
+        'sockets': (len(cpus) if list_ok else (cnt if (cnt is not None and cnt_ok) else None)),
+        'cores_physical': (known_sum if (list_ok and not unknown) else (cc if cc_ok else None)),
         'model': (models[0] if models else None),
         'max_speed_mhz': (speeds[0] if speeds else None),
         'architecture': (archs[0] if archs else (isets[0] if isets else None)),
@@ -4096,19 +4603,28 @@ def _normalize_cpu_raw(procs):
 def _normalize_memory_raw(raw_mem, raw_sys=None):
     raw_mem = raw_mem if isinstance(raw_mem, dict) else {}
     slots = raw_mem.get('slots') or []
-    total_mib = raw_mem.get('total_mib')
-    if not total_mib and isinstance(raw_sys, dict):
-        _ms_gib = _safe_int(_safe(raw_sys, 'memory_summary', 'total_gib'))
-        if _ms_gib:
-            total_mib = _ms_gib * 1024
+    tm = _safe_int(raw_mem.get('total_mib'))
+    known_mib, unknown = 0, 0
+    for s in slots:
+        if not isinstance(s, dict):
+            continue
+        c = _safe_int(s.get('capacity_mb') if s.get('capacity_mb') is not None else s.get('capacity_mib'))
+        if c is None:
+            unknown += 1
+        else:
+            known_mib += c
+    ms_gib = _safe_int(_safe(raw_sys, 'memory_summary', 'total_gib')) if isinstance(raw_sys, dict) else None
+    ms_ok = (ms_gib is not None and ms_gib > 0
+             and (ms_gib * MIB_PER_GIB > known_mib if unknown else ms_gib * MIB_PER_GIB >= known_mib))
+    trusted_gib = ms_gib if ms_ok else None
     groups, seen, total_gb = [], {}, 0
     for s in slots:
         if not isinstance(s, dict):
             continue
         cap_mb = _safe_int(s.get('capacity_mb') or s.get('capacity_mib'), 0)
-        if cap_mb <= 0:
+        cap_gb = int(round(cap_mb / MIB_PER_GIB)) if cap_mb > 0 else 0
+        if cap_gb <= 0:
             continue
-        cap_gb = cap_mb // MIB_PER_GIB
         t, sp = s.get('type'), s.get('speed_mhz')
         mfr, pn = s.get('manufacturer'), s.get('part_number')
         key = '%s|%s|%s|%s|%s' % (cap_gb, t, sp, mfr, pn)
@@ -4122,19 +4638,26 @@ def _normalize_memory_raw(raw_mem, raw_sys=None):
                            'manufacturer': mfr, 'part_number': pn, 'quantity': 1,
                            'group_total_gb': cap_gb})
         total_gb += cap_gb
+    if tm is not None and tm > 0:
+        total_mib, grand = tm, (total_gb if total_gb > 0 else int(round(tm / MIB_PER_GIB)))
+    else:
+        total_mib = trusted_gib * MIB_PER_GIB if trusted_gib is not None else None
+        grand = trusted_gib
     return {
         'total_mb': total_mib, 'total_basis': 'physical_installed',
         'installed_mb': total_mib, 'visible_mb': None, 'free_mb': None,
-        'slots': slots, 'summary': {'groups': groups, 'grand_total_gb': total_gb},
+        'slots': slots, 'summary': {'groups': groups, 'grand_total_gb': grand},
     }
 
 
 def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
                          timeout, verify_ssl, chassis_uri=None, product_hint=None):
     out = {'partitions': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, systems_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, systems_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.partitions',
             f'Systems 컬렉션 실패: {err}'))
@@ -4145,16 +4668,18 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
         sys_data, sys_errs = gather_system(bmc_ip, m['uri'], vendor, *creds, part_chassis, product_hint)
         cpu_data, cpu_errs = gather_processors(bmc_ip, m['uri'], *creds)
         mem_data, mem_errs = gather_memory(bmc_ip, m['uri'], *creds)
-        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None)
+        part_inv = {}
+        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None,
+                                            inventory_out=part_inv)
         net_data, net_errs = gather_network(bmc_ip, m['uri'], *creds)
         boot_data, boot_errs = gather_boot(bmc_ip, m['uri'], *creds)
         out['partitions'].append({
             'id':         m['id'],
             'system_uri': m['uri'],
             'system':     sys_data,
-            'cpu':        _normalize_cpu_raw(cpu_data),
+            'cpu':        _normalize_cpu_raw(cpu_data, sys_data, bool(cpu_errs)),
             'memory':     _normalize_memory_raw(mem_data, sys_data),
-            'storage':    _normalize_storage_raw(sto_data),
+            'storage':    _normalize_storage_raw(sto_data, part_inv),
             'network':    _normalize_network_raw(net_data),
             'boot':       boot_data,
         })
@@ -4184,9 +4709,11 @@ def _extract_chassis_oem(cdata):
 def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
                          timeout, verify_ssl):
     out = {'chassis': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, chassis_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, chassis_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.chassis',
             f'Chassis 컬렉션 실패: {err}'))
@@ -4203,9 +4730,9 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
         kind = _classify_chassis_kind(m['uri'], m['id'], cdata)
         if get_ok:
             pwr_data, pwr_errs = gather_power(bmc_ip, m['uri'],
-                                              username, password, timeout, verify_ssl)
+                                              username, password, timeout, verify_ssl, chassis_body=cdata)
             thm_data, thm_errs = gather_thermal(bmc_ip, m['uri'],
-                                                username, password, timeout, verify_ssl)
+                                                username, password, timeout, verify_ssl, chassis_body=cdata)
             if pwr_errs and _is_404_only_error(pwr_errs):
                 pwr_errs = []
             if thm_errs and _is_404_only_error(thm_errs):
@@ -4246,6 +4773,7 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                       [_err('multi_node.composition', f'CompositionService 실패: {cerr or st}')])
 
     blocks = []
+    rb_complete = False
     rb_link = _safe(comp, 'ResourceBlocks', '@odata.id')
     if rb_link:
         rst, rcoll, rerr = _get(bmc_ip, _p(rb_link), username, password, timeout, verify_ssl)
@@ -4254,16 +4782,20 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                 errors.append(_err('multi_node.composition',
                                    f'ResourceBlocks 컬렉션 실패: {rerr or rst}'))
         else:
+            walk = {}
+            rb_complete = True
             for m in _collection_members(bmc_ip, _p(rb_link), rcoll, username, password, timeout,
-                                         verify_ssl, 'multi_node.composition', errors):
+                                         verify_ssl, 'multi_node.composition', errors, state_out=walk):
                 uri = _safe(m, '@odata.id')
                 if not uri:
+                    rb_complete = False
                     continue
                 bst, bd, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
                 if bst != 200 or not isinstance(bd, dict):
                     if bst != 404:
                         errors.append(_err('multi_node.composition', f'ResourceBlock {uri} 실패: {_e or bst}',
                                            detail={'status_code': bst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    rb_complete = False
                     continue
                 chassis_links = [
                     _safe(c, '@odata.id')
@@ -4283,40 +4815,45 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     'state':                _safe(bd, 'Status', 'State'),
                     'health':               _safe(bd, 'Status', 'Health'),
                     'composition_state':    _safe(bd, 'CompositionStatus', 'CompositionState'),
-                    'processor_count':      len(_dicts(_safe(bd, 'Processors'))),
-                    'memory_count':         len(_dicts(_safe(bd, 'Memory'))),
+                    'processor_count':      (len(_dicts(_safe(bd, 'Processors'))) if isinstance(_safe(bd, 'Processors'), list) else None),
+                    'memory_count':         (len(_dicts(_safe(bd, 'Memory'))) if isinstance(_safe(bd, 'Memory'), list) else None),
                     'chassis':              chassis_links,
                     'computer_systems':     systems_links,
                 })
+            rb_complete = rb_complete and bool(walk.get('complete'))
     return {
         'enabled':              (bool(comp.get('ServiceEnabled', True)) if isinstance(comp, dict) else None),
         'state':                _safe(comp, 'Status', 'State'),
         'health':               _safe(comp, 'Status', 'Health'),
-        'resource_block_count': len(blocks),
+        'resource_block_count': (len(blocks) if rb_complete else None),
         'resource_blocks':      blocks,
     }, errors
 
 
 def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify_ssl, errors, kind):
     if not coll_uri:
-        return []
+        return [], False
     st, coll, cerr = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if cerr or st != 200:
         if st != 404:
             errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} 컬렉션 {coll_uri} 실패: {cerr or st}',
                                detail={'status_code': st}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
-        return []
+        return [], False
     out = []
+    walk = {}
+    complete = True
     for m in _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout, verify_ssl,
-                                 f'multi_node.fabrics.{kind}', errors):
+                                 f'multi_node.fabrics.{kind}', errors, state_out=walk):
         uri = _safe(m, '@odata.id')
         if not uri:
+            complete = False
             continue
         mst, md, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if mst != 200 or not isinstance(md, dict):
             if mst != 404:
                 errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} {uri} 실패: {_e or mst}',
                                    detail={'status_code': mst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
             continue
         if kind == 'switch':
             out.append({
@@ -4334,11 +4871,13 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
                 'state':             _safe(md, 'Status', 'State'),
                 'health':            _safe(md, 'Status', 'Health'),
             })
-    return out
+    return out, (complete and bool(walk.get('complete')))
 
 
-def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl):
+def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl, state_out=None):
     errors = []
+    if state_out is not None:
+        state_out['complete'] = False
     if not isinstance(service_root, dict):
         return None, errors
     fab_uri = _safe(service_root, 'Fabrics', '@odata.id')
@@ -4349,21 +4888,25 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
         return None, ([] if st == 404 else
                       [_err('multi_node.fabrics', f'Fabrics 컬렉션 실패: {ferr or st}')])
     fabrics = []
+    walk = {}
+    complete = True
     for m in _collection_members(bmc_ip, _p(fab_uri), fcoll, username, password, timeout, verify_ssl,
-                                 'multi_node.fabrics', errors):
+                                 'multi_node.fabrics', errors, state_out=walk):
         furi = _safe(m, '@odata.id')
         if not furi:
+            complete = False
             continue
         fst, fdata, _e = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
         if fst != 200 or not isinstance(fdata, dict):
             if fst != 404:
                 errors.append(_err('multi_node.fabrics', f'Fabric {furi} 실패: {_e or fst}',
                                    detail={'status_code': fst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
             continue
-        switches = _gather_fabric_members(
+        switches, switches_ok = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Switches', '@odata.id'),
             username, password, timeout, verify_ssl, errors, kind='switch')
-        endpoints = _gather_fabric_members(
+        endpoints, endpoints_ok = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Endpoints', '@odata.id'),
             username, password, timeout, verify_ssl, errors, kind='endpoint')
         fabrics.append({
@@ -4372,11 +4915,13 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
             'fabric_type':    _safe(fdata, 'FabricType'),
             'state':          _safe(fdata, 'Status', 'State'),
             'health':         _safe(fdata, 'Status', 'Health'),
-            'switch_count':   len(switches),
-            'endpoint_count': len(endpoints),
+            'switch_count':   (len(switches) if switches_ok else None),
+            'endpoint_count': (len(endpoints) if endpoints_ok else None),
             'switches':       switches,
             'endpoints':      endpoints,
         })
+    if state_out is not None:
+        state_out['complete'] = complete and bool(walk.get('complete'))
     return fabrics, errors
 
 
@@ -4402,11 +4947,12 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     chs_result = gather_chassis_multi(
         bmc_ip, chassis_uri_coll, username, password, timeout, verify_ssl,
     )
+    fab_state = {}
     composition, comp_errs = gather_composition_service(
         bmc_ip, service_root, username, password, timeout, verify_ssl,
     )
     fabrics, fab_errs = gather_fabrics(
-        bmc_ip, service_root, username, password, timeout, verify_ssl,
+        bmc_ip, service_root, username, password, timeout, verify_ssl, state_out=fab_state,
     )
 
     partitions = sys_result.get('partitions') or []
@@ -4414,17 +4960,17 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     chassis    = chs_result.get('chassis')    or []
 
     representative = partitions[0].get('id') if partitions else None
-    rb_count = composition.get('resource_block_count', 0) if isinstance(composition, dict) else 0
+    rb_count = composition.get('resource_block_count') if isinstance(composition, dict) else None
     return {
         'enabled': True,
         'layout':  manager_layout,
         'summary': {
-            'partition_count':           len(partitions),
-            'manager_count':             len(managers),
-            'chassis_count':             len(chassis),
+            'partition_count':           (len(partitions) if sys_result.get('complete') else None),
+            'manager_count':             (len(managers) if mgr_result.get('complete') else None),
+            'chassis_count':             (len(chassis) if chs_result.get('complete') else None),
             'representative_partition':  representative,
             'resource_block_count':      rb_count,
-            'fabric_count':              len(fabrics) if isinstance(fabrics, list) else 0,
+            'fabric_count':              (len(fabrics) if isinstance(fabrics, list) and fab_state.get('complete') else None),
         },
         'partitions': partitions,
         'managers':   managers,
@@ -4486,13 +5032,15 @@ def _supplement_firmware_from_pcie_psu(bmc_ip, fw_list, chassis_uris, power_sect
     return out
 
 
-def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl, chassis_bodies=None):
     uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
     if len(uris) <= 1:
-        return gather_power(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+        _cu = uris[0] if uris else default_uri
+        return gather_power(bmc_ip, _cu, username, password, timeout, verify_ssl,
+                            chassis_body=(chassis_bodies or {}).get(_p(_cu)) if _cu else None)
     psus, errors, pcs, used = [], [], [], []
     for cu in _capped(uris, 'power', errors):
-        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl)
+        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl, chassis_body=(chassis_bodies or {}).get(_p(cu)))
         if not d and _is_404_only_error(e):
             _notice('power', '섀시 %s: Power 리소스 없음 — 합산에서 제외' % _p(cu))
             continue
@@ -4524,13 +5072,15 @@ def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, passwo
     return {'power_supplies': psus, 'power_control': power_control}, errors
 
 
-def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl, chassis_bodies=None):
     uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
     if len(uris) <= 1:
-        return gather_thermal(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+        _cu = uris[0] if uris else default_uri
+        return gather_thermal(bmc_ip, _cu, username, password, timeout, verify_ssl,
+                              chassis_body=(chassis_bodies or {}).get(_p(_cu)) if _cu else None)
     temps, fans, errors, used = [], [], [], []
     for cu in _capped(uris, 'thermal', errors):
-        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl)
+        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl, chassis_body=(chassis_bodies or {}).get(_p(cu)))
         if not d and _is_404_only_error(e):
             _notice('thermal', '섀시 %s: Thermal 리소스 없음 — 합산에서 제외' % _p(cu))
             continue
@@ -4549,7 +5099,8 @@ def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, pass
 def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           username, password, timeout, verify_ssl,
                           all_errors, collected, failed, unsupported=None,
-                          manager_layout=None, product_hint=None, firmware_scope=None):
+                          manager_layout=None, product_hint=None, firmware_scope=None, aux_out=None,
+                          pcie_link_registries=None):
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
     creds = (username, password, timeout, verify_ssl)
     sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
@@ -4557,19 +5108,28 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]
     sys_chassis_all = sys_chassis or ([eff_chassis_uri] if eff_chassis_uri else [])
     bios_link = {}
+    bmc_links, fw_links_by_key = {}, {}
+    fw_release_dates, ndf_mtu = {}, {}
+    storage_inv = {}
     sections = {
         'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
-        'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout),
+        'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout, links_out=bmc_links),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
-        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all),
+        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all,
+                                   inventory_out=storage_inv),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
-        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds),
-        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds),
-        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds),
+        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds, links_out=fw_links_by_key,
+                                   dates_out=fw_release_dates),
+        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds,
+                                   chassis_bodies=bios_link.get('chassis_bodies')),
+        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds,
+                                   chassis_bodies=bios_link.get('chassis_bodies')),
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
-                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
+                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis,
+                                   pcie_link_registries=pcie_link_registries,
+                                   mtu_out=ndf_mtu),
     }
     _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
     if (_str(firmware_scope).strip().lower() == 'complex_only') and isinstance(sections.get('firmware'), list):
@@ -4578,7 +5138,42 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)
     sections['bios'] = bios
+    if _str(bios_link.get('power_state')).strip().lower() == 'off':
+        _notice('system', '호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
+    _fw_links_final = _firmware_links_by_id(
+        sections.get('firmware'), fw_links_by_key,
+        bios_link.get('active_software_image'), bmc_links.get('active_software_image'))
+    _sysd = sections.get('system')
+    if isinstance(_sysd, dict) and _sysd.get('bios_date') is None:
+        for _fid, _hit in _fw_links_final.items():
+            if not (isinstance(_hit, dict) and _hit.get('bios')):
+                continue
+            _d = _normalize_bios_date(fw_release_dates.get(_fw_dedup_key(_fid)))
+            if isinstance(_d, str) and _valid_iso_date(_d) and not _d.startswith('0000'):
+                _sysd['bios_date'] = _d
+                _notice('system', 'BIOS 날짜를 FirmwareInventory %s 의 ReleaseDate 로 채움 (System · OEM 에 날짜 없음)' % _fid)
+                break
+    if aux_out is not None:
+        aux_out['firmware_links'] = _fw_links_final
+        aux_out['ndf_mtu_by_mac'] = ndf_mtu
+        aux_out['storage_inventory'] = storage_inv
     return sections
+
+
+def _firmware_links_by_id(fw_list, links_by_key, bios_image_uri, bmc_image_uri):
+    by_key = {k: dict(v) for k, v in (links_by_key or {}).items() if isinstance(v, dict)}
+    for uri, kind in ((bios_image_uri, 'bios'), (bmc_image_uri, 'bmc')):
+        tail = _str(uri).rstrip('/').split('/')[-1] if isinstance(uri, str) and uri.strip() else ''
+        if tail:
+            by_key.setdefault(_fw_dedup_key(tail), {})[kind] = True
+    out = {}
+    for fw in (fw_list or []):
+        if not isinstance(fw, dict) or not isinstance(fw.get('id'), str):
+            continue
+        hit = by_key.get(_fw_dedup_key(fw['id']))
+        if hit:
+            out[fw['id']] = dict(hit)
+    return out
 
 
 def _compute_final_status(collected, failed, errors=None, first_auth_status=None):
@@ -4808,6 +5403,8 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
             'has_username_key': isinstance(acc_data, dict) and 'UserName' in acc_data,
             'host_bootstrap': _safe(acc_data, 'HostBootstrapAccount', default=None),
             'login_interfaces': _account_login_interfaces(acc_data),
+            'writable': ([s for s in _as_list(_safe(acc_data, '@Redfish.WriteableProperties')) if isinstance(s, str)]
+                         if _safe(acc_data, '@Redfish.WriteableProperties') is not None else None),
         })
     out['member_read'] = len(out['accounts'])
 
@@ -5152,15 +5749,21 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
         if 'imm2' in hint:
             reasons.append('IMM2 는 Redfish AccountService 근거 미확보 → generic 유지')
             return account_family('generic_collection_post'), reasons
+        mdl = (mgr.get('model') or '').lower()
+        m_gen = re.search(r'xclarity controller\s*(\d+)?', mdl)
+        model_gen = (int(m_gen.group(1)) if m_gen.group(1) else 2) if m_gen else None
         exposes_account_types = any(a.get('account_types') for a in accounts)
         has_bootstrap = any(a.get('host_bootstrap') is not None for a in accounts)
-        if exposes_account_types or has_bootstrap or 'xcc3' in hint or 'xcc2' in hint:
-            if 'xcc3' in hint:
-                reasons.append('adapter hint xcc3 → PasswordChangeRequired 미지원 Family')
+        if exposes_account_types or has_bootstrap or model_gen is not None or 'xcc3' in hint or 'xcc2' in hint:
+            if model_gen is not None and model_gen >= 3:
+                reasons.append(f'Manager.Model={mdl!r} → XCC{model_gen} (PasswordChangeRequired 미지원 Family; hint={hint!r} 는 참고)')
+                return account_family('lenovo_xcc3_accounttypes'), reasons
+            if model_gen is None and 'xcc3' in hint:
+                reasons.append('Manager.Model 없음 · adapter hint xcc3 → PasswordChangeRequired 미지원 Family')
                 return account_family('lenovo_xcc3_accounttypes'), reasons
             reasons.append(
-                f'AccountTypes 관측={exposes_account_types} HostBootstrap 관측={has_bootstrap} '
-                f'hint={hint!r} → AccountTypes 지원 XCC family')
+                f'Manager.Model={mdl!r} model_gen={model_gen} AccountTypes 관측={exposes_account_types} '
+                f'HostBootstrap 관측={has_bootstrap} hint={hint!r} → AccountTypes 지원 XCC family')
             return account_family('lenovo_xcc2_accounttypes'), reasons
         not_purley_hint = any(k in hint for k in ('whitley', 'amd', 'xcc2', 'xcc3'))
         if _has_prepopulated_slots(accounts) and not not_purley_hint:
@@ -5769,6 +6372,13 @@ def account_service_provision(
             body_full['PasswordChangeRequired'] = False
         if existing.get('locked') is True and account_prop_writable(family, 'Locked', 'repair'):
             body_full['Locked'] = False
+        _declared = existing.get('writable')
+        if isinstance(_declared, list) and _declared:
+            _demoted = sorted(k for k in list(body_full) if k not in _declared)
+            for _k in _demoted:
+                body_full.pop(_k, None)
+            if _demoted:
+                out['write_demoted_by_device'] = _demoted
         patch_headers = None
         if account_if_match(family, 'repair'):
             etag = _get_response_etag(bmc_ip, _p(existing['slot_uri']),
@@ -6164,6 +6774,7 @@ def main():
             attempt         = dict(type='dict', default=None, required=False),
             prior_auth_failures = dict(type='int', default=0, required=False),
             firmware_inventory_scope = dict(type='str', default=None, required=False),
+            pcie_port_link_condition_registries = dict(type='list', elements='str', default=None, required=False),
         ),
         supports_check_mode=True,
     )
@@ -6294,13 +6905,15 @@ def main():
                 multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
             )
 
+    aux = {}
     result_data = _collect_all_sections(
         bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         username, password, timeout, verify_ssl,
         all_errors, collected, failed, unsupported,
-        manager_layout=manager_layout,
+        manager_layout=manager_layout, aux_out=aux,
         product_hint=_safe(service_root, 'Product'),
         firmware_scope=(p.get('firmware_inventory_scope') or None),
+        pcie_link_registries=(p.get('pcie_port_link_condition_registries') or None),
     )
 
     if _serial_resolver is not None:
@@ -6335,6 +6948,9 @@ def main():
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
+        firmware_links=aux.get('firmware_links') or {},
+        ndf_mtu_by_mac=aux.get('ndf_mtu_by_mac') or {},
+        storage_inventory=aux.get('storage_inventory') or {},
         cache=cache_stats(),
     )
 

@@ -117,6 +117,12 @@ def adapter_matches(adapter, facts, aliases=None):
         if firmware and not pattern_match_any(firmware_patterns, firmware):
             return False
 
+    bmc_model_patterns = match.get("bmc_model_patterns", [])
+    if bmc_model_patterns:
+        bmc_model = facts.get("bmc_model", "")
+        if bmc_model and not pattern_match_any(bmc_model_patterns, bmc_model):
+            return False
+
     os_type = match.get("os_type")
     if os_type:
         detected = facts.get("detected_os") or facts.get("os_type") or ""
@@ -149,6 +155,8 @@ def adapter_specificity(adapter):
     if match.get("model_patterns"):
         score += 20
     if match.get("firmware_patterns"):
+        score += 20
+    if match.get("bmc_model_patterns"):
         score += 20
     if match.get("version_patterns"):
         score += 15
@@ -200,6 +208,15 @@ def adapter_match_score(adapter, facts, aliases=None):
         if pattern_match_any(firmware_patterns, facts.get("firmware", "")):
             score += 25
         elif not facts.get("firmware", ""):
+            pass
+        else:
+            return -9999
+
+    bmc_model_patterns = match.get("bmc_model_patterns", [])
+    if bmc_model_patterns:
+        if pattern_match_any(bmc_model_patterns, facts.get("bmc_model", "")):
+            score += 25
+        elif not facts.get("bmc_model", ""):
             pass
         else:
             return -9999

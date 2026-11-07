@@ -50,7 +50,10 @@ def power_summary(power):
         consumed_int = _as_int(consumed)
         if consumed_int is not None:
             pct = round(consumed_int * 100 / cap_total, 1)
-    rollup = 'Critical' if critical > 0 else ('Warning' if warning > 0 else ('OK' if ok > 0 else 'Unknown'))
+    if psu_total == 0:
+        rollup = None
+    else:
+        rollup = 'Critical' if critical > 0 else ('Warning' if warning > 0 else ('OK' if ok > 0 else 'Unknown'))
     return {
         'psu_count': psu_total,
         'psu_active': psu_active,

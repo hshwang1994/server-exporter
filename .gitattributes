@@ -7,3 +7,7 @@ Jenkinsfile* text eol=lf
 
 *.groovy text eol=lf
 tests/fixtures/finalize_corpus/** text eol=lf
+
+tests/fixtures/prodgen/** text eol=lf
+tests/scripts/finalize_corpus_check.py text eol=lf
+tests/reference/redfish/mock2/SHA256SUMS text eol=lf
