@@ -1,0 +1,277 @@
+[repro] head=f92ebe6a autocrlf=true MSYS_NO_PATHCONV=1
+tests/fixtures/prodgen/sample.cfg CR=12
+tests/scripts/finalize_corpus_check.py CR=254
+tests/reference/redfish/mock2/SHA256SUMS CR=11
+FFFFFFFF..F.F.......FF..FF..............................F..........      [100%]
+================================== FAILURES ===================================
+_____________________ test_script_behaviour[branch_main] ______________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'branch_main'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: branch_main: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+____________________ test_script_behaviour[branch_feature] ____________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'branch_feature'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: branch_feature: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_________________________ test_script_behaviour[tag] __________________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'tag'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: tag: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+______________________ test_script_behaviour[refs_heads] ______________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'refs_heads'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: refs_heads: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_____________________ test_script_behaviour[full_sha_tip] _____________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'full_sha_tip'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: full_sha_tip: rc=1 out= err=[addon] unavailable: 사용법: addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_________ test_script_behaviour[full_sha_unadvertised_uses_fallback] __________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'full_sha_unadvertised_uses_fallback'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: full_sha_unadvertised_uses_fallback: rc=1 out= err=[addon] unavailable: 사용법: addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+_________________ test_script_behaviour[stale_files_removed] __________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'stale_files_removed'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: stale_files_removed: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+__________________ test_script_behaviour[short_sha_rejected] __________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'short_sha_rejected'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: short_sha_rejected: rc=1 out= err=[addon] unavailable: 사용법: addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+__________________ test_script_behaviour[missing_ref_fails] ___________________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'missing_ref_fails'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: missing_ref_fails: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+______________ test_script_behaviour[ssl_verify_true_same_flow] _______________
+
+case_results = {'branch_main': ('FAIL', "rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQ...ailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory"), ...}
+case = 'ssl_verify_true_same_flow'
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_script_behaviour(case_results, case):
+        assert case in case_results, f"case '{case}' 결과 없음: {case_results}"
+        verdict, detail = case_results[case]
+>       assert verdict == "PASS", f"{case}: {detail}"
+E       AssertionError: ssl_verify_true_same_flow: rc=1 out= err=[addon] unavailable: git init 에 실패했습니다: fatal: cannot change to '/tmp/tmp.k9fQjDaAqH/work/addon': No such file or directory
+E       assert 'FAIL' == 'PASS'
+E         
+E         - PASS
+E         + FAIL
+
+tests\unit\test_addon_checkout.py:164: AssertionError
+___ test_golden[sample_tasks.yml-sample_tasks.expected.yml-yaml-None-True] ____
+
+fixtures_dir = WindowsPath('C:/github/ClovirONE/se-fix-20261028-win/base/tests/fixtures/prodgen')
+src = 'sample_tasks.yml', expected = 'sample_tasks.expected.yml'
+language = 'yaml', kind = None, needs_ps = True
+
+    @pytest.mark.parametrize("src,expected,language,kind,needs_ps", CASES)
+    def test_golden(fixtures_dir, src, expected, language, kind, needs_ps):
+        ctx = StripContext(policy={"jinja_trim_blocks": "ansible", "powershell_strip": True})
+        if needs_ps:
+            parser = psstrip.PowerShellParser()
+            if not parser.available:
+                pytest.skip("golden with PowerShell block needs a PowerShell parser")
+            ctx.ps_parser = parser
+        data = (fixtures_dir / src).read_bytes()
+>       assert b"\r" not in data
+E       AssertionError: assert b'\r' not in b'---\r\n# sample_tasks.yml \xe2\x80\x94 prodgen golden fixture (YAML layer 1 + Jinja + embedded shell/PowerShell)\r\n... trailing comment\r\n    Get-Volume | Where-Object { $_.Size -gt 0 } | ConvertTo-Json -Compress\r\n  register: _ps\r\n'
+
+tests\unit\prodgen\test_fixtures_golden.py:30: AssertionError
+_ test_golden[sample_module.py-sample_module.expected.py-python-library-False] _
+
+fixtures_dir = WindowsPath('C:/github/ClovirONE/se-fix-20261028-win/base/tests/fixtures/prodgen')
+src = 'sample_module.py', expected = 'sample_module.expected.py'
+language = 'python', kind = 'library', needs_ps = False
+
+    @pytest.mark.parametrize("src,expected,language,kind,needs_ps", CASES)
+    def test_golden(fixtures_dir, src, expected, language, kind, needs_ps):
+        ctx = StripContext(policy={"jinja_trim_blocks": "ansible", "powershell_strip": True})
+        if needs_ps:
+            parser = psstrip.PowerShellParser()
+            if not parser.available:
+                pytest.skip("golden with PowerShell block needs a PowerShell parser")
+            ctx.ps_parser = parser
+        data = (fixtures_dir / src).read_bytes()
+>       assert b"\r" not in data
+E       assert b'\r' not in b'#!/usr/bin/python\r\n# -*- coding: utf-8 -*-\r\n# sample_module.py \xe2\x80\x94 prodgen golden fixture (python_kind=...hout its explanations\r\n    return Collector().run("#abcdef")\r\n\r\n\r\nif __name__ == "__main__":\r\n    main()\r\n'
+
+tests\unit\prodgen\test_fixtures_golden.py:30: AssertionError
+_________ test_golden[sample.cfg-sample.expected.cfg-ini-None-False] __________
+
+fixtures_dir = WindowsPath('C:/github/ClovirONE/se-fix-20261028-win/base/tests/fixtures/prodgen')
+src = 'sample.cfg', expected = 'sample.expected.cfg', language = 'ini'
+kind = None, needs_ps = False
+
+    @pytest.mark.parametrize("src,expected,language,kind,needs_ps", CASES)
+    def test_golden(fixtures_dir, src, expected, language, kind, needs_ps):
+        ctx = StripContext(policy={"jinja_trim_blocks": "ansible", "powershell_strip": True})
+        if needs_ps:
+            parser = psstrip.PowerShellParser()
+            if not parser.available:
+                pytest.skip("golden with PowerShell block needs a PowerShell parser")
+            ctx.ps_parser = parser
+        data = (fixtures_dir / src).read_bytes()
+>       assert b"\r" not in data
+E       AssertionError: assert b'\r' not in b'# sample.cfg \xe2\x80\x94 prodgen golden fixture (INI)\r\n# full-line comments (# and ;) are removed; values are unt...-o ControlMaster=auto # not an inline comment for configparser\r\n\r\n[inventory]\r\nenable_plugins = script, auto\r\n'
+
+tests\unit\prodgen\test_fixtures_golden.py:30: AssertionError
+_______________ test_golden_inputs_are_lf_and_end_with_newline ________________
+
+fixtures_dir = WindowsPath('C:/github/ClovirONE/se-fix-20261028-win/base/tests/fixtures/prodgen')
+
+    def test_golden_inputs_are_lf_and_end_with_newline(fixtures_dir):
+        for name in sorted(p.name for p in fixtures_dir.iterdir()):
+            data = (fixtures_dir / name).read_bytes()
+>           assert b"\r" not in data, name
+E           AssertionError: sample.cfg
+E           assert b'\r' not in b'# sample.cfg \xe2\x80\x94 prodgen golden fixture (INI)\r\n# full-line comments (# and ;) are removed; values are unt...-o ControlMaster=auto # not an inline comment for configparser\r\n\r\n[inventory]\r\nenable_plugins = script, auto\r\n'
+
+tests\unit\prodgen\test_fixtures_golden.py:43: AssertionError
+_________________________ test_lf_line_endings[path2] _________________________
+
+path = WindowsPath('C:/github/ClovirONE/se-fix-20261028-win/base/tests/scripts/finalize_corpus_check.py')
+
+    @pytest.mark.parametrize("path", [CI_PATH, LIB_PATH, REPO / "tests" / "scripts" / "finalize_corpus_check.py",
+                                      REPO / "scripts" / "ai" / "prodgen" / "ci_pwsh_bootstrap.sh", REPO / "scripts" / "ai" / "prodgen" / "git_askpass.sh"])
+    def test_lf_line_endings(path):
+>       assert b"\r\n" not in path.read_bytes(), f"{path.name}: CRLF — Linux 에이전트의 #!/bin/bash 블록이 깨진다"
+E       AssertionError: finalize_corpus_check.py: CRLF — Linux 에이전트의 #!/bin/bash 블록이 깨진다
+E       assert b'\r\n' not in b'#!/usr/bin/env python3\r\n"""finalize_corpus_check.py \xe2\x80\x94 Layer A finalizer \xeb\xa5\xbc corpus \xec\x9c\x8... EXIT_MISMATCH if summary["mismatches"] else EXIT_OK\r\n\r\n\r\nif __name__ == "__main__":\r\n    sys.exit(main())\r\n'
+E        +  where b'#!/usr/bin/env python3\r\n"""finalize_corpus_check.py \xe2\x80\x94 Layer A finalizer \xeb\xa5\xbc corpus \xec\x9c\x8... EXIT_MISMATCH if summary["mismatches"] else EXIT_OK\r\n\r\n\r\nif __name__ == "__main__":\r\n    sys.exit(main())\r\n' = read_bytes()
+E        +    where read_bytes = WindowsPath('C:/github/ClovirONE/se-fix-20261028-win/base/tests/scripts/finalize_corpus_check.py').read_bytes
+
+tests\unit\test_jenkinsfile_ci.py:399: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[branch_main]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[branch_feature]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[tag] - Assert...
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[refs_heads]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[full_sha_tip]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[full_sha_unadvertised_uses_fallback]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[stale_files_removed]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[short_sha_rejected]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[missing_ref_fails]
+FAILED tests/unit/test_addon_checkout.py::test_script_behaviour[ssl_verify_true_same_flow]
+FAILED tests/unit/prodgen/test_fixtures_golden.py::test_golden[sample_tasks.yml-sample_tasks.expected.yml-yaml-None-True]
+FAILED tests/unit/prodgen/test_fixtures_golden.py::test_golden[sample_module.py-sample_module.expected.py-python-library-False]
+FAILED tests/unit/prodgen/test_fixtures_golden.py::test_golden[sample.cfg-sample.expected.cfg-ini-None-False]
+FAILED tests/unit/prodgen/test_fixtures_golden.py::test_golden_inputs_are_lf_and_end_with_newline
+FAILED tests/unit/test_jenkinsfile_ci.py::test_lf_line_endings[path2] - Asser...
+15 failed, 52 passed in 19.36s
+rc=1

@@ -56,13 +56,17 @@ def load_serviceroot(mirror_dir: Path):
     return None, None
 
 
-def assemble_facts(root):
-    """detect_vendor.yml 의 facts 조립 재현 (무인증 → data.* 빈 가정)."""
+def assemble_facts(root, bmc_model=""):
+    """detect_vendor.yml 의 facts 조립 재현 (무인증 → data.* 빈 가정).
+
+    bmc_model: 인증 후 facts 를 흉내낼 때만 넘긴다 (2026-10-27 — reselect_adapter.yml 의 `_rf_postauth_facts.bmc_model`,
+    adapter 가 match.bmc_model_patterns 를 선언한 경우에만 평가). 무인증 1차 facts 에서는 빈 값이다.
+    """
     vendor = rg._detect_vendor_from_service_root(root) or "unknown"
     hints = rg._extract_probe_facts(root, vendor)
     model = hints.get("model_hint", "") or ""
     firmware = (hints.get("firmware_hint", "") or hints.get("manager_type", "") or "")
-    return {"vendor": vendor, "model": model, "firmware": firmware}, hints
+    return {"vendor": vendor, "model": model, "firmware": firmware, "bmc_model": bmc_model or ""}, hints
 
 
 def select_adapter(facts):

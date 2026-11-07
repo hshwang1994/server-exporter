@@ -359,8 +359,12 @@ def test_ib_output_is_stable_across_runs_and_member_order(monkeypatch):
     first, n1, _, _ = _gather(monkeypatch, _routes(ports, ndfs))
     second, n2, _, _ = _gather(monkeypatch, _routes(ports, ndfs))
     reversed_members, n3, _, _ = _gather(monkeypatch, _routes(ports, list(reversed(ndfs))))
-    assert first == second == reversed_members and n1 == n2 == n3 == []
+    assert first == second == reversed_members
+    # 2026-10-29 (SA-09): Training 은 network.ports 에서도 unknown(종전 down) — 원문이 있는데 unknown 이 된 포트 notice 1건. IB 판정 notice 는 0
+    assert n1 == n2 == n3 == [{"section": "network_adapters",
+                               "message": "네트워크 포트 링크 상태 값 미확정, unknown 으로 기록 (network.ports link_status) — HCA0/1=Training"}]
     assert [e["link_status"] for e in first["infiniband"]] == ["up", "unknown"]
+    assert [p["link_status"] for p in first["ports"]] == ["up", "unknown"]
     for i, e in enumerate(first["infiniband"]):
         assert_ib_entry_canonical(e, f"redfish stable[{i}]")
 

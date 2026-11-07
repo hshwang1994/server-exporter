@@ -1,0 +1,1860 @@
+{
+ "rows": [
+  {
+   "label": "dl380_gen12_03",
+   "kind": "explained",
+   "path": "diagnosis.details.notices[1].message",
+   "ref": "",
+   "before": "호스트 전원 Off 관측 — 저장/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음",
+   "after": "호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음",
+   "issue": "03-storage-001"
+  },
+  {
+   "label": "sr650_v4_01",
+   "kind": "explained",
+   "path": "data.network.interfaces[1].link_status",
+   "ref": "NIC1 ec:e7:a7:22:59:5d",
+   "before": "unknown",
+   "after": "down",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_01",
+   "kind": "explained",
+   "path": "data.network.interfaces[2].is_primary",
+   "ref": "NIC2 ec:e7:a7:22:59:5c",
+   "before": false,
+   "after": true,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_01",
+   "kind": "explained",
+   "path": "data.network.interfaces[2].link_status",
+   "ref": "NIC2 ec:e7:a7:22:59:5c",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_01",
+   "kind": "explained",
+   "path": "data.network.interfaces[3].link_status",
+   "ref": "NIC3 ec:e7:a7:22:5d:bd",
+   "before": "unknown",
+   "after": "down",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_01",
+   "kind": "explained",
+   "path": "data.network.interfaces[4].link_status",
+   "ref": "NIC4 ec:e7:a7:22:5d:bc",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_01",
+   "kind": "explained",
+   "path": "data.network.summary.groups[2].link_up_count",
+   "ref": "",
+   "before": 0,
+   "after": 2,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_01",
+   "kind": "explained",
+   "path": "data.network.summary.primary_speed_mbps",
+   "ref": "",
+   "before": null,
+   "after": 25600,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_02",
+   "kind": "explained",
+   "path": "data.network.interfaces[1].link_status",
+   "ref": "NIC1 ec:e7:a7:22:5f:39",
+   "before": "unknown",
+   "after": "down",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_02",
+   "kind": "explained",
+   "path": "data.network.interfaces[2].is_primary",
+   "ref": "NIC2 ec:e7:a7:22:5f:38",
+   "before": false,
+   "after": true,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_02",
+   "kind": "explained",
+   "path": "data.network.interfaces[2].link_status",
+   "ref": "NIC2 ec:e7:a7:22:5f:38",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_02",
+   "kind": "explained",
+   "path": "data.network.interfaces[3].link_status",
+   "ref": "NIC5 ec:e7:a7:22:61:81",
+   "before": "unknown",
+   "after": "down",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_02",
+   "kind": "explained",
+   "path": "data.network.summary.groups[2].link_up_count",
+   "ref": "",
+   "before": 0,
+   "after": 1,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_02",
+   "kind": "explained",
+   "path": "data.network.summary.primary_speed_mbps",
+   "ref": "",
+   "before": null,
+   "after": 25600,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[10].link_status",
+   "ref": "NIC14 ec:e7:a7:22:55:c4",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[1].is_primary",
+   "ref": "NIC1 ec:e7:a7:22:4d:05",
+   "before": false,
+   "after": true,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[1].link_status",
+   "ref": "NIC1 ec:e7:a7:22:4d:05",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[2].link_status",
+   "ref": "NIC2 ec:e7:a7:22:4d:04",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[3].link_status",
+   "ref": "NIC3 ec:e7:a7:20:2d:6d",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[4].link_status",
+   "ref": "NIC4 ec:e7:a7:20:2d:6c",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[5].link_status",
+   "ref": "NIC9 ec:e7:a7:20:26:19",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[6].link_status",
+   "ref": "NIC10 ec:e7:a7:20:26:18",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[7].link_status",
+   "ref": "NIC11 ec:e7:a7:20:33:05",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[8].link_status",
+   "ref": "NIC12 ec:e7:a7:20:33:04",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.interfaces[9].link_status",
+   "ref": "NIC13 ec:e7:a7:22:55:c5",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.summary.groups[1].link_up_count",
+   "ref": "",
+   "before": 0,
+   "after": 4,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.summary.groups[2].link_up_count",
+   "ref": "",
+   "before": 0,
+   "after": 6,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_03",
+   "kind": "explained",
+   "path": "data.network.summary.primary_speed_mbps",
+   "ref": "",
+   "before": null,
+   "after": 25600,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_04",
+   "kind": "explained",
+   "path": "data.network.interfaces[1].link_status",
+   "ref": "NIC1 ec:e7:a7:22:55:39",
+   "before": "unknown",
+   "after": "down",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_04",
+   "kind": "explained",
+   "path": "data.network.interfaces[2].is_primary",
+   "ref": "NIC2 ec:e7:a7:22:55:38",
+   "before": false,
+   "after": true,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_04",
+   "kind": "explained",
+   "path": "data.network.interfaces[2].link_status",
+   "ref": "NIC2 ec:e7:a7:22:55:38",
+   "before": "unknown",
+   "after": "up",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_04",
+   "kind": "explained",
+   "path": "data.network.interfaces[3].link_status",
+   "ref": "NIC3 ec:e7:a7:22:4b:5d",
+   "before": "unknown",
+   "after": "down",
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_04",
+   "kind": "explained",
+   "path": "data.network.summary.groups[2].link_up_count",
+   "ref": "",
+   "before": 0,
+   "after": 1,
+   "issue": "03-network-002"
+  },
+  {
+   "label": "sr650_v4_04",
+   "kind": "explained",
+   "path": "data.network.summary.primary_speed_mbps",
+   "ref": "",
+   "before": null,
+   "after": 25600,
+   "issue": "03-network-002"
+  }
+ ],
+ "runs": [
+  {
+   "label": "csus3200_01",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 186,
+    "requests_distinct": 182,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 181
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 186,
+    "requests_distinct": 182,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 181
+    }
+   }
+  },
+  {
+   "label": "csus3200_02",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 134,
+    "requests_distinct": 130,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 129
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 134,
+    "requests_distinct": 130,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 129
+    }
+   }
+  },
+  {
+   "label": "csus3200_03",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 170,
+    "requests_distinct": 166,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 165
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 170,
+    "requests_distinct": 166,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 165
+    }
+   }
+  },
+  {
+   "label": "dl380_gen12_01",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 157,
+    "requests_distinct": 153,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 152
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 157,
+    "requests_distinct": 153,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 152
+    }
+   }
+  },
+  {
+   "label": "dl380_gen12_02",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 148,
+    "requests_distinct": 144,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 143
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 148,
+    "requests_distinct": 144,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 143
+    }
+   }
+  },
+  {
+   "label": "dl380_gen12_03",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 85,
+    "requests_distinct": 81,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 80
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 85,
+    "requests_distinct": 81,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 80
+    }
+   }
+  },
+  {
+   "label": "dl380_gen12_04",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 148,
+    "requests_distinct": 144,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 143
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 148,
+    "requests_distinct": 144,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 143
+    }
+   }
+  },
+  {
+   "label": "r1_DELL_R740_01",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "dell",
+    "adapter_id": "redfish_dell_idrac9",
+    "adapter_first_pass": "redfish_dell_idrac10",
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 141,
+    "requests_distinct": 137,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 136
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "dell",
+    "adapter_id": "redfish_dell_idrac9",
+    "adapter_first_pass": "redfish_dell_idrac10",
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 141,
+    "requests_distinct": 137,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 136
+    }
+   }
+  },
+  {
+   "label": "r1_HPE_CSUS3200_01",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 131,
+    "requests_distinct": 127,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 126
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 131,
+    "requests_distinct": 127,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 126
+    }
+   }
+  },
+  {
+   "label": "r1_HPE_CSUS3200_02",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 131,
+    "requests_distinct": 127,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 126
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 131,
+    "requests_distinct": 127,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 126
+    }
+   }
+  },
+  {
+   "label": "r1_HPE_CSUS3200_03",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 200,
+    "requests_distinct": 196,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 195
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 200,
+    "requests_distinct": 196,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 195
+    }
+   }
+  },
+  {
+   "label": "r1_HPE_CSUS3200_04",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 200,
+    "requests_distinct": 196,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 195
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hpCsus",
+    "adapter_id": "redfish_hpe_csus_3200",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 200,
+    "requests_distinct": 196,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 195
+    }
+   }
+  },
+  {
+   "label": "r1_HPE_DL380_01",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 136,
+    "requests_distinct": 132,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 131
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "hp",
+    "adapter_id": "redfish_hpe_ilo7",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 136,
+    "requests_distinct": 132,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 131
+    }
+   }
+  },
+  {
+   "label": "r1_Lenovo_SR650_01",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 127,
+    "requests_distinct": 123,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 122
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 127,
+    "requests_distinct": 123,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 122
+    }
+   }
+  },
+  {
+   "label": "sr650_v4_01",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 112,
+    "requests_distinct": 108,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 107
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 112,
+    "requests_distinct": 108,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 107
+    }
+   }
+  },
+  {
+   "label": "sr650_v4_02",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 129,
+    "requests_distinct": 125,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 124
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 129,
+    "requests_distinct": 125,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 124
+    }
+   }
+  },
+  {
+   "label": "sr650_v4_03",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 163,
+    "requests_distinct": 159,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 158
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 163,
+    "requests_distinct": 159,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 158
+    }
+   }
+  },
+  {
+   "label": "sr650_v4_04",
+   "missing": [],
+   "req_added": [],
+   "req_removed": [],
+   "req_unexplained": [],
+   "run_same": {
+    "playbook_rc": true,
+    "status": true,
+    "vendor": true,
+    "adapter_id": true,
+    "adapter_first_pass": true,
+    "sections": true,
+    "errors": true,
+    "failure": true,
+    "requests": true,
+    "requests_distinct": true,
+    "req_notes": true
+   },
+   "before": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 117,
+    "requests_distinct": 113,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 112
+    }
+   },
+   "after": {
+    "playbook_rc": 0,
+    "status": "success",
+    "vendor": "lenovo",
+    "adapter_id": "redfish_lenovo_xcc3",
+    "adapter_first_pass": null,
+    "sections": {
+     "system": "not_supported",
+     "hardware": "success",
+     "bmc": "success",
+     "cpu": "success",
+     "memory": "success",
+     "storage": "success",
+     "network": "success",
+     "firmware": "success",
+     "users": "not_supported",
+     "power": "success",
+     "thermal": "success"
+    },
+    "errors": 0,
+    "failure": {
+     "failure_stage": null,
+     "failure_code": null,
+     "auth_success": true
+    },
+    "requests": 117,
+    "requests_distinct": 113,
+    "req_notes": {
+     "anon/200/noauth-root": 4,
+     "anon/401/anon-denied": 1,
+     "basic/200/tree": 112
+    }
+   }
+  }
+ ]
+}

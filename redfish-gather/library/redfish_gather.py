@@ -84,8 +84,9 @@ def _safe_round_int(x, default=None):
 
     2026-06-16 감사 G1: 온도 reading 을 _safe_int 로 받으면 44.7031→44 / 38.86→38 /
     -68.75→-68 처럼 소수점 절삭(≤1° 오차)이 발생. round() 로 44.7→45 / 38.86→39 / -68.75→-69.
-    int 계약은 유지(타입 불변) — 절삭 대신 반올림만 교체. _safe_int 는 watt/capacity 등 다른
-    호출부에서 그대로 사용(회귀 0). 비-숫자/None/inf/nan → default.
+    int 계약은 유지(타입 불변) — 절삭 대신 반올림만 교체. 비-숫자/None/inf/nan → default.
+    2026-10-29 (SA-17, 사용자 결정): 전력 측정값(소비 · min/avg/max · PSU 입출력 · Telemetry 합계)도 이 함수다 — round() 는 half-even
+    (591.5 → 592, 592.5 → 592). 정격(PowerCapacityWatts 등)은 _safe_int 그대로다.
     """
     if x is None:
         return default
@@ -131,6 +132,10 @@ def _normalize_port_speed(pdata):
     # int() OverflowError/ValueError 차단), int 는 int, **fractional float(2.5GbE)는 float 보존**.
     cur_gbps_num = _safe_num(cur_gbps)
     speed_mbps = _safe_int(_safe(pdata, 'CurrentLinkSpeedMbps'))  # Round 3 #17: mbps int 통일
+    # 2026-10-27 (C8 03-network-004, 실측 iDRAC9 R740 NetworkPorts): 0 Mbps 는 '0 으로 협상' 이 아니라 링크 없음 — Gbps 쪽(SCHEMA-02)과
+    #   같이 None 으로 통일한다(ports 전용; 호스트 NIC interfaces[].speed_mbps 의 0 은 원문 그대로). 양수는 영향 없음.
+    if speed_mbps == 0:
+        speed_mbps = None
     if speed_mbps is None and cur_gbps_num:
         # round: fractional Gbps(2.5→2500) 정확 변환 + float 정밀도 truncation 방지
         speed_mbps = _safe_int(round(cur_gbps_num * MBPS_PER_GBPS))
@@ -1148,6 +1153,8 @@ def _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl
                 duplicates — 같은 @odata.id 가 다시 나온 수(중복은 지우지 않는다)
     2026-10-10 (C3): 순회 · 요청 순서는 종전 _collection_members 와 같다. 새 근거(비객체 · Members 부재 · 중복)는 Accounts 처럼
     완결성이 쓰기 판단의 근거인 호출부만 쓴다 — 다른 소비자에는 새 정책을 전파하지 않는다.
+    2026-10-29 (SA-01 · SA-05): 개수 · 합계를 확정하는 호출부(다중 노드 개수 · DIMM 합)도 _walk_complete 로 이 근거를 쓴다.
+    목록 · 요청 순서 · errors 는 바꾸지 않는다 — 온전하지 않으면 개수 · 합계만 null 이다.
     """
     state = {'cut': None, 'pages': 1, 'non_object': 0, 'members_absent': 0, 'members_not_list': 0, 'duplicates': 0}
     ids = set()
@@ -1209,6 +1216,18 @@ def _walk_cut_text(first_path, cut):
     return '%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존' % (first_path, arg[0], arg[2] or arg[1])
 
 
+def _walk_complete(state):
+    """_collection_walk 상태 → 컬렉션을 끝까지 온전히 읽었는가 (2026-10-29, SA-01).
+
+    개수를 정수로 확정해도 되는 조건이다 — 절단 없음 · 비객체/Members 부재/목록 아님/중복 없음(계정 열거의 anomalies 와 같은 기준).
+    하나라도 있으면 모은 멤버 수는 원천의 개수가 아니므로 호출부가 개수를 null 로 둔다. 목록 자체는 종전대로 읽은 만큼 남긴다.
+    """
+    if not isinstance(state, dict) or state.get('cut') is not None:
+        return False
+    return not (state.get('non_object') or state.get('members_absent')
+                or state.get('members_not_list') or state.get('duplicates'))
+
+
 def _walk_cut_detail(cut):
     """계정 열거 요약 오류의 detail 조각. HTTP 상태는 'status=' 숫자로만 적는다 — 'HTTP 404' 글자가 들어가면 요약 오류까지
     404 신호로 읽혀 '계정 관리 미지원' 으로 잘못 분류된다(_is_404_only_error)."""
@@ -1223,7 +1242,7 @@ def _walk_cut_detail(cut):
 
 
 def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
-                        section, errors):
+                        section, errors, state_out=None):
     """컬렉션 첫 페이지(coll, 이미 조회됨)의 Members 를 모으고 Members@odata.nextLink 를 따라간다.
 
     - 후속 페이지 실패 / 페이지 상한 / 다른 origin 링크 / 순환: **앞 페이지 멤버는 보존**하고
@@ -1232,8 +1251,11 @@ def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_
     - Members@odata.count 가 있고 모은 수와 다르면 notice (정보 없음과 불일치를 구분).
     errors 가 None 인 호출부(보조 헬퍼)는 notice 로만 남긴다. nextLink 가 없으면 종전과 완전히 같다.
     2026-10-10 (C3): 순회는 _collection_walk 가 한다. 반환 멤버 · 요청 순서 · errors · notices 는 종전과 같다.
+    2026-10-29 (SA-01): state_out(dict)을 주면 'complete'(끝까지 온전히 읽고 상한 절단도 없음)를 적는다 — 개수 확정용. 주지 않으면 종전과 같다.
     """
     members, state = _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl)
+    if state_out is not None:
+        state_out['complete'] = _walk_complete(state) and len(members) <= MAX_COLLECTION_MEMBERS
     first_path = _str(path).split('?', 1)[0]
     truncated = state['cut'] is not None
     if truncated:
@@ -1762,7 +1784,7 @@ def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, ver
     return _safe(members[0], '@odata.id'), st, None
 
 
-def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
+def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl, state_out=None):
     """컬렉션 URI → 모든 Members 의 @odata.id 추출 (cycle 2026-05-12 — ADR-2026-05-12).
 
     `_resolve_first_member_uri` 의 Additive 확장. RMC (HPE Compute Scale-up Server 3200 /
@@ -1777,24 +1799,34 @@ def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, veri
 
     Returns: (members: list[dict], status_code, error_msg)
         members: [{'uri': str, 'id': str}]  (Member ID = URI 의 마지막 path segment)
+
+    2026-10-29 (SA-01): state_out(dict)을 주면 'complete' 를 적는다 — 컬렉션 200 을 끝까지 온전히 읽었고 버린 멤버가 없을 때만 참이다.
+    200 · 멤버 0 은 'members 없음' 오류지만 complete=True(확인한 0)다. 반환값은 종전과 같다.
     """
+    if state_out is not None:
+        state_out['complete'] = False
     if not coll_uri:
         return [], None, 'collection uri 없음'
     st, coll, err = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if err or st != 200:
         return [], st, err or f'HTTP {st}'
+    walk = {}
     raw_members = _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout,
-                                      verify_ssl, 'multi_node', None)
+                                      verify_ssl, 'multi_node', None, state_out=walk)
     if not isinstance(raw_members, list):  # rule 95 R1 #2: 비-list Members 방어 (Round 2 #15)
         raw_members = []
     out = []
+    dropped = 0
     for m in raw_members:
         uri = _safe(m, '@odata.id')
         if not uri or not isinstance(uri, str):  # Round 3 #3: 비-str @odata.id .rstrip 방어
+            dropped += 1
             continue
         # Member ID = URI 의 마지막 path segment (trailing '/' 제거)
         mid = uri.rstrip('/').rsplit('/', 1)[-1] if '/' in uri else uri
         out.append({'uri': uri, 'id': mid})
+    if state_out is not None:
+        state_out['complete'] = bool(walk.get('complete')) and not dropped
     if not out:
         return [], st, 'members 없음'
     return out, st, None
@@ -2259,12 +2291,14 @@ def _extract_oem_lenovo(data, chassis_data=None):                             # 
         'product_name':         product_name,
         'system_status':        _safe(sys_oem, 'SystemStatus'),
         'fru_serial':           _safe(cha_oem, 'FruSerialNumber'),
-        'machine_type':         _safe(cha_oem, 'MachineType'),
+        # 2026-10-27 (C4, 실측 XCC3 V4: Chassis.Oem.Lenovo 에 MachineType/LEDIndicators 없음): System.SubModel('7DGD' = 4자리 machine type) ·
+        # System.IndicatorLED 로 채운다. chassis OEM 값이 있으면(XCC1/2) 그대로다.
+        'machine_type':         _safe(cha_oem, 'MachineType') or _safe(data, 'SubModel'),
         'machine_level':        _safe(cha_oem, 'MachineLevel'),
         'product_id':           _safe(cha_oem, 'ProductId'),
         'system_id':            _safe(cha_oem, 'SystemId'),
         'health_summary':       _safe(sys_oem, 'HealthSummary'),
-        'led_indicator':        _safe(cha_oem, 'LEDIndicators') or _safe(cha_oem, 'IndicatorLED'),
+        'led_indicator':        _safe(cha_oem, 'LEDIndicators') or _safe(cha_oem, 'IndicatorLED') or _safe(data, 'IndicatorLED'),
     }
 
 
@@ -2393,6 +2427,13 @@ def _normalize_dimm_label(raw_label):                                         # 
     return normalized
 
 
+# 일반 NIC · 포트(network.interfaces[] · network.ports[] · 파티션 NIC) 링크 값 (2026-10-29 SA-09).
+#   storage.hbas[] 는 이 집합을 쓰지 않는다 — _HBA_LINK_UP_VALUES / _HBA_LINK_DOWN_VALUES 가 따로 고정돼 있다.
+_LINK_UP_VALUES = frozenset(('linkup', 'up', 'connected'))
+_LINK_DOWN_VALUES = frozenset(('linkdown', 'down', 'nolink', 'disconnected', 'disabled', 'inactive', 'offline'))
+_LINK_EMPTY_VALUES = frozenset(('', 'none', 'unknown', 'null'))   # 값 없음 — unknown 이어도 notice 대상이 아니다
+
+
 def _normalize_link_status(value):
     """Normalize Redfish LinkStatus to standard enum.
 
@@ -2402,27 +2443,40 @@ def _normalize_link_status(value):
       - Cisco CIMC: 'Connected' / 'Disconnected' / null
       - Lenovo XCC: 'LinkUp' / 'LinkDown'
 
-    DMTF DSP8010 2026.1 대조 2026-06-08: Port.LinkStatus enum 정본은
-      ['LinkUp', 'Starting', 'Training', 'LinkDown', 'NoLink'] (Port.v1_19_0).
-      'Starting'/'Training' = 링크 협상 중(비작동) 전이 상태 → 기존 비작동
-      매핑(disabled/inactive/offline)과 동일하게 'down' 으로 정규화.
+    DMTF 대조: EthernetInterface.LinkStatus = LinkUp / NoLink / LinkDown, Port.LinkStatus = LinkUp / Starting / Training /
+      LinkDown / NoLink (Port.v1_19_0), NetworkPort.LinkStatus = Up / Down / Starting / Training (NetworkPort.v1_4_3).
+      2026-10-29 (SA-09, 사용자 의견): Starting · Training 은 링크를 협상하는 전이 상태라 링크가 아직 정해지지 않았다 — 종전(2026-06-08)
+      'down' 매핑을 'unknown' 으로 바꾼다(storage.infiniband 의 _normalize_ib_link_status 와 같은 규칙). Enabled · Active 는 링크 값이
+      아니라 State 값이라 up 으로 보지 않는다. 미인식 값도 원문을 그대로 내보내지 않고 'unknown' 이다 — 원문이 있는데 unknown 이 된
+      값은 _link_status_unmapped 로 골라 호출부가 섹션당 notice 1건으로 남긴다. storage.hbas 는 이 함수를 쓰지 않는다(_hba_link_status).
 
     Standard enum:
-      'up'      — link active
-      'down'    — link inactive (NoLink, LinkDown, Disconnected, Starting, Training)
-      'unknown' — null/unknown response
+      'up'      — link active (LinkUp, Up, Connected)
+      'down'    — link inactive (LinkDown, Down, NoLink, Disconnected, Disabled, Inactive, Offline)
+      'unknown' — 값 없음 · 전이 상태(Starting, Training) · 링크 값 아님(Enabled, Active) · 미인식 값
     """
     if value is None:
         return 'unknown'
     s = str(value).strip().lower()
-    if not s or s in ('none', 'unknown', 'null'):
-        return 'unknown'
-    if s in ('linkup', 'up', 'connected', 'enabled', 'active'):
+    if s in _LINK_UP_VALUES:
         return 'up'
-    if s in ('linkdown', 'down', 'nolink', 'disconnected', 'disabled',
-             'inactive', 'offline', 'starting', 'training'):
+    if s in _LINK_DOWN_VALUES:
         return 'down'
-    return s  # unknown vendor-specific value — preserve raw
+    return 'unknown'
+
+
+def _link_status_unmapped(value):
+    """원문이 있는데 _normalize_link_status 가 'unknown' 으로 둔 LinkStatus 원문 (Starting · Training · Enabled · Active · 미인식 값).
+
+    값이 없거나(None · 빈 값 · none · unknown · null) up/down 으로 정해지는 값이면 None — 2026-10-29 SA-09 notice 용.
+    """
+    if value is None:
+        return None
+    raw = str(value).strip()
+    low = raw.lower()
+    if low in _LINK_EMPTY_VALUES or low in _LINK_UP_VALUES or low in _LINK_DOWN_VALUES:
+        return None
+    return raw
 
 
 def _valid_iso_date(s):
@@ -2574,6 +2628,9 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     if bios_link_out is not None:
         bios_link_out['retrieved'] = True
         bios_link_out['link'] = _safe(data, 'Bios', '@odata.id')
+        # 2026-10-27 (C2 — 02-system/05-power/05-thermal 전원 Off 맥락): 같은 응답의 PowerState 도 기록한다.
+        # _collect_all_sections 가 섹션 수집 뒤 "호스트 전원 Off 관측" notice 1회에 쓴다 (요청 0, 전역 없음).
+        bios_link_out['power_state'] = _safe(data, 'PowerState')
 
     # Lenovo 등 일부 벤더는 ProductName 이 Chassis.Oem 에 위치 (System.Oem 에는 없음).
     # OEM extractor 가 chassis 데이터를 활용할 수 있도록 1회 fetch.
@@ -2582,6 +2639,9 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
         cst, cdata, _cerr = _get(bmc_ip, _p(chassis_uri), username, password, timeout, verify_ssl)
         if not _cerr and cst == 200:
             chassis_data = cdata
+            # 2026-10-27 (C5 05-power-004): 이미 받은 섀시 본문을 power/thermal 이 navigation property 확인에 재사용한다 (요청 0).
+            if bios_link_out is not None and isinstance(cdata, dict):
+                bios_link_out.setdefault('chassis_bodies', {})[_p(chassis_uri)] = cdata
 
     # HostName: HPE는 빈 문자열("") 반환 가능 → None으로 변환
     hostname = _safe(data, 'HostName')
@@ -2627,7 +2687,11 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
         'uuid':           _ne('UUID'),
         'hostname':       hostname,
         'power_state':    _safe(data, 'PowerState'),
-        'health':         _safe(data, 'Status', 'Health'),
+        # 2026-10-27 (01-hardware-002): System.Status.Health 가 없을 때만 HealthRollup 폴백(memory_summary · cpu_summary 와 같은 패턴).
+        #   값이 있으면 그대로 — 리소스 자체 health 다(DMTF: Health 는 리소스 자체, HealthRollup 은 하위 포함). 18 label 실측은 전부 Health 가
+        #   있어 값 불변(1차 SR650 Health Warning · HealthRollup OK 는 Warning 유지). PSU 장애의 등급은 벤더가 정한다(iLO 7 Warning · XCC 3 Critical).
+        'health':         (_safe(data, 'Status', 'Health') if _safe(data, 'Status', 'Health') not in (None, '')
+                           else _safe(data, 'Status', 'HealthRollup')),
         'state':          _safe(data, 'Status', 'State'),
         'led_state':      led_state,
         'bios_version':   _ne('BiosVersion'),
@@ -2764,6 +2828,10 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
                                code=_CODE_BIOS_NON_BLOCKING))
             return out, errors
 
+        # 2026-10-27 (C9 04-firmware, 구조 근거): Bios.Links.ActiveSoftwareImage → firmware_links(bios). 이미 받은 응답에서만 읽는다.
+        if isinstance(link_info, dict):
+            link_info['active_software_image'] = _safe(data, 'Links', 'ActiveSoftwareImage', '@odata.id')
+
         # 최상위 type 만 본다. 표준 응답도 내부(@Redfish.Settings / Oem)에는 다른 type 이 있다.
         odata_type = data.get('@odata.type')
         if odata_type is not None and not (
@@ -2799,7 +2867,7 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
 
 
 def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_ssl,
-               manager_layout=None, is_first=True, manager_id=None):
+               manager_layout=None, is_first=True, manager_id=None, links_out=None):
     """bmc 섹션 수집 (Redfish endpoints).
 
     호출 endpoint:
@@ -2821,6 +2889,9 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     if err or st != 200:
         errors.append(_err('bmc', f'BMC 수집 실패: {err or st}'))
         return {}, errors
+    # 2026-10-27 (C9 04-firmware, 구조 근거): Manager.Links.ActiveSoftwareImage → firmware_links(bmc). 이미 받은 응답에서만 읽는다 (요청 0).
+    if isinstance(links_out, dict):
+        links_out['active_software_image'] = _safe(data, 'Links', 'ActiveSoftwareImage', '@odata.id')
 
     # nosec rule12-r1: vendor → BMC 표시명 매핑 (외부 spec 기반 표준 이름)
     bmc_names = {'dell': 'iDRAC', 'hpe': 'iLO', 'lenovo': 'XCC', 'supermicro': 'BMC',
@@ -2834,6 +2905,13 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     # 동일 source. 단일 노드(manager_id=None)는 응답 body Id 사용 (기존 동작 보존).
     _mid = manager_id if manager_id is not None else _safe(data, 'Id')
     rmc_label = _classify_rmc_label(manager_uri, _mid, manager_layout, is_first)
+    # 2026-10-27 (06-bmc-006): layout 선언이 없어도 장비가 ManagerType 으로 집합 관리자(RackManager · EnclosureManager)임을 밝히면 vendor 라벨
+    #   대신 그 Id(짧은 토큰) 또는 ManagerType 을 쓴다 — DMTF enum 값으로만 가른다(실측 CSUS RMC `Id RMC` · `ManagerType RackManager`, plain 재생에서
+    #   종전 'iLO' 로 나오던 것). layout 이 있는 경로와 BMC 형 Manager 는 불변(18 label 값 불변).
+    if rmc_label is None and _safe(data, 'ManagerType') in ('RackManager', 'EnclosureManager'):
+        _mid_s = _str(_safe(data, 'Id')).strip()
+        rmc_label = (_mid_s if (0 < len(_mid_s) <= 16 and _mid_s.replace('-', '').replace('_', '').isalnum())
+                     else _str(_safe(data, 'ManagerType')))
     # cycle-016 Phase M/N: BMC 운영 정보 강화 — datetime / dns / mac / uuid / last_reset / timezone / power_state
     result = {
         'name':             rmc_label or bmc_names.get(vendor, 'BMC'),
@@ -2863,6 +2941,7 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         'datetime_offset':  _safe(data, 'DateTimeLocalOffset'),
         'oem': {},
     }
+    nic_cands = []   # 2026-10-27 (06-bmc-005): IPv4 를 가진 Manager NIC 후보 — 루프 뒤에 규칙으로 고른다
 
     # Manager EthernetInterfaces에서 BMC IP / MAC / FQDN + NameServers / Gateway 추출
     # 2026-04-29 cisco-critical-review: BMC NIC 의 NameServers / IPv4Addresses[*].Gateway
@@ -2892,12 +2971,16 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                         errors.append(_err('bmc', f'EthernetInterface {nuri} 실패: {nerr2 or nst2}',
                                            detail={'status_code': nst2}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
-                # IPv4 — 첫 매칭만 result['ip']/['mac_address']/['dns_name'] 에 사용,
+                # IPv4 — NIC 마다 0.0.0.0 이 아닌 주소를 모으고(첫 주소 = 그 NIC 의 대표), result['ip']/['mac_address']/['dns_name'] 은
+                # 루프 뒤 선택 규칙(① 대상 주소를 가진 NIC → ② Links.HostInterface 가 없고 InterfaceEnabled 가 false 가 아닌 NIC → ③ IPv4 를 가진
+                # 첫 NIC — 2026-10-27 06-bmc-005)으로 고른 한 NIC 에서 뽑는다.
                 # 모든 NIC 의 Gateway 는 누적 (멀티 NIC: dedicated + shared 등 대비)
                 nic_first_ip = None
+                nic_ips = []
                 for addr in _dicts(_safe(ndata, 'IPv4Addresses')):  # Round 3 #4: 비-list/비-dict 방어
                     ip = _safe(addr, 'Address')
                     if ip and isinstance(ip, str) and ip not in ('0.0.0.0', ''):  # Round 7 #3: 비-str Address 방어
+                        nic_ips.append(ip)
                         if nic_first_ip is None:
                             nic_first_ip = ip
                         gw = _safe(addr, 'Gateway')
@@ -2913,20 +2996,27 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                 for ns in _as_list(_safe(ndata, 'StaticNameServers')):
                     if isinstance(ns, str) and ns and ns not in _ns_placeholders and ns not in bmc_static_name_servers:  # Round 9 #1
                         bmc_static_name_servers.append(ns)
-                # MAC + FQDN — IP 가 있는 첫 NIC 에서 추출 (기존 동작 유지)
+                # 2026-10-27 (06-bmc-005): IP 가 있는 NIC 을 후보로 모은다 — 종전 "첫 NIC" 은 아래 선택 규칙의 ③ 이다.
+                #   XC-4 (2026-06-15): MAC 소문자 정규화 — _normalize_wwn/ports[].associated_address 와 동일 canonical case
+                #   (HPE iLO 는 Manager NIC MAC 을 대문자로 노출). raw 가 colon-grouped hex 라 .lower() 무손실.
                 if nic_first_ip:
-                    if not result['ip']:
-                        result['ip'] = nic_first_ip
-                    if not result['mac_address']:
-                        _mac = _safe(ndata, 'MACAddress') or _safe(ndata, 'PermanentMACAddress')
-                        # XC-4 (2026-06-15): MAC 소문자 정규화 — _normalize_wwn/ports[].associated_address
-                        # (NET-2-1) 와 동일 canonical case. HPE iLO 는 Manager NIC MAC 을 대문자로
-                        # 노출(7C:A6:..) 하나 System/Chassis NIC 은 소문자 → bmc.mac_address 만 case 이탈.
-                        # raw 가 colon-grouped hex 라 .lower() 무손실 (cross-channel MAC dedup/매칭 일관).
-                        result['mac_address'] = _mac.lower() if isinstance(_mac, str) else None  # Round 14 #2: 비-str MAC 방어
-                    if not result['dns_name']:
-                        result['dns_name'] = _safe(ndata, 'FQDN') or _safe(ndata, 'HostName')
+                    _mac = _safe(ndata, 'MACAddress') or _safe(ndata, 'PermanentMACAddress')
+                    nic_cands.append({
+                        'ips': nic_ips, 'ip': nic_first_ip,
+                        'mac': _mac.lower() if isinstance(_mac, str) else None,  # Round 14 #2: 비-str MAC 방어
+                        'dns': _safe(ndata, 'FQDN') or _safe(ndata, 'HostName'),
+                        'host_if': _safe(ndata, 'Links', 'HostInterface') is not None,
+                        'enabled': _safe(ndata, 'InterfaceEnabled'),
+                    })
 
+    # 2026-10-27 (06-bmc-005): ① 대상 IP(bmc_ip)와 같은 주소를 가진 NIC → ② Links.HostInterface 가 없고 InterfaceEnabled 가 False 가 아닌 NIC
+    #   → ③ 첫 NIC(종전). 실측 18 label 은 전용 관리 NIC 이 첫 멤버라 값 불변; iLO 7 의 USB 가상 NIC(16.1.15.1, Links.HostInterface) 가 앞에
+    #   나열돼도 ② 가 거른다. NAT/VIP(대상 IP 가 어느 NIC 에도 없음)는 ②/③ 으로 종전과 같다. mac_address · dns_name 은 같은 NIC 에서 뽑는다.
+    if nic_cands:
+        _pick = (next((c for c in nic_cands if bmc_ip in c['ips']), None)
+                 or next((c for c in nic_cands if not c['host_if'] and c['enabled'] is not False), None)
+                 or nic_cands[0])
+        result['ip'], result['mac_address'], result['dns_name'] = _pick['ip'], _pick['mac'], _pick['dns']
     # envelope 비노출 — normalize_standard.yml 의 _rf_d_bmc_clean 단계에서 제거된다.
     result['_network_meta'] = {
         'name_servers':        bmc_name_servers,
@@ -2963,6 +3053,16 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         result['oem'] = {
             'ilo_version': _safe(oem, 'Firmware', 'Current', 'VersionString'),
         }
+        # 2026-10-27 (06-bmc-003, 실측 iLO 7 5대): Manager 에 TimeZoneName 이 없고 Oem.Hpe.Links.DateTimeService 가 있으면 그 리소스를 1회 GET 해
+        #   TimeZone.Value(POSIX 꼴 "JST-9:00" — iDRAC TimeZoneName "CST6CDT" 와 같은 계열) → 없으면 TimeZone.Name 을 timezone 에 넣는다.
+        #   실패 · 404 는 조용히 null(+1 GET, iLO 만 — 다른 벤더는 링크가 없다). RMC 는 TimeZoneName 이 있어 미발동.
+        if result.get('timezone') is None:
+            _dt_link = _safe(oem, 'Links', 'DateTimeService', '@odata.id')
+            if isinstance(_dt_link, str) and _dt_link.strip():
+                _st_dt, _dt, _e_dt = _get(bmc_ip, _p(_dt_link), username, password, timeout, verify_ssl)
+                if _st_dt == 200 and isinstance(_dt, dict):
+                    _tz = _safe(_dt, 'TimeZone', 'Value') or _safe(_dt, 'TimeZone', 'Name')
+                    result['timezone'] = _strip_or_none(_tz) if isinstance(_tz, str) else None
     elif vendor == 'supermicro':                                              # nosec rule12-r1
         oem = _safe(data, 'Oem', 'Supermicro') or {}                          # nosec rule12-r1
         result['oem'] = {'bmc_ip': _safe(oem, 'BMCIPv4Address')}
@@ -2991,6 +3091,59 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     # 신규 vendor (huawei/inspur/fujitsu/quanta) — 추가 OEM 추출은 사이트 fixture 수신 후 도입.
 
     return result, errors
+
+
+def _cache_string_kb(value):
+    """'22.50 MB' / '45 MB' / '1024 KB' / 숫자(KB) → KB int. 모르는 꼴 · 0 이하는 None (HPE RMC Oem.Hpe.L3CacheSize 문자열)."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    m = re.match(r'^\s*([\d.]+)\s*(KB|MB|GB)?\s*$', str(value), re.I)
+    if not m:
+        return None
+    try:
+        kb = float(m.group(1)) * {'KB': 1, 'MB': 1024, 'GB': 1024 * 1024}[(m.group(2) or 'KB').upper()]
+    except ValueError:
+        return None
+    return int(round(kb)) if kb > 0 else None
+
+
+def _processor_cache_kb(pdata):
+    """소켓당 L2/L3 캐시 KB — Processor OEM 네임스페이스에서만(라이브러리 OEM 추출 분기, 값이 있을 때만) (2026-10-27 C8, 2차 Mock 02-cpu §5).
+    iLO `Oem.Hpe.Cache[]{Name 'L2-Cache'/'L3-Cache', InstalledSizeKB}` · XCC `Oem.Lenovo.CacheInfo[]{CacheLevel, InstalledSizeKByte}` ·
+    iDRAC `Oem.Dell.DellProcessor.Cache{N}Level / Cache{N}InstalledSizeKB` · RMC `Oem.Hpe.L2CacheSize/L3CacheSize`("22.50 MB" 문자열 → KB).
+    vendor 이름으로 가르지 않고 OEM 키의 존재로 가른다. 없으면 (None, None)."""
+    oem = _safe(pdata, 'Oem')
+    if not isinstance(oem, dict):
+        return None, None
+    found = {}
+    for o in oem.values():
+        if not isinstance(o, dict):
+            continue
+        for c in _dicts(o.get('Cache')):                                   # HPE iLO
+            name = _str(c.get('Name')).strip().upper()
+            lvl = 'L2' if name.startswith('L2') else ('L3' if name.startswith('L3') else None)
+            kb = _safe_int(c.get('InstalledSizeKB'))
+            if lvl and kb:
+                found.setdefault(lvl, kb)
+        for c in _dicts(o.get('CacheInfo')):                               # Lenovo XCC
+            lvl = _str(c.get('CacheLevel')).strip().upper()
+            kb = _safe_int(c.get('InstalledSizeKByte'))
+            if lvl in ('L2', 'L3') and kb:
+                found.setdefault(lvl, kb)
+        dp = o.get('DellProcessor')                                        # Dell iDRAC
+        if isinstance(dp, dict):
+            for n in range(1, 5):
+                lvl = _str(dp.get('Cache%dLevel' % n)).strip().upper()
+                kb = _safe_int(dp.get('Cache%dInstalledSizeKB' % n))
+                if lvl in ('L2', 'L3') and kb:
+                    found.setdefault(lvl, kb)
+        for lvl, key in (('L2', 'L2CacheSize'), ('L3', 'L3CacheSize')):   # HPE RMC(문자열)
+            kb = _cache_string_kb(o.get(key))
+            if kb:
+                found.setdefault(lvl, kb)
+    return found.get('L2'), found.get('L3')
 
 
 def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -3049,12 +3202,32 @@ def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ss
             'serial_number':     _ne_p('SerialNumber'),
             'part_number':       _ne_p('PartNumber'),
         })
+        # 2026-10-27 (C8): 소켓당 L2/L3 캐시 KB — OEM 에 값이 있을 때만 키를 둔다(새 발행 키, 원천 있을 때만). normalize 가 groups 에 싣는다.
+        _l2, _l3 = _processor_cache_kb(pdata)
+        if _l2 is not None:
+            processors[-1]['l2_cache_kb'] = _l2
+        if _l3 is not None:
+            processors[-1]['l3_cache_kb'] = _l3
     # Round 15: 멤버는 있었으나 전부 Absent/Disabled → 펌웨어 오류/미장착 가능. collected=[] 가
     # 컬렉션 GET 실패와 구분되도록 warning 명시 (gather_memory total_mib=0 구분 철학과 일관).
     if not processors and _absent > 0:
         errors.append(_err('processors',
                            f'모든 CPU({_absent})가 Absent/Disabled (펌웨어 오류 또는 미장착 가능)'))
     return processors, errors
+
+
+def _memory_rank_count(mdata):
+    """RankCount(DMTF) → 없으면 HPE OEM Label('32GB 1Rx4 PC5-6400B-RC1')의 '<n>Rx<m>' (2026-10-27 C8 02-memory-004 — 실측 CSUS RMC 는
+    RankCount 키가 없다). OEM 네임스페이스 존재로 가른다(vendor 이름 분기 아님). 둘 다 없으면 None — 값을 지어내지 않는다."""
+    rc = _safe_int(_safe(mdata, 'RankCount'))
+    if rc is not None:
+        return rc
+    label = _safe(mdata, 'Oem', 'Hpe', 'Label')                               # nosec rule12-r1 — OEM 외부 계약(HPE DIMM Label '<n>Rx<m>', 02-memory-004)
+    if isinstance(label, str):
+        m = re.search(r'(?<![\w.])(\d+)Rx\d+(?![\w])', label)
+        if m:
+            return int(m.group(1))
+    return None
 
 
 def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -3064,7 +3237,10 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
       - GET {system_uri}/Memory                  (Members collection)
       - GET {system_uri}/Memory/{id} × N         (각 DIMM 상세)
 
-    Returns: ({'total_mib': int, 'slots': list}, errors_list)
+    Returns: ({'total_mib': int | None, 'slots': list}, errors_list)
+
+    2026-10-29 (SA-05): total_mib 는 나열된 DIMM 을 모두 읽었고 컬렉션을 끝까지 온전히 읽었을 때만 정수다. 멤버를 못 읽었으면(404 포함 —
+    가리킨 것을 못 읽음) 아는 DIMM 의 합은 부분 합이라 None 으로 둔다(C5 와 같은 처리, 읽은 slot 은 보존).
     """
     path = _p(system_uri) + '/Memory'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
@@ -3073,16 +3249,28 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         errors.append(_err('memory', f'Memory 컬렉션 실패: {err or st}'))
         return {'total_mib': None, 'slots': []}, errors
 
-    slots, total_mib, cap_unknown = [], 0, 0
+    slots, total_mib, cap_unknown, empty_slots = [], 0, 0, 0
+    walk, unread, no_uri = {}, 0, 0   # 2026-10-29 (SA-05): 나열됐는데 읽지 못한 멤버 수 — 하나라도 있으면 합계는 부분 합
     for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
-                                      'memory', errors):
+                                      'memory', errors, state_out=walk):
         uri = _safe(member, '@odata.id')
-        if not uri: continue
+        if not uri:
+            unread += 1
+            no_uri += 1
+            continue
         st, mdata, merr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if merr or st != 200:
             errors.append(_err('memory', f'Memory {uri} 실패: {merr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            unread += 1
             continue
         if _safe(mdata, 'Status', 'State') == 'Absent':
+            continue
+        # 2026-10-27 (C2 02-memory, 실측 iLO 7 DL380 Gen12 호스트 Off 스냅샷 — 32 멤버 중 16): Status 자체가 없고 CapacityMiB 가
+        # 0/None 이며 제조사·부품·시리얼이 전부 비어 있는 멤버는 빈 슬롯이다(DeviceLocator 만 있다). 값이 하나라도 있으면 종전대로 담는다.
+        # Status 가 있는 장착 DIMM · Absent 로 표시된 슬롯(위 분기) 은 영향 없다.
+        if (_safe(mdata, 'Status') is None and not _safe(mdata, 'CapacityMiB')
+                and not any(_strip_or_none(_safe(mdata, k)) for k in ('Manufacturer', 'PartNumber', 'SerialNumber'))):
+            empty_slots += 1
             continue
         # MEM-01 (2026-06-15 재검수): 구 `_safe(mdata,'CapacityMiB') or 0` 은 CapacityMiB 부재(None)를
         # 0(유효 용량)으로 날조 — 누락과 "0 MiB DIMM" 을 혼동(wrong-default). None 보존(raw 충실).
@@ -3110,8 +3298,10 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             # LOCATOR-STR (2026-06-15 cross-device 일관성): field_dictionary 계약 = "string|null".
             # Lenovo(DeviceLocator 부재 + Slot=32 truthy int)는 구 코드가 int 32 누출(같은 slot id 는 str '32' 와 불일치).
             # truthy Slot 만 str cast → Lenovo 32→'32', CSUS Slot=0 은 falsy 유지(ServiceLabel 폴백 보존), Dell/DL380 DeviceLocator 불변.
+            # 2026-10-27 (C4 02-memory-003, 실측 XCC3 'DIMM 23' vs Slot 23): 사람이 읽는 위치 이름이 번호보다 먼저다 —
+            # DeviceLocator → Location.PartLocation.ServiceLabel → str(MemoryLocation.Slot). Dell/iLO(DeviceLocator)·CSUS(Slot 0 → ServiceLabel)
+            # 는 결과 불변, Lenovo 만 '23' → 'DIMM 23'. LOCATOR-STR(문자열 계약)은 유지.
             'locator':         (_safe(mdata, 'DeviceLocator')
-                                or (str(_mloc_slot) if _mloc_slot else None)
                                 or _safe(mdata, 'Location', 'PartLocation', 'ServiceLabel')
                                 or (str(_mloc_slot) if _mloc_slot is not None else None)),
             'capacity_mb':     cap_int,
@@ -3122,7 +3312,7 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             'serial':          _strip_or_none(_safe(mdata, 'SerialNumber')),
             # 2026-04-30: Cisco 등 trailing whitespace 정규화.
             'part_number':     _strip_or_none(_safe(mdata, 'PartNumber')),
-            'rank_count':      _safe_int(_safe(mdata, 'RankCount')),  # Round 4 #8/#14: int 통일
+            'rank_count':      _memory_rank_count(mdata),  # Round 4 #8/#14: int 통일 · 2026-10-27 HPE OEM Label 폴백(02-memory-004)
             'data_width_bits': _safe_int(_safe(mdata, 'DataWidthBits')),
             'bus_width_bits':  _safe_int(_safe(mdata, 'BusWidthBits')),
             'error_correction': _safe(mdata, 'ErrorCorrection'),
@@ -3141,21 +3331,37 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         else:
             _notice('memory', f'CapacityMiB 부재 DIMM {cap_unknown}/{len(slots)} — 합계 미산출(slot 은 보존)')
         total_mib = None
+    # 2026-10-29 (SA-05): 나열된 멤버를 못 읽었거나 컬렉션을 끝까지 읽지 못했으면 합계 미산출 — 실패는 위 errors(멤버 조회 · 절단)가 적는다.
+    #   @odata.id 없는 멤버는 errors 가 없으므로 notice 로 남긴다. normalize 가 MemorySummary 를 검사해 총량을 쓰거나 null 로 둔다.
+    if unread or not walk.get('complete'):
+        if no_uri:
+            _notice('memory', f'@odata.id 없는 Memory 멤버 {no_uri}개 — 읽지 못함, 합계 미산출(slot 은 보존)')
+        total_mib = None
+    if empty_slots:
+        _notice('memory', f'빈 DIMM 슬롯 {empty_slots}개 제외 (Status 없음 · CapacityMiB 0 · 제조사/부품/시리얼 없음)')
     return {'total_mib': total_mib, 'slots': slots}, errors
 
 
-def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl):
-    """SimpleStorage 경로 — 플랫 디바이스 목록 (구형 BMC 호환)."""
+def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl, inv=None):
+    """SimpleStorage 경로 — 플랫 디바이스 목록 (구형 BMC 호환).
+
+    2026-10-29 (SA-07): inv(dict)를 주면 Devices 배열(빈 배열 포함)을 읽은 멤버로 'enumerated', 읽지 못한 멤버로 'incomplete' 를 적는다.
+    """
     controllers = []
     errors = []
+    no_uri = 0
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
+            no_uri += 1
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
             errors.append(_err('storage', f'SimpleStorage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
+        if isinstance(_safe(sdata, 'Devices'), list):
+            _inv_set(inv, 'enumerated')
         drives = []
         for dev in _dicts(_safe(sdata, 'Devices')):  # Round 4 #1: 비-list Devices 방어
             cap_int = _safe_int(_safe(dev, 'CapacityBytes'))
@@ -3175,6 +3381,9 @@ def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_
             'id': _safe(sdata, 'Id'), 'name': _safe(sdata, 'Name'),
             'health': _safe(sdata, 'Status', 'Health'), 'drives': drives,
         })
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 SimpleStorage 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return controllers, errors
 
 
@@ -3233,17 +3442,52 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
     }, errors
 
 
-def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl):
-    """Drives 추출 — Empty Bay 필터링 + 정규화."""
+def _drive_wwn(ddata):
+    """Drive.Identifiers 의 NAA/EUI DurableName → 'naa.<hex>' / 'eui.<hex>'(소문자 — ESXi canonicalName 과 같은 꼴; Linux 는 '0x' 접두라
+    조인은 접두를 뗀 hex 로 한다). 없으면 None (2026-10-27 C8 03-storage-003 — 실측 iLO 7 Gen12 · iDRAC9 Drive.Identifiers NAA)."""
+    for ident in _dicts(_safe(ddata, 'Identifiers')):
+        fmt = _str(ident.get('DurableNameFormat')).strip().upper()
+        dn = _str(ident.get('DurableName')).strip().lower()
+        if fmt not in ('NAA', 'EUI') or not dn:
+            continue
+        for pre in ('naa.', 'eui.', '0x'):
+            if dn.startswith(pre):
+                dn = dn[len(pre):]
+        if dn:
+            return ('naa.' if fmt == 'NAA' else 'eui.') + dn
+    return None
+
+
+def _inv_set(inv, key):
+    """드라이브 목록 근거 표식 (2026-10-29 SA-07) — inv(dict)가 없으면(종전 호출부) 아무것도 하지 않는다."""
+    if isinstance(inv, dict):
+        inv[key] = True
+
+
+def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl, inv=None):
+    """Drives 추출 — Empty Bay 필터링 + 정규화.
+
+    2026-10-29 (SA-07): inv(dict)를 주면 드라이브 목록 근거를 적는다 — Drives 가 배열이면(빈 배열 포함) 'enumerated',
+    가리킨 드라이브를 읽지 못했으면(@odata.id 없음 · 조회 실패(404 포함 — 가리킨 것을 못 읽음) · 상한 절단) 'incomplete'.
+    Empty Bay(Q-09)는 읽고 거른 것이라 미완결이 아니다. inv 를 주지 않으면 종전과 같다.
+    """
     drives = []
     errors = []
-    for d_member in _capped(_safe(sdata, 'Drives') or [], 'storage', errors):
+    raw = _safe(sdata, 'Drives')
+    if isinstance(raw, list):
+        _inv_set(inv, 'enumerated')
+        if len(raw) > MAX_COLLECTION_MEMBERS:
+            _inv_set(inv, 'incomplete')
+    no_uri = 0
+    for d_member in _capped(raw or [], 'storage', errors):
         d_uri = _safe(d_member, '@odata.id')
         if not d_uri:
+            no_uri += 1
             continue
         dst, ddata, derr = _get(bmc_ip, _p(d_uri), username, password, timeout, verify_ssl)
         if derr or dst != 200:
             errors.append(_err('storage', f'Drive {d_uri} 실패: {derr or dst}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
         # Q-09: HPE Empty Bay 필터 — CapacityBytes가 없거나 Name에 "Empty" 포함 시 스킵
         drive_name = _str(_safe(ddata, 'Name'))  # Round 11 #1: 분리형 string-method 방어
@@ -3270,6 +3514,13 @@ def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_s
             'failure_predicted':      _safe(ddata, 'FailurePredicted'),
             'predicted_life_percent': life_pct,
         })
+        # 2026-10-27 (C8 03-storage-003): Identifiers 의 NAA/EUI 가 있을 때만 wwn 키(새 발행 키 — 원천 있을 때만).
+        _wwn = _drive_wwn(ddata)
+        if _wwn:
+            drives[-1]['wwn'] = _wwn
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 Drive 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return drives, errors
 
 
@@ -3367,27 +3618,42 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
     return volumes, errors
 
 
-def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None):
+def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None,
+                             inv=None, refs=None):
     """Storage 정규경로 — 컨트롤러 → 드라이브 → 볼륨 계층.
 
     2026-10-19 (A-8): StorageControllers/Controllers 가 없고 드라이브가 있는 멤버는 섀시 PCIeDevices 에서 컨트롤러 정체를 찾는다
     (_identify_controller_from_pcie — 드라이브 위치 ⊂ PCIe 슬롯 위치). chassis_uris 가 없으면 종전과 같다.
+    2026-10-29 (SA-07 · SA-12): inv 에 드라이브 목록 근거(멤버 Drives 배열 · 읽지 못한 멤버)를 적고, refs 에 Storage 가 가리킨 드라이브
+    @odata.id(조회 실패 · Empty Bay 포함)와 Links.Enclosures 섀시를 모은다 — _chassis_drives_union 이 쓴다. 이미 받은 본문이라 요청은 늘지 않는다.
     """
     controllers = []
     volumes = []
     errors = []
     pcie_cache = None   # 섀시 PCIeDevices 는 멤버마다 다시 읽지 않는다
+    no_uri = 0
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
+            no_uri += 1
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
             errors.append(_err('storage', f'Storage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            _inv_set(inv, 'incomplete')
             continue
+        if isinstance(refs, dict):
+            for _enc in _dicts(_safe(sdata, 'Links', 'Enclosures')):
+                _eu = _safe(_enc, '@odata.id')
+                if isinstance(_eu, str) and _eu:
+                    refs['enclosures'].append(_eu)
+            for _dm in _dicts(_safe(sdata, 'Drives')):
+                _du = _safe(_dm, '@odata.id')
+                if isinstance(_du, str) and _du:
+                    refs['drive_uris'].add(_p(_du))
         ctrl_info, c_errs = _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout, verify_ssl)
         errors.extend(c_errs)
-        drives, d_errs = _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl)
+        drives, d_errs = _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl, inv)
         errors.extend(d_errs)
         # name 우선순위: controller_name (실제 하드웨어 모델) → Storage 객체 Name fallback.
         # 실측 (Lenovo XCC SR650 V2): 컨트롤러 식별 정보 손실 차단.
@@ -3411,10 +3677,13 @@ def _gather_standard_storage(bmc_ip, members, username, password, timeout, verif
         vols, v_errs = _extract_storage_volumes(sdata, _safe(sdata, 'Id'), bmc_ip, username, password, timeout, verify_ssl)
         volumes.extend(vols)
         errors.extend(v_errs)
+    if no_uri and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'@odata.id 없는 Storage 멤버 {no_uri}개 — 읽지 못함, 디스크 합계 미산출')
     return controllers, volumes, errors
 
 
-def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):    # nosec rule12-r1
+def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, inv=None):    # nosec rule12-r1
     """HPE iLO4 SmartStorage legacy path (cycle 2026-05-07 M-I1 — Additive).
 
     iLO4 (Gen8/Gen9 pre-iLO5) 펌웨어는 표준 `/Systems/{id}/Storage` 미도입,
@@ -3427,6 +3696,8 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
     Returns: (controllers: list, volumes: list, errors: list) — gather_standard_storage 와
              동일한 envelope shape (controllers / volumes / health / drives).
     실측 fixture: tests/fixtures/redfish/hpe_ilo4/ (Round 14 web sources).
+    2026-10-29 (SA-07): inv 를 주면 PhysicalDrives 컬렉션(200)을 읽은 컨트롤러로 'enumerated', 컨트롤러 · 디스크 경로를 다 읽지 못하면
+    'incomplete' 를 적는다. 종전부터 errors 를 남기지 않던 PhysicalDrives 실패는 그대로 errors 없이 두고(섹션 상태 불변) notice 로 남긴다.
     """
     base = _p(system_uri) + '/SmartStorage'
     st, ss_root, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
@@ -3436,6 +3707,7 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
         return [], [], errors
 
     controllers = []
+    unread = 0   # 2026-10-29 (SA-07): errors 를 남기지 않는 디스크 경로 실패 수(@odata.id 없음 · PhysicalDrives 컬렉션 · 멤버)
     # ArrayControllers (RAID) + HostBusAdapters (HBA pass-through) 둘 다 시도
     for coll_key in ('ArrayControllers', 'HostBusAdapters'):
         coll_link = _safe(ss_root, coll_key, '@odata.id')
@@ -3444,15 +3716,19 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
         cst, coll, cerr = _get(bmc_ip, _p(coll_link), username, password, timeout, verify_ssl)
         if cerr or cst != 200:
             errors.append(_err('storage', f'SmartStorage.{coll_key} 실패: {cerr or cst}'))
+            _inv_set(inv, 'incomplete')
             continue
+        cwalk = {}
         for member in _collection_members(bmc_ip, _p(coll_link), coll, username, password, timeout,
-                                          verify_ssl, 'storage', errors):
+                                          verify_ssl, 'storage', errors, state_out=cwalk):
             ctrl_uri = _safe(member, '@odata.id')
             if not ctrl_uri:
+                unread += 1
                 continue
             ctrl_st, ctrl_data, ctrl_err = _get(bmc_ip, _p(ctrl_uri), username, password, timeout, verify_ssl)
             if ctrl_err or ctrl_st != 200:
                 errors.append(_err('storage', f'SmartStorage controller {ctrl_uri} 실패: {ctrl_err or ctrl_st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                _inv_set(inv, 'incomplete')
                 continue
             # PhysicalDrives 컬렉션 (iLO4 SmartStorage 구조)
             drives = []
@@ -3460,13 +3736,17 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
             if pd_link:
                 pst, pcoll, _perr = _get(bmc_ip, _p(pd_link), username, password, timeout, verify_ssl)
                 if pst == 200:
+                    _inv_set(inv, 'enumerated')
+                    pwalk = {}
                     for pd_m in _collection_members(bmc_ip, _p(pd_link), pcoll, username, password,
-                                                    timeout, verify_ssl, 'storage', errors):
+                                                    timeout, verify_ssl, 'storage', errors, state_out=pwalk):
                         pd_uri = _safe(pd_m, '@odata.id')
                         if not pd_uri:
+                            unread += 1
                             continue
                         pdst, pddata, _pderr = _get(bmc_ip, _p(pd_uri), username, password, timeout, verify_ssl)
                         if pdst != 200:
+                            unread += 1
                             continue
                         # iLO4 SmartStorage 단위 정정 (Round 1 #10/11/20): CapacityGB 는 십진 GB,
                         # CapacityMiB 는 이진 MiB. 둘을 혼동해 capacity_gb 에 MiB 값을 그대로 넣어
@@ -3494,6 +3774,10 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                             'capacity_gb':    capacity_gb,
                             'health':         _safe(pddata, 'Status', 'Health'),
                         })
+                    if not pwalk.get('complete'):
+                        _inv_set(inv, 'incomplete')
+                else:
+                    unread += 1
             ctrl_id = _safe(ctrl_data, 'Id')
             controllers.append({
                 'id':                      ctrl_id,
@@ -3507,6 +3791,11 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                 'controller_manufacturer': _safe(ctrl_data, 'Manufacturer') or 'HPE',  # nosec rule12-r1 — SmartStorage path 은 HPE OEM legacy spec 직접 의존
                 'controller_health':       _safe(ctrl_data, 'Status', 'Health'),
             })
+        if not cwalk.get('complete'):
+            _inv_set(inv, 'incomplete')
+    if unread and isinstance(inv, dict):
+        inv['incomplete'] = True
+        _notice('storage', f'SmartStorage 디스크 경로 {unread}건을 읽지 못함 — 디스크 합계 미산출')
     # SmartStorage 는 logical volume (LogicalDrives) 별도 경로 — iLO4 fixture 부재로
     # 본 cycle 은 controllers + drives 만 (Additive — 향후 lab fixture 추가 시 보강)
     return controllers, [], errors
@@ -3617,61 +3906,137 @@ def _identify_controller_from_pcie(ctrl_entry, sdata, pcie_devices, bmc_ip, user
     return True
 
 
-def _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl):
-    """Storage 에 드라이브가 0건이면 System 이 연결한 섀시의 `Drives` 컬렉션을 본다 (2026-10-19, A-10).
+def _chassis_drives_union(bmc_ip, chassis_uris, refs, controllers, username, password, timeout, verify_ssl, inv=None):
+    """Storage 가 가리킨 드라이브에 섀시가 광고한 드라이브를 합집합으로 더한다 (2026-10-29 SA-12 — 종전 A-10 _chassis_drives_fallback).
 
-    DMTF Chassis.Drives 는 그 섀시에 물리적으로 든 드라이브다. 실측 HPE CSUS 3200 4노드는 Storage/1.Drives 와 같은 목록(0 또는 2건)이라 결과가
-    바뀌지 않지만, Storage 컨테이너가 드라이브를 가리키지 않는 펌웨어에서 디스크가 통째로 빠지는 것을 막는다. 섀시 단위 컨테이너
-    (id=`Chassis.<id>`, name=`<Chassis.Name> Drives`)로 담고 notice 를 남긴다. 드라이브를 가진 벤더는 호출되지 않는다(요청 0건).
+    DMTF Chassis.Drives · Chassis.Links.Drives 는 그 섀시에 물리적으로 든 드라이브다. 대상 섀시 = System 이 연결한 섀시(chassis_uris)
+    ∪ Storage 멤버의 Links.Enclosures(refs['enclosures']). 섀시 본문이 **광고한** `Drives` 컬렉션과 `Links.Drives` 만 따른다 — 광고가
+    없으면 GET 하지 않는다(경로 조립 없음). 중복은 @odata.id 로 먼저 지운다 — Storage 가 이미 가리킨 URI(refs['drive_uris'] — 조회 실패 ·
+    Empty Bay 포함)는 다시 읽지 않는다. 새로 읽은 드라이브는 SerialNumber 가 Storage 드라이브와 같으면 같은 디스크로 본다. Serial 이 없어
+    같은지 판정할 수 없는 섀시 전용 드라이브는 Storage 에 드라이브가 있으면 더하지 않는다 — 중복 합산도 누락도 확정할 수 없으므로
+    notice 를 남기고 합계를 미산출(inv['incomplete'])로 둔다. Storage 가 드라이브를 하나도 가리키지 않으면 종전 A-10 처럼 그대로 쓴다.
+    Storage 에 없던 드라이브만 섀시 단위 컨테이너(id=`Chassis.<id>`, name=`<Chassis.Name> Drives`)로 담고 notice 를 남긴다.
+    섀시 본문 · Drives 컬렉션의 404 는 "미제공" 으로 조용히 넘긴다 — 실행 중에는 404 의 출처(장비 응답 · 재생 기록 누락)를 가를 수 없다.
+    그 밖의 실패는 비차단 오류이며 드라이브 목록이 미완결이다. 실측 18대 미러는 섀시 쪽 참조가 모두 Storage 와 같은 URI 다(추가 0건).
     """
-    controllers, errors = [], []
-    for cu in _capped([u for u in (chassis_uris or []) if isinstance(u, str) and u], 'storage', errors):
+    controllers_out, errors = [], []
+    refs = refs if isinstance(refs, dict) else {}
+    known_serials, had_drives = set(), False
+    for c in (controllers or []):
+        for d in ((c.get('drives') or []) if isinstance(c, dict) else []):
+            if isinstance(d, dict):
+                had_drives = True
+                sn = _str(d.get('serial')).strip().upper()
+                if sn:
+                    known_serials.add(sn)
+    seen = set(refs.get('drive_uris') or ())
+    targets, tseen = [], set()
+    for u in list(chassis_uris or []) + list(refs.get('enclosures') or []):
+        if isinstance(u, str) and u and _p(u) not in tseen:
+            tseen.add(_p(u))
+            targets.append(u)
+    no_uri, excluded = 0, 0
+    for cu in _capped(targets, 'storage', errors):
         st, cdata, cerr = _get(bmc_ip, _p(cu), username, password, timeout, verify_ssl)
         if cerr or st != 200 or not isinstance(cdata, dict):
             if st != 404:
                 errors.append(_err('storage', f'Chassis {cu} 실패: {cerr or st}', _extended_info(cdata),
                                    code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                _inv_set(inv, 'incomplete')
             continue
+        members = []
         link = _safe(cdata, 'Drives', '@odata.id')
-        if not isinstance(link, str) or not link:
+        if isinstance(link, str) and link:
+            st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+            if err2 or st2 != 200 or not isinstance(coll, dict):
+                if st2 != 404:
+                    errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
+                                       code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    _inv_set(inv, 'incomplete')
+            else:
+                walk = {}
+                members.extend(_collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl,
+                                                   'storage', errors, state_out=walk))
+                _inv_set(inv, 'enumerated')
+                if not walk.get('complete'):
+                    _inv_set(inv, 'incomplete')
+        linked = _safe(cdata, 'Links', 'Drives')
+        if isinstance(linked, list):
+            members.extend(linked)
+            _inv_set(inv, 'enumerated')
+        new = []
+        for m in members:
+            du = _safe(m, '@odata.id')
+            if not isinstance(du, str) or not du:
+                no_uri += 1
+                continue
+            if _p(du) in seen:
+                continue
+            seen.add(_p(du))
+            new.append({'@odata.id': du})
+        if not new:
             continue
-        st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
-        if err2 or st2 != 200 or not isinstance(coll, dict):
-            if st2 != 404:
-                errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
-                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
-            continue
-        members = _collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl, 'storage', errors)
-        if not members:
-            continue
-        drives, d_errs = _extract_storage_drives({'Drives': members}, bmc_ip, username, password, timeout, verify_ssl)
+        drives, d_errs = _extract_storage_drives({'Drives': new}, bmc_ip, username, password, timeout, verify_ssl, inv)
         errors.extend(d_errs)
-        if not drives:
+        kept = []
+        for d in drives:
+            sn = _str(d.get('serial')).strip().upper()
+            if sn:
+                if sn in known_serials:
+                    continue
+                known_serials.add(sn)
+            elif had_drives:
+                excluded += 1
+                continue
+            kept.append(d)
+        if not kept:
             continue
         cid = _id_text(_safe(cdata, 'Id')) or _p(cu).rstrip('/').rsplit('/', 1)[-1]
-        controllers.append({
+        controllers_out.append({
             'id':     'Chassis.%s' % cid,
             'name':   '%s Drives' % (_strip_or_none(_safe(cdata, 'Name')) or cid),
             'health': _safe(cdata, 'Status', 'Health') or _safe(cdata, 'Status', 'HealthRollup'),
-            'drives': drives,
+            'drives': kept,
         })
-        _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(drives)))
-    return controllers, errors
+        if had_drives:
+            _notice('storage', '섀시 %s 의 드라이브 %d건 — Storage 가 가리키지 않아 추가' % (cid, len(kept)))
+        else:
+            _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(kept)))
+    if no_uri:
+        _inv_set(inv, 'incomplete')
+        _notice('storage', '@odata.id 없는 섀시 Drive 멤버 %d개 — 읽지 못함, 디스크 합계 미산출' % no_uri)
+    if excluded:
+        _inv_set(inv, 'incomplete')
+        _notice('storage', 'SerialNumber 없는 섀시 전용 드라이브 %d건 — Storage 드라이브와 같은지 판정할 수 없어 더하지 않음, '
+                           '디스크 합계 미산출' % excluded)
+    return controllers_out, errors
 
 
-def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None):
+def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None, inventory_out=None):
     """Storage 진입 — Storage → SimpleStorage → SmartStorage fallback dispatcher.
 
     cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4) fallback chain 추가 — Additive.
     기존 Storage / SimpleStorage 분기 변경 0. SmartStorage 는 iLO4 legacy path 라
     표준 / SimpleStorage 둘 다 404 일 때만 시도.
 
-    2026-10-19 (chassis_uris — System 이 연결한 섀시, 선택): 표준 경로에서 (A-8) 컨트롤러 정보 없는 Storage 멤버의 정체를 섀시 PCIeDevices 로,
-    (A-10) 드라이브가 0건이면 섀시 Drives 컬렉션으로 보충한다. 둘 다 "정보가 없을 때만" 발동해 컨트롤러 정보·드라이브를 주는 벤더는 요청 0건 증가.
+    2026-10-19 (chassis_uris — System 이 연결한 섀시, 선택): 표준 경로에서 (A-8) 컨트롤러 정보 없는 Storage 멤버의 정체를 섀시 PCIeDevices 로
+    찾는다 — 컨트롤러 정보를 주는 벤더는 요청 0건 증가.
+    2026-10-29 (SA-12): 표준 경로는 Storage 가 가리킨 드라이브에 섀시(chassis_uris ∪ Storage Links.Enclosures)가 광고한 드라이브를 늘
+    합집합으로 더한다(_chassis_drives_union — 종전 A-10 은 Storage 드라이브 0건일 때만). 광고한 링크만 따르며 그만큼 요청이 늘 수 있다.
+    SimpleStorage · SmartStorage 경로는 합집합을 하지 않는다(종전과 같다).
+    2026-10-29 (SA-07): inventory_out(dict)을 주면 끝에서 드라이브 목록 근거 {'enumerated', 'incomplete'} 를 적는다 — normalize 가
+    storage.summary.grand_total_gb 의 null(못 봄 · 미완결)과 0(확인한 0)을 가른다. 전원 상태는 쓰지 않는다. 예외로 끝나면 적지 않는다.
     """
     path = _p(system_uri) + '/Storage'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
     errors = []
+    inv = {'enumerated': False, 'incomplete': False}
+    refs = {'enclosures': [], 'drive_uris': set()}
+
+    def _done(val):
+        if isinstance(inventory_out, dict):
+            inventory_out.update(inv)
+        return val, errors
 
     # Storage 실패 시 SimpleStorage fallback (구형 BMC 호환)
     use_simple = False
@@ -3688,20 +4053,23 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, 
             # cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4 OEM legacy) fallback —
             # 표준/SimpleStorage 모두 404 시 HPE 구 path 시도 (Additive).
             ctrls, vols, smart_errors = _gather_smart_storage(
-                bmc_ip, system_uri, username, password, timeout, verify_ssl
+                bmc_ip, system_uri, username, password, timeout, verify_ssl, inv
             )
             if ctrls:
                 # 2026-08-12 (H11): 성공한 fallback — errors 아님 (위 SimpleStorage 와 동일 사유)
                 _notice('storage', 'Storage/SimpleStorage 미지원, SmartStorage (HPE OEM legacy) fallback 사용')  # nosec rule12-r1 — SmartStorage OEM path spec
                 errors.extend(smart_errors)
-                return {'controllers': ctrls, 'volumes': vols}, errors
+                return _done({'controllers': ctrls, 'volumes': vols})
             errors.append(_err('storage', f'Storage/SimpleStorage/SmartStorage 모두 실패: {err or st}'))
-            return {'controllers': [], 'volumes': []}, errors
+            return _done({'controllers': [], 'volumes': []})
 
+    walk = {}
     members = _collection_members(bmc_ip, (simple_path if use_simple else path), coll, username,
-                                  password, timeout, verify_ssl, 'storage', errors)
+                                  password, timeout, verify_ssl, 'storage', errors, state_out=walk)
+    if not walk.get('complete'):
+        inv['incomplete'] = True   # 2026-10-29 (SA-07): Storage · SimpleStorage 컬렉션을 끝까지 온전히 읽지 못함
     if use_simple:
-        controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl)
+        controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl, inv)
         errors.extend(sub_errors)
         # 2026-08-12: fallback **사용 사실**은 notice 지만, fallback 이 200 을 주고도
         #   결과가 비면 그건 성공이 아니다. errors 가 비면 _make_section_runner 가
@@ -3709,16 +4077,17 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, 
         if not controllers and not errors:
             errors.append(_err('storage',
                                'SimpleStorage 경로가 응답했지만 디스크 정보가 비어 있음'))
-        return {'controllers': controllers, 'volumes': []}, errors
+        return _done({'controllers': controllers, 'volumes': []})
     controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl,
-                                                                chassis_uris=chassis_uris)
+                                                                chassis_uris=chassis_uris, inv=inv, refs=refs)
     errors.extend(sub_errors)
-    # 2026-10-19 (A-10): Storage 가 드라이브를 하나도 가리키지 않으면 섀시 Drives 컬렉션으로 보충 (실측 CSUS 는 같은 목록 — 결과 불변)
-    if chassis_uris and not any((c.get('drives') if isinstance(c, dict) else None) for c in controllers):
-        extra_ctrls, extra_errs = _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl)
+    # 2026-10-29 (SA-12): 섀시가 광고한 드라이브를 늘 합집합으로 — 종전 A-10(Storage 드라이브 0건일 때만)을 대신한다
+    if chassis_uris or refs['enclosures']:
+        extra_ctrls, extra_errs = _chassis_drives_union(bmc_ip, chassis_uris, refs, controllers,
+                                                        username, password, timeout, verify_ssl, inv)
         controllers.extend(extra_ctrls)
         errors.extend(extra_errs)
-    return {'controllers': controllers, 'volumes': volumes}, errors
+    return _done({'controllers': controllers, 'volumes': volumes})
 
 
 def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -3731,6 +4100,7 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         return [], errors
 
     nics = []
+    link_unmapped = []   # 2026-10-29 (SA-09): 원문이 있는데 unknown 이 된 NIC — 'Id=원문'
     for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
                                       'network', errors):
         uri = _safe(member, '@odata.id')
@@ -3745,6 +4115,13 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             for a in _dicts(_safe(ndata, 'IPv4Addresses'))
             if a.get('Address') not in (None, '0.0.0.0', '')
         ]
+        # 2026-10-27 (C8 03-network-006): IPv6Addresses 도 같은 모양으로 — 값이 있을 때만 'ipv6' 키를 둔다(실측 18대 전부 빈 목록 — 합성 검증).
+        ipv6_addrs = [
+            {'address': a.get('Address').strip(), 'prefix_length': _safe_int(a.get('PrefixLength')),
+             'address_origin': a.get('AddressOrigin')}
+            for a in _dicts(_safe(ndata, 'IPv6Addresses'))
+            if isinstance(a.get('Address'), str) and a.get('Address').strip() not in ('', '::')
+        ]
         # 2026-04-29 fix B13: link_status enum 정규화 — Dell linkup/linkdown / HPE NoLink / Cisco Connected/Disconnected → up/down/unknown
         # cycle 2026-06-15 (Lenovo SR650 V4 실미러 검수): MAC 소문자 정규화 — bmc.mac_address /
         # network_adapters.*.mac / ports.associated_address 와 case 일관(라이브러리 lowercase 규약,
@@ -3752,14 +4129,24 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         # 같은 물리 NIC 이 data.network(대문자) vs network_adapters(소문자) 로 갈렸다. raw 가
         # colon-hex 라 .lower() 무손실.
         _nmac = _safe(ndata, 'MACAddress')
+        _nlink = _safe(ndata, 'LinkStatus')
+        _nraw = _link_status_unmapped(_nlink)
+        if _nraw is not None:
+            link_unmapped.append('%s=%s' % (_id_text(_safe(ndata, 'Id')) or _p(uri), _nraw))
         nics.append({
             'id': _safe(ndata, 'Id'), 'name': _safe(ndata, 'Name') or _safe(ndata, 'Id') or '',
             'mac': _nmac.lower() if isinstance(_nmac, str) else _nmac, 'speed_mbps': _safe_int(_safe(ndata, 'SpeedMbps')),  # Round 2 #18: mbps int 통일
             'mtu': _safe_int(_safe(ndata, 'MTUSize')),  # Round 6 #6: int 통일(마지막 수치 필드)
-            'link_status': _normalize_link_status(_safe(ndata, 'LinkStatus')),
+            'link_status': _normalize_link_status(_nlink),
             'health': _safe(ndata, 'Status', 'Health'),
             'ipv4': ipv4_addrs,
         })
+        if ipv6_addrs:
+            nics[-1]['ipv6'] = ipv6_addrs
+    # 2026-10-29 (SA-09): Starting · Training · Enabled · Active · 미인식 값은 unknown — 원문을 EthernetInterfaces 경로당 1건으로 남긴다
+    #   (파티션도 각 System 의 이 함수를 거치므로 System 마다 1건). _normalize_network_raw 의 재정규화는 멱등이라 notice 를 내지 않는다.
+    if link_unmapped:
+        _notice('network', '%s: NIC 링크 상태 값 미확정, unknown 으로 기록 (link_status) — %s' % (path, ', '.join(link_unmapped)))
     return nics, errors
 
 
@@ -3875,8 +4262,9 @@ def _normalize_ib_link_status(value):
 
     Port.LinkStatus(LinkUp / Starting / Training / LinkDown / NoLink — Port.v1_19_0) 와 NetworkPort.LinkStatus(Up / Down /
     Starting / Training — NetworkPort.v1_4_3) 를 up / down / unknown 으로 — 명확한 up 과 down 만 확정하고 중간 상태(Starting /
-    Training) · 없음 · 그 밖의 값은 unknown 이다. network.ports[].link_status 는 종전 _normalize_link_status 그대로(협상 중 = down)
-    라 같은 포트가 training 중이면 ports=down / infiniband=unknown 으로 갈릴 수 있다 (docs/contract/03-fields.md 6.3.3).
+    Training) · 없음 · 그 밖의 값은 unknown 이다. 2026-10-29 (SA-09)부터 network.ports[].link_status(_normalize_link_status)도
+    Starting · Training 을 unknown 으로 둬 같은 포트의 두 값이 갈리지 않는다 (docs/contract/03-fields.md 6.3.3). 그쪽만 Connected 를 up,
+    Disconnected · Disabled · Inactive · Offline 을 down 으로 더 받는다.
     """
     s = _str(value).strip().lower()
     if s in ('linkup', 'up'):
@@ -4107,8 +4495,28 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             'port_guid':    _normalize_ib_guid(_safe(ib, 'PortGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentPortGUID')),
             'port_uri':     _p(port_uri) if port_uri else None,
             'port_uris':    port_uris,
+            # 2026-10-27 (C8 03-network-007): 기능의 Ethernet.MTUSize 와 MAC — 호스트 NIC interfaces[].mtu 가 null 일 때 MAC 으로 채우는
+            #   근거(요청 0). 모듈은 data 밖 aux(ndf_mtu_by_mac)로 넘기고 normalize 층이 채운다. 실측 MTU 보유: XCC3 · iLO 7 일부 NDF.
+            'mtu':          _safe_int(_safe(nd, 'Ethernet', 'MTUSize')),
+            'macs':         [m.strip().upper().replace(':', '').replace('-', '')
+                             for m in (_safe(nd, 'Ethernet', 'MACAddress'), _safe(nd, 'Ethernet', 'PermanentMACAddress'))
+                             if isinstance(m, str) and m.strip()],
         })
     return ndfs
+
+
+# HBA 링크를 up 으로 인정하는 LinkStatus 값 — 포트 단위 표준 링크 값만 (2026-10-28 사용자 결정).
+#   DMTF Port.LinkStatus 는 LinkUp 만 활성이다(Starting · Training 은 협상 중, LinkDown · NoLink 는 비활성). 구 NetworkPort.LinkStatus 는 Up.
+#   Connected 는 사전이 up 으로 적어 둔 기존 값이라 유지한다(표준 enum 밖 — 2026-10-28 미러 18대 · fixture 출현 0).
+#   Enabled · Active 는 표준 Port.LinkStatus 에서 링크 의미가 불명이라 down + '값 미확정' notice 다. OEM 의 포트별 필드가 실제 Link Up 을
+#   뜻한다는 근거(벤더 문서 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가 확인되면 _extract_oem_* 계열에서 따로 정규화한다
+#   (카드 단위 값은 대상이 아니다). network.ports[].link_status 는 이 집합을 쓰지 않는다(_normalize_link_status).
+#   source: https://redfish.dmtf.org/schemas/v1/Port.json · https://redfish.dmtf.org/schemas/v1/NetworkPort.json
+_HBA_LINK_UP_VALUES = frozenset(('linkup', 'up', 'connected'))
+# HBA 가 notice 없이 down 으로 적는 값 — 2026-10-28 의 down 목록을 HBA 전용으로 고정한다 (2026-10-29 SA-09). 일반 NIC · 포트가 Starting ·
+#   Training 을 unknown 으로 바꿔도 storage.hbas 의 값 · '값 미확정' notice 는 입력마다 종전과 같다(HBA up/down 정책 불변 — 사용자 지시).
+_HBA_LINK_DOWN_VALUES = frozenset(('linkdown', 'down', 'nolink', 'disconnected', 'disabled', 'inactive', 'offline',
+                                   'starting', 'training'))
 
 
 def _hba_link_status(pdata):
@@ -4116,14 +4524,17 @@ def _hba_link_status(pdata):
 
     2026-10-18 에는 포트 응답에 `LinkStatus` 키가 없으면(실측 HPE CSUS 3200 RMC 1.75.108 — FC Port 24개 전부) None(JSON null)을 두고
     "확인되지 않은 상태를 down 으로 적지 않는다" 였다. 2026-10-19 사용자 재결정: 값은 항상 들어가야 하고 up · down 둘만 존재한다 —
-    링크 활성이 확인된 경우(LinkUp · Up · Connected 등 → 'up')만 up 이고, 그 밖(키 없음 · 값 null · Unknown · 미인식 벤더 문자열 ·
-    LinkDown · NoLink · Starting · Training)은 전부 down 이다. 키 없음(_hba_link_missing)과 키는 있는데 up/down 으로 정규화되지
-    않은 값(_hba_link_unresolved)은 호출부가 카드당 notice 로 남겨 "장비가 안 줘서 down" 과 "장비가 down 이라 해서 down" 을
-    diagnosis.details.notices 에서 가를 수 있게 한다. network.ports[].link_status 는 종전 _normalize_link_status 그대로다.
+    링크 활성이 확인된 경우만 up 이고, 그 밖(키 없음 · 값 null · Unknown · 미인식 벤더 문자열 · LinkDown · NoLink · Starting · Training)은
+    전부 down 이다. 2026-10-28 사용자 결정: "확인된 경우" 는 표준 링크 값(_HBA_LINK_UP_VALUES — LinkUp · Up · Connected)뿐이다.
+    Enabled · Active 는 HBA 에서 down 이다(2026-10-28 당시 네트워크 정규화는 up, 2026-10-29 SA-09 부터 unknown). 키 없음(_hba_link_missing)과
+    키는 있는데 HBA 값이 정해지지 않은 값(_hba_link_unresolved)은 호출부가 카드당 notice 로 남겨 "장비가 안 줘서 down" 과 "장비가 down
+    이라 해서 down" 을 diagnosis.details.notices 에서 가를 수 있게 한다. network.ports[].link_status 는 _normalize_link_status 를 쓴다
+    (2026-10-29 SA-09 — Starting · Training 은 거기서 unknown, HBA 에서는 종전처럼 down).
     """
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return 'down'
-    return 'up' if _normalize_link_status(pdata.get('LinkStatus')) == 'up' else 'down'
+    raw = pdata.get('LinkStatus')
+    return 'up' if isinstance(raw, str) and raw.strip().lower() in _HBA_LINK_UP_VALUES else 'down'
 
 
 def _hba_link_missing(pdata):
@@ -4132,11 +4543,17 @@ def _hba_link_missing(pdata):
 
 
 def _hba_link_unresolved(pdata):
-    """`LinkStatus` 키는 있는데 up/down 으로 정규화되지 않은 값(null · Unknown · 미인식 문자열)의 원문. 그런 값이 아니면 None."""
+    """`LinkStatus` 키는 있는데 HBA 값이 표준으로 정해지지 않은 값의 원문. 그런 값이 아니면 None.
+
+    HBA up 값(_HBA_LINK_UP_VALUES)도 HBA down 값(_HBA_LINK_DOWN_VALUES)도 아닌 값 — null · Unknown · 미인식 문자열과 Enabled · Active 다.
+    둘 다 값은 down, 사실은 notice `링크 상태 값 미확정`. 2026-10-29 (SA-09): 종전에는 _normalize_link_status 결과로 갈랐다 — 일반 매핑이
+    Starting · Training 을 unknown 으로 바꿔도 이 판정이 따라 바뀌지 않도록 HBA 전용 집합으로 고정한다(입력마다 결과는 종전과 같다).
+    """
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return None
     raw = pdata.get('LinkStatus')
-    if _normalize_link_status(raw) in ('up', 'down'):
+    s = '' if raw is None else str(raw).strip().lower()
+    if s in _HBA_LINK_DOWN_VALUES or (s in _HBA_LINK_UP_VALUES and _hba_link_status(pdata) == 'up'):
         return None
     return 'null' if raw is None else str(raw).strip()
 
@@ -4446,13 +4863,34 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
     return sources, tried, fails, state['empty']
 
 
+def _pcie_port_link_condition(pcie_body, registries):
+    """PCIeDevice.Status.Conditions[] 에서 **선언된 등록부**(adapter vendor_notes.pcie_port_link_condition_registries)의 LinkUp/LinkDown
+    메시지 1건을 (상태, Timestamp, MessageArgs[0]) 로 돌려준다 (2026-10-27 결정 11 A안 · 사용자 3차 검토).
+    - 등록부 접두(MessageId 의 첫 세그먼트)가 선언 목록에 없으면 None — 벤더 이름으로 가르지 않는다(선언 없는 벤더는 문구 없음).
+    - 마지막 세그먼트가 LinkUp/LinkDown 이 아닌 것(PcieLinkTrainingOk 등 PCIe 자체 링크)은 보지 않는다.
+    - 카드 단위 조건이다 — 호출부는 포트 link_status 값을 바꾸지 않고 notice 참고 정보로만 쓴다."""
+    regs = {str(r).strip() for r in (registries or []) if str(r).strip()}
+    if not regs or not isinstance(pcie_body, dict):
+        return None
+    for c in _dicts(_safe(pcie_body, 'Status', 'Conditions')):
+        mid = _str(c.get('MessageId')).strip()
+        parts = mid.split('.')
+        if len(parts) < 2 or parts[0] not in regs or parts[-1] not in ('LinkUp', 'LinkDown'):
+            continue
+        args = c.get('MessageArgs') if isinstance(c.get('MessageArgs'), list) else []
+        return (parts[-1], _str(c.get('Timestamp')).strip() or None, _str(args[0]).strip() if args else None)
+    return None
+
+
 def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                 username, password, timeout, verify_ssl):
+                                 username, password, timeout, verify_ssl, pcie_link_registries=None, mtu_out=None,
+                                 link_out=None):
     """NetworkAdapter 1장 수집 — gather_network_adapters_chassis 의 카드 루프 본문을 그대로 뽑아낸 것 (2026-10-18, F3b).
 
     반환: 'ok' | 'fetch_failed'(카드 GET 실패 — 비차단 오류 기록) | 'skipped'(빈 슬롯 등 조용히 제외).
     out / errors / seen_ports / ib_idx_by_port 는 호출부의 것을 제자리에서 채운다. 예외는 밖으로 던지고 호출부가 카드 단위로
-    격리한다(이 카드의 부분 항목은 호출부가 되돌린다).
+    격리한다(이 카드의 부분 항목은 호출부가 되돌린다). link_out(2026-10-29 SA-09)에는 ports[] 에 들어간 포트 중 원문이 있는데
+    link_status 가 unknown 이 된 것을 'Card/Port=원문' 으로 더한다 — 호출부가 섹션당 notice 1건으로 남긴다(data 에는 넣지 않는다).
 
     요청 순서 · 산출은 종전 루프 본문과 같다 — 2026-10-18 에 더해진 것: 링크 상태 규칙(_hba_link_status — 2026-10-19 부터 up/down 둘뿐), WWPN 배제 규칙
     (_derive_port_wwpn), 짝 없는 FC 기능의 부모 포트 링크 상속(F1), 이름 없는 카드의 기능 목록 1회 조회(F4), Id 문자열 정규화(F3a).
@@ -4466,6 +4904,8 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
         return 'fetch_failed'
 
     adapter_id = _safe(adata, 'Id')
+    r16_pcie_body = None                    # 2026-10-27 (결정 11 A안): 이 어댑터 링크로 받은 PCIeDevice 본문 (정확히 1건일 때만)
+    out_fc_added = False                    # 이 카드에서 storage.hbas 가 생성됐는가
     # FirmwareVersion: Controllers[0].FirmwarePackageVersion 또는 root
     fw_ver = None
     ctrls = _safe(adata, 'Controllers', default=[]) or []
@@ -4476,12 +4916,16 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
         # 에 둔다(실측 Mellanox MCX631102="26.46.3048..."). 링크추적 fallback (Additive — 표준 위치
         # 보유 vendor 불변, PCIeDevice 도 부재 시 None 유지).
         if not fw_ver:
-            for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
+            _r16_links = _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices'))
+            for _pd in _r16_links:
                 _pd_uri = _safe(_pd, '@odata.id')
                 if not _pd_uri:
                     continue
                 _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
                 if _ps == 200 and isinstance(_pdata, dict):
+                    # 2026-10-27 (결정 11 A안): 바로 이 어댑터의 링크로 받은 본문만 카드 조건 근거로 쓴다 (섀시 PCIeDevices 열거·캐시는 쓰지 않음)
+                    if len(_r16_links) == 1 and r16_pcie_body is None:
+                        r16_pcie_body = _pdata
                     fw_ver = _safe(_pdata, 'FirmwareVersion')
                     if fw_ver:
                         break
@@ -4545,6 +4989,12 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
     # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
     ndfs = pre_ndfs if pre_ndfs is not None else _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
+    # 2026-10-27 (C8 03-network-007): 기능 MTU 를 MAC(대문자 hex, 구분자 없음) 별로 모은다 — data 밖 aux, 첫 값 유지.
+    if isinstance(mtu_out, dict):
+        for _nd in ndfs:
+            if isinstance(_nd, dict) and _nd.get('mtu'):
+                for _m in (_nd.get('macs') or []):
+                    mtu_out.setdefault(_m, _nd['mtu'])
     # 2026-10-10 (RD-F15): 한 포트에 NDF 가 여럿(CNA 의 Ethernet 기능 + FCoE 기능)이면 **목록**으로 둔다 — 종전 dict 는 뒤 멤버가 앞을
     #   덮어 멤버 순서에 따라 같은 포트가 Ethernet 으로도 FC 로도 분류됐다.
     # 2026-10-18 (F1b): 기능이 가리키는 포트 링크 두 종류(NetworkPorts/… · Ports/…)를 모두 색인한다.
@@ -4564,6 +5014,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     # 2026-10-18: 링크 상태를 장비가 주지 않은 포트 · WWPN 을 정하지 못한 포트 — 카드당 notice 1건씩.
     # 2026-10-19: link_status 는 up/down 둘뿐이라 미제공(link_missing) · 값 미확정(link_unresolved) 포트도 down 이다 — 그 사실은 notice 로만 남는다.
     link_missing, link_unresolved, wwpn_missing, wwpn_derived = [], [], [], []
+    fc_port_n, eth_port_n = 0, 0            # 2026-10-27 (결정 11 A안): 카드 종류 판별용 — FC 전용 카드(이더넷 포트 0)만 카드 조건을 붙인다
 
     # NetworkPorts (Redfish 1.5 이전) 또는 Ports (1.6+)
     ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
@@ -4624,7 +5075,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                 port_protocol = _safe(pdata, 'PortProtocol')
                 link_tech = (_safe(pdata, 'LinkNetworkTechnology')
                              or _safe(pdata, 'ActiveLinkTechnology'))
-                # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화.
+                # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화 (2026-10-29 SA-09: Starting · Training · Enabled · Active · 미인식 = unknown).
                 normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
                 port_id = _safe(pdata, 'Id')
                 pid_s = _id_text(port_id)      # 2026-10-18 (F3a): 문자열 연산 전용 — 출력 port_id 는 raw
@@ -4677,6 +5128,10 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                 if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
                     primary_addr = ndf['wwpn']
 
+                if cls in ('FibreChannel', 'FCoE'):
+                    fc_port_n += 1
+                elif cls == 'Ethernet':
+                    eth_port_n += 1
                 port_hbas = []
                 if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE') and not (not cand and prefixed_orphan):
                     hba_link = _hba_link_status(pdata)   # 2026-10-19: up / down 둘뿐 — 미제공 · 미확정은 down + notice
@@ -4724,6 +5179,9 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                     'health':                  _safe(pdata, 'Status', 'Health'),
                     'associated_address':      primary_addr,
                 }
+                _praw = _link_status_unmapped(_safe(pdata, 'LinkStatus'))
+                if _praw is not None and link_out is not None:
+                    link_out.append('%s/%s=%s' % (_id_text(adapter_id), pid_s, _praw))
                 out['ports'].append(port_info)
                 # 2026-04-29 fix B93: adapter level에 ports의 첫 active 메타 fold-in.
                 # FC/IB 포트의 WWPN/GUID 는 NIC mac 이 아니므로 fold-in 제외.
@@ -4739,6 +5197,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
                 if port_hbas:
                     out['fc_hbas'].extend(port_hbas)
+                    out_fc_added = True             # 2026-10-27 (결정 11 A안): 포트 경로로 만든 hbas 도 '이 카드가 FC HBA' 근거
                 elif ib_dec == 'ib':
                     _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
                                     [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
@@ -4804,13 +5263,24 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
             if hba.get('wwpn') and hba['wwpn'] in {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
                 continue
             out['fc_hbas'].append(hba)
+            out_fc_added = True
     _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
 
     # 2026-10-18: 카드당 notice — 장비가 링크 상태를 주지 않은 FC 포트 · 포트 주소로 정한 WWPN · 못 정한 WWPN.
     # 2026-10-19: 값은 down 으로 적되(up/down 둘뿐) 미제공 · 값 미확정 사실을 notice 로 가른다 — Portal 은 wwpn 으로 OS 채널 값을 조인한다.
     if link_missing:
-        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
-                % (adapter_id, ', '.join(link_missing)))
+        _lm_msg = ('네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
+                   % (adapter_id, ', '.join(link_missing)))
+        # 2026-10-27 (03-storage-004 결정 11 A안, 사용자 3차 검토 3중 판별): (1) 이 카드가 FC 전용(hbas 생성 ∧ 이더넷 포트 0) ∧
+        #   (2) PCIeDevice 본문이 바로 이 어댑터의 Controllers[0].Links.PCIeDevices(정확히 1건)로 CSUS-R16 경로에서 받은 것 ∧
+        #   (3) MessageId 등록부가 adapter 가 선언한 값(pcie_port_link_condition_registries)이고 마지막 세그먼트가 LinkUp/LinkDown —
+        #   셋 다 성립할 때만 **카드 단위** 조건을 참고로 덧붙인다. 포트 값(down)은 바꾸지 않는다. RAID/NIC 카드는 (1)(2) 에서 걸러진다.
+        _cond = (_pcie_port_link_condition(r16_pcie_body, pcie_link_registries)
+                 if (out_fc_added and eth_port_n == 0 and r16_pcie_body is not None) else None)
+        if _cond is not None:
+            _lm_msg += (' — 링크 단절을 확인한 값 아님; 카드 %s 조건 %s(%s, 카드 단위)'
+                        % (_cond[2] or _str(adapter_id), _cond[0], _cond[1] or 'Timestamp 없음'))
+        _notice('network_adapters', _lm_msg)
     if link_unresolved:
         _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 값 미확정, down 으로 기록 (storage.hbas link_status)'
                 % (adapter_id, ', '.join(link_unresolved)))
@@ -4832,7 +5302,8 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
 
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
-                                    verify_ssl, system_uri=None, extra_chassis_uris=None):
+                                    verify_ssl, system_uri=None, extra_chassis_uris=None, pcie_link_registries=None,
+                                    mtu_out=None):
     """NetworkAdapters 수집 + FC HBA / InfiniBand 분류.
 
     NetworkAdapters         → adapters[] (NIC 카드 모델/firmware)
@@ -4950,20 +5421,25 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             items.append((origin, m))
 
     card_fail = 0   # 2026-10-18 (F7): 목록에는 있는데 읽지 못한 카드 수
+    link_unmapped = []   # 2026-10-29 (SA-09): 원문이 있는데 unknown 이 된 포트 — 'Card/Port=원문'
     for origin, member in _capped(items, 'network_adapters', errors):
         # 2026-10-18 (F3b): 카드 단위 예외 격리 — 응답 오염(dict/list Id · 비정상 타입)으로 한 카드가 예외를 내도 다른 카드의
         #   adapters · ports · fc_hbas 는 남긴다. 이 카드가 남긴 부분 항목은 되돌리고(스냅샷 길이로 절단) 비차단 오류 1건만 남긴다.
         #   종전에는 섹션 runner 가 예외를 잡아 네트워크 카드 섹션 전체를 None 으로 버렸다(storage.hbas · network.adapters 전부 []).
         snap = {k: len(v) for k, v in out.items()}
         ports_snap = set(seen_ports)
+        link_snap = len(link_unmapped)
         try:
             result = _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                                  username, password, timeout, verify_ssl)
+                                                  username, password, timeout, verify_ssl,
+                                                  pcie_link_registries=pcie_link_registries, mtu_out=mtu_out,
+                                                  link_out=link_unmapped)
         except Exception as e:
             sys.stderr.write("[redfish_gather] network_adapters 카드 예외: %s\n%s\n"
                              % (type(e).__name__, traceback.format_exc(limit=3)))
             for k, n in snap.items():
                 del out[k][n:]
+            del link_unmapped[link_snap:]
             for key in [k for k, idx in ib_idx_by_port.items() if idx >= snap['infiniband']]:
                 del ib_idx_by_port[key]
             seen_ports.clear()
@@ -4980,6 +5456,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     if items and card_fail and not out['adapters'] and _is_404_only_error(errors):
         _notice('network_adapters', 'NetworkAdapters 목록 %d건 중 읽은 카드 0건(404 %d건), 네트워크 카드(FC HBA 포함) 정보 미수집'
                 % (len(items), card_fail))
+    # 2026-10-29 (SA-09): 포트 원문이 Starting · Training · Enabled · Active · 미인식 값이면 ports[].link_status 는 unknown — 섹션당 1건.
+    #   storage.hbas 의 값과 FC 포트 '값 미확정' notice(카드당)는 _hba_link_status · _hba_link_unresolved 가 따로 정하며 바뀌지 않는다.
+    if link_unmapped:
+        _notice('network_adapters', '네트워크 포트 링크 상태 값 미확정, unknown 으로 기록 (network.ports link_status) — %s'
+                % ', '.join(link_unmapped))
     return out, errors
 
 
@@ -5000,7 +5481,7 @@ def _is_pending_fw_id(fw_id):
     return bool(isinstance(fw_id, str) and 'pending' in fw_id.lower())
 
 
-def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
+def gather_firmware(bmc_ip, username, password, timeout, verify_ssl, links_out=None, dates_out=None):
     """
     UpdateService/FirmwareInventory — 벤더 공통
     Members 에 상세 필드 없으면 개별 URI 조회 (Dell/HPE/Supermicro 모두 해당)
@@ -5083,6 +5564,11 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
                 _notice('firmware', f'{fw_id or member_uri}: Version 비어 있음(N/A) — 목록에서 제외')   # RD-FW2 (2026-10-10): 조용히 버리지 않는다
                 continue
             ver = None
+        # 2026-10-27 (C4 04-firmware-006, 실측 Lenovo XCC3): Status.State=Disabled 이고 Version 이 빈 '-Pending' 멤버는 예정된 업데이트가 없는
+        # 자리(placeholder)다 → 제외 + notice. Version 이 있으면 종전대로 pending: true 로 보존한다.
+        if ver is None and _str(_safe(member, 'Status', 'State')).strip().lower() == 'disabled':
+            _notice('firmware', f'{fw_id or member_uri}: Disabled · Version 없음(예정된 업데이트 없음) — 목록에서 제외')
+            continue
         # Q-13: SoftwareId가 문자열 "null"이면 Python None으로 변환
         component = _safe(member, 'SoftwareId')
         if isinstance(component, str) and component.lower() == 'null':
@@ -5092,6 +5578,15 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         if post_key in seen_fw_keys:
             continue
         seen_fw_keys.add(post_key)
+        # 2026-10-27 (C9 구조 근거): 멤버 RelatedItem 이 Bios 리소스(…/Bios)를 가리키면 BIOS 펌웨어다 (실측 Lenovo UEFI · UEFI-Pending).
+        # RelatedItem → Managers/<id> 는 bmc 근거로 쓰지 않는다 — 같은 링크를 HPM-FPGA 같은 다른 부품도 가진다(실측 Lenovo).
+        if isinstance(links_out, dict) and any(
+                isinstance(ri, dict) and _str(ri.get('@odata.id')).rstrip('/').lower().endswith('/bios')
+                for ri in _dicts(_safe(member, 'RelatedItem'))):
+            links_out.setdefault(_fw_dedup_key(fw_id), {})['bios'] = True
+        # 2026-10-27 (C8 01-hardware-004): ReleaseDate 는 발행 키가 아니라 dedup key 별 내부 맵(dates_out)에만 둔다 — hardware.bios_date 폴백 근거.
+        if isinstance(dates_out, dict) and _safe(member, 'ReleaseDate') is not None:
+            dates_out.setdefault(_fw_dedup_key(fw_id), _safe(member, 'ReleaseDate'))
         fw_list.append({
             'id':         fw_id,
             'name':       _safe(member, 'Name'),
@@ -5110,7 +5605,8 @@ def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, ver
     경로가 없고, 장비가 'TotalPowerConsumedWatts' 를 TelemetryService MetricReport(Id 에 chassis id
     내장: Chassis<id>_TotalPowerConsumedWatts)로 노출한다. MetricReports 컬렉션을 순회해 이 chassis 의
     리포트를 찾아 MetricValue 반환. PSU InputPowerWatts 합(AC 입력, ~20% 높음)보다 장비 자신의 '소비'
-    정의(591.5W)에 충실. MetricValue 는 문자열("591.5") → _safe_num 으로 파싱.
+    정의(591.5W)에 충실. MetricValue 는 문자열("591.5") → _safe_num 으로 파싱 → 2026-10-29 (SA-17) 정수 반올림(_safe_round_int,
+    half-even — 591.5 → 592, 815.75 → 816; 종전 int() 절삭은 591 · 815).
 
     source (rule 96 R1-A): DMTF DSP0266 TelemetryService/MetricReport (MetricValues[].MetricId/MetricValue).
     Returns: int | None
@@ -5137,12 +5633,14 @@ def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, ver
             if _str(_safe(mv, 'MetricId')).strip().lower() == 'totalpowerconsumedwatts':
                 num = _safe_num(_safe(mv, 'MetricValue'))  # "591.5" → float → int
                 if num is not None:
-                    return _safe_int(num)
+                    return _safe_round_int(num)   # 2026-10-29 (SA-17): 절삭 대신 반올림
     return None
 
 
-def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     """DMTF 2020.4 (Redfish 1.13+) PowerSubsystem fallback parser.
+
+    chassis_body (선택, 2026-10-27 C5): 섀시 본문을 알면 EnvironmentMetrics 링크가 없을 때 그 GET 을 건너뛴다.
 
     cycle 2026-05-01: 신 펌웨어 (HPE iLO 6 / Lenovo XCC2-3 / Dell iDRAC9 5.x+ /
     Supermicro X14+) 가 /Power 대신 /PowerSubsystem 응답. 기본 PSU 정보는 공통.
@@ -5164,6 +5662,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     psus = []
     psu_input_total = 0          # CSUS-R10: PSU 입력전력 합 (소비전력 fallback)
     psu_input_seen = False
+    psu_output_total = 0         # 2026-10-27 (C10 05-power-007): PSU 출력전력(DC) 합 — Telemetry 다음, 입력 합보다 앞선 폴백
+    psu_output_seen = False
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
         if st_c != 200:
@@ -5183,19 +5683,23 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                         errors.append(_err('power', f'PowerSupply {m_uri} 실패: {_err_m or st_m}',
                                            detail={'status_code': st_m}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
+                m_state = _safe(mdata, 'Status', 'State')
+                # CSUS-R9 (2026-06-15 실미러 검수): HPE CSUS PSU 는 FirmwareVersion 부재 +
+                # DMTF PowerSupply.Version("Release -0005")에 버전 → Version fallback (Additive).
+                m_cap, m_fw = _psu_absent_placeholders_to_none(
+                    m_state, _safe_int(_safe(mdata, 'PowerCapacityWatts')),
+                    _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'))
                 psus.append({
                     'name':             _safe(mdata, 'Name'),
-                    'model':            _safe(mdata, 'Model'),
-                    'serial':           _safe(mdata, 'SerialNumber'),
-                    'manufacturer':     _safe(mdata, 'Manufacturer'),
+                    'model':            _strip_or_none(_safe(mdata, 'Model')),          # 2026-10-27 (C4): strip
+                    'serial':           _strip_or_none(_safe(mdata, 'SerialNumber')),
+                    'manufacturer':     _strip_or_none(_safe(mdata, 'Manufacturer')),
                     # 2026-06-16 감사 G4 (Additive): CSUS PSU raw PartNumber=CSU2400AP-3-500 미수집이었음.
-                    'part_number':      _safe(mdata, 'PartNumber'),
-                    'power_capacity_w': _safe_int(_safe(mdata, 'PowerCapacityWatts')),
-                    # CSUS-R9 (2026-06-15 실미러 검수): HPE CSUS PSU 는 FirmwareVersion 부재 +
-                    # DMTF PowerSupply.Version("Release -0005")에 버전 → Version fallback (Additive).
-                    'firmware_version': _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'),
+                    'part_number':      _strip_or_none(_safe(mdata, 'PartNumber')),
+                    'power_capacity_w': m_cap,
+                    'firmware_version': m_fw,
                     'health':           _safe(mdata, 'Status', 'Health'),
-                    'state':            _safe(mdata, 'Status', 'State'),
+                    'state':            m_state,
                 })
                 # CSUS-R10: PSU.Metrics.InputPowerWatts.Reading 합산 — chassis 에 /Power·
                 # /EnvironmentMetrics 가 없어 소비전력이 PSU Metrics 에만 있는 환경(HPE CSUS) 대비.
@@ -5203,10 +5707,20 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                 if metrics_link:
                     st_mm, mm, _e_mm = _get(bmc_ip, _p(metrics_link), username, password, timeout, verify_ssl)
                     if st_mm == 200 and isinstance(mm, dict):
-                        ipw = _safe_int(_safe(mm, 'InputPowerWatts', 'Reading'))
+                        # 2026-10-29 (SA-17): 측정값은 절삭(_safe_int) 대신 정수 반올림(_safe_round_int) — 정격(PowerCapacityWatts)은 그대로
+                        ipw = _safe_round_int(_safe(mm, 'InputPowerWatts', 'Reading'))
                         if ipw is not None:
                             psu_input_total += ipw
                             psu_input_seen = True
+                        opw = _safe_round_int(_safe(mm, 'OutputPowerWatts', 'Reading'))
+                        if opw is not None:
+                            psu_output_total += opw
+                            psu_output_seen = True
+                        # 2026-10-27 (C10 05-power-002): 신 경로의 입력 0 W/0 V 관측 (키가 있을 때만, Absent 제외)
+                        if _str(m_state).strip().lower() != 'absent':
+                            _psu_zero_input_notice(_safe(mdata, 'Name'), _safe(mdata, 'Id'),
+                                                   ipw if isinstance(_safe(mm, 'InputPowerWatts'), dict) else None,
+                                                   _safe_int(_safe(mm, 'InputVoltage', 'Reading')) if isinstance(_safe(mm, 'InputVoltage'), dict) else None)
 
     # PowerControl 은 PowerSubsystem 표준에 없음 — chassis-level 합산 또는 None
     pc_capacity = None
@@ -5227,32 +5741,35 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     # F05 (cycle 2026-05-01): DMTF 2020.4 EnvironmentMetrics fallback —
     # PowerSubsystem 신 schema는 system-level metric을 EnvironmentMetrics 로 분리.
     # source: redfish.dmtf.org/schemas/v1/EnvironmentMetrics.v1_3_0.json (2020.4)
-    # PowerWatts.Reading / ReadingRangeMin/Max 가 PowerControl 대응.
+    # PowerWatts.Reading 이 PowerControl.PowerConsumedWatts 에 대응한다.
+    # 2026-10-29 (SA-19): 종전 주석은 ReadingRangeMin/Max 도 PowerControl(min/max 소비전력)에 대응한다고 적었으나 틀렸다 — DMTF Sensor 의
+    #   ReadingRangeMin/Max 는 그 센서가 낼 수 있는 Reading 의 범위(측정 가능 범위)이지 관측한 최소/최대가 아니다. min/max_consumed_watts 는
+    #   이 경로에서 null 이다. source: https://redfish.dmtf.org/schemas/v1/Sensor.json (ReadingRangeMin · ReadingRangeMax)
     if power_control is not None:
         em_path = _p(chassis_uri) + '/EnvironmentMetrics'
-        st_em, em_data, _err_em = _get(bmc_ip, em_path, username, password, timeout, verify_ssl)
+        if _chassis_has_link(chassis_body, 'EnvironmentMetrics') is False:
+            st_em, em_data, _err_em = 404, {}, 'HTTP 404: Not Found (섀시 본문에 EnvironmentMetrics 링크 없음 — 요청 생략)'
+        else:
+            st_em, em_data, _err_em = _get(bmc_ip, em_path, username, password, timeout, verify_ssl)
         if st_em == 200 and isinstance(em_data, dict):
             pw = em_data.get('PowerWatts') if isinstance(em_data.get('PowerWatts'), dict) else None
             if pw:
-                pc_consumed = _safe_int(pw.get('Reading'))
-                pc_min = _safe_int(pw.get('ReadingRangeMin'))
-                pc_max = _safe_int(pw.get('ReadingRangeMax'))
+                pc_consumed = _safe_round_int(pw.get('Reading'))   # 2026-10-29 (SA-17): 반올림
                 if pc_consumed is not None:
                     power_control['power_consumed_watts'] = pc_consumed
-                if pc_min is not None:
-                    power_control['min_consumed_watts'] = pc_min
-                if pc_max is not None:
-                    power_control['max_consumed_watts'] = pc_max
         # interval_in_min / avg_consumed_watts: EnvironmentMetrics 표준에 없음 — None 유지
         # CSUS-R14 (2026-06-15 실미러 검수): EnvironmentMetrics 부재 시 장비 자신의 권위 소비전력
-        # (TelemetryService TotalPowerConsumedWatts, 591.5W)을 우선 사용 — PSU 입력전력 합(731W,
-        # AC 입력이라 ~24% 높음)보다 장비의 '소비' 정의에 충실. 표준 경로(EnvironmentMetrics) 보유
-        # vendor 는 위에서 이미 채워져 미발동.
+        # (TelemetryService TotalPowerConsumedWatts)을 우선 사용. 표준 경로(EnvironmentMetrics) 보유 vendor 는 위에서 이미 채워져 미발동.
+        # 2026-10-27 (C10 05-power-007 정정): 폴백 순서는 Telemetry(장비의 '소비' 정의) → PSU Metrics.OutputPowerWatts 합(DC 출력 — 소비에
+        #   가장 가깝다) → PSU Metrics.InputPowerWatts 합(AC 입력 — 변환 손실만큼 높은 근사값). 종전 주석의 "~24% 높음" 은 CSUS 1대의
+        #   한 시점 비교였고 비율은 부하·효율에 따라 다르다 — 정의 차이만 적는다.
         if power_control['power_consumed_watts'] is None:
             tpc = _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
             if tpc is not None:
                 power_control['power_consumed_watts'] = tpc
-        # CSUS-R10: TelemetryService 도 없으면 PSU 입력전력 합으로 마지막 fallback (AC 입력 — 근사값).
+        if power_control['power_consumed_watts'] is None and psu_output_seen:
+            power_control['power_consumed_watts'] = psu_output_total
+        # CSUS-R10: 출력도 없으면 PSU 입력전력 합으로 마지막 fallback (AC 입력 — 근사값).
         if power_control['power_consumed_watts'] is None and psu_input_seen:
             power_control['power_consumed_watts'] = psu_input_total
 
@@ -5302,8 +5819,20 @@ def _merge_power_dual(legacy_result, subsystem_result):    # nosec rule12-r1
     return {'power_supplies': merged_psus, 'power_control': pc}
 
 
-def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _chassis_has_link(chassis_body, name):
+    """섀시 본문에 navigation property(name)가 있는가 — 본문을 모르면 None(종전 동작), 알면 True/False (2026-10-27 C5 05-power-004)."""
+    if not isinstance(chassis_body, dict):
+        return None
+    link = chassis_body.get(name)
+    return isinstance(link, dict) and bool(_safe(link, '@odata.id'))
+
+
+def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     """Chassis/{id}/Power — PSU 정보. chassis_uri는 detect_vendor()에서 전달.
+
+    chassis_body (선택, 2026-10-27 C5 05-power-004 — 실측 HPE CSUS RackGroup/Rack1 은 Power·PowerSubsystem 링크가 없고 r001u01 은
+      PowerSubsystem 만 있다): 호출자가 이미 받은 섀시 본문. 주면 navigation property 가 없는 경로는 요청하지 않는다 —
+      둘 다 없으면 404 와 같은 미지원 오류(요청 0), Power 없이 PowerSubsystem 만 있으면 신 경로로 바로 간다. 본문을 모르면 종전과 같다.
 
     cycle 2026-05-01: /Power 404 시 /PowerSubsystem fallback (DMTF 2020.4 신 schema).
     Storage SimpleStorage fallback 패턴 따름 (gather_storage 참조).
@@ -5318,12 +5847,18 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
         errors.append(_err('power', 'chassis_uri 없음 (detect_vendor 에서 Chassis 미발견)'))
         return {}, errors
 
+    # 2026-10-27 (C5 05-power-004): 섀시 본문을 알면 링크 없는 경로를 요청하지 않는다
+    has_legacy, has_new = _chassis_has_link(chassis_body, 'Power'), _chassis_has_link(chassis_body, 'PowerSubsystem')
+    if has_legacy is False and has_new is False:
+        return {}, [_err('power', 'Power/PowerSubsystem 미지원: HTTP 404 (섀시 본문에 링크 없음 — 요청 생략)')]
+    if has_legacy is False and has_new:
+        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=chassis_body)
     power_path = _p(chassis_uri) + '/Power'
     st, pdata, perr = _get(bmc_ip, power_path, username, password, timeout, verify_ssl)
 
     # cycle 2026-05-01: 404 = 신 펌웨어 가능 → PowerSubsystem fallback
     if st == 404:
-        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
+        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=chassis_body)
 
     if perr or st != 200:
         errors.append(_err('power', f'Power 정보 실패: {perr or st}'))
@@ -5340,16 +5875,24 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
             ranges = _safe(psu, 'InputRanges') or []
             if isinstance(ranges, list) and ranges and isinstance(ranges[0], dict):
                 psu_capacity = _safe_int(ranges[0].get('OutputWattage'))
+        psu_state = _safe(psu, 'Status', 'State')
+        psu_capacity, psu_fw = _psu_absent_placeholders_to_none(psu_state, psu_capacity, _safe(psu, 'FirmwareVersion'))
+        # 2026-10-27 (C10 05-power-002): 키가 있고 0 일 때만 관측 notice (Absent 슬롯은 제외 — 미장착은 입력이 없는 게 당연하다)
+        if _str(psu_state).strip().lower() != 'absent':
+            _psu_zero_input_notice(_safe(psu, 'Name'), _safe(psu, 'MemberId'),
+                                   _safe_round_int(psu.get('PowerInputWatts')) if 'PowerInputWatts' in psu else None,  # 2026-10-29 (SA-17)
+                                   _safe_int(psu.get('LineInputVoltage')) if 'LineInputVoltage' in psu else None)
         psus.append({
             'name':             _safe(psu, 'Name'),
-            'model':            _safe(psu, 'Model'),
-            'serial':           _safe(psu, 'SerialNumber'),
-            'manufacturer':     _safe(psu, 'Manufacturer'),
-            'part_number':      _safe(psu, 'PartNumber'),  # 2026-06-16 감사 G4 (Additive)
+            # 2026-10-27 (C4 05-power-003, 실측 XCC3 'CRPS1300D5    '): 문자열 양끝 공백 제거 (비면 null)
+            'model':            _strip_or_none(_safe(psu, 'Model')),
+            'serial':           _strip_or_none(_safe(psu, 'SerialNumber')),
+            'manufacturer':     _strip_or_none(_safe(psu, 'Manufacturer')),
+            'part_number':      _strip_or_none(_safe(psu, 'PartNumber')),  # 2026-06-16 감사 G4 (Additive)
             'power_capacity_w': psu_capacity,
-            'firmware_version': _safe(psu, 'FirmwareVersion'),
+            'firmware_version': psu_fw,
             'health':           _safe(psu, 'Status', 'Health'),
-            'state':            _safe(psu, 'Status', 'State'),
+            'state':            psu_state,
         })
 
     # PowerControl — system-level power consumption (Safe Common: 3 vendors verified)
@@ -5365,25 +5908,85 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     # 합산으로 fallback (PSU 770W × 2 = 1540W 형태).
     pc_capacity = _safe_int(_safe(pc0, 'PowerCapacityWatts'))  # Round 2: watt int 통일
     if pc_capacity is None:
-        psu_caps = [p['power_capacity_w'] for p in psus if p['power_capacity_w'] is not None]
+        # 2026-10-27 (C2): Absent 슬롯은 설치된 PSU 가 아니다 — 신 경로(_gather_power_subsystem, D-07)와 같은 규칙
+        psu_caps = [p['power_capacity_w'] for p in psus
+                    if p['power_capacity_w'] is not None and _str(p.get('state')).strip().lower() != 'absent']
         if psu_caps:
             pc_capacity = sum(psu_caps)
     power_control = {
         # Round 1 #21: watt 필드는 int 로 통일 (BMC 가 문자열 '1500' 반환 시 타입 불일치 방지).
         # PowerSubsystem 경로와도 일관 (둘 다 int watts).
-        'power_consumed_watts':  _safe_int(_safe(pc0, 'PowerConsumedWatts')),
+        # 2026-10-29 (SA-17): 측정값(소비 · min/avg/max)은 절삭 대신 정수 반올림(_safe_round_int, half-even) — 정격(power_capacity_watts)은
+        #   _safe_int 그대로. 소수 문자열('412.6')은 종전 _safe_int 가 None 으로 버렸고 이제 413 이다.
+        'power_consumed_watts':  _safe_round_int(_safe(pc0, 'PowerConsumedWatts')),
         'power_capacity_watts':  pc_capacity,
         'interval_in_min':       _safe(pm, 'IntervalInMin'),
-        'min_consumed_watts':    _safe_int(_safe(pm, 'MinConsumedWatts')),
-        'avg_consumed_watts':    _safe_int(_safe(pm, 'AverageConsumedWatts')),
-        'max_consumed_watts':    _safe_int(_safe(pm, 'MaxConsumedWatts')),
+        'min_consumed_watts':    _safe_round_int(_safe(pm, 'MinConsumedWatts')),
+        'avg_consumed_watts':    _safe_round_int(_safe(pm, 'AverageConsumedWatts')),
+        'max_consumed_watts':    _safe_round_int(_safe(pm, 'MaxConsumedWatts')),
     } if pc0 else None
 
     return {'power_supplies': psus, 'power_control': power_control}, errors
 
 
-def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _psu_absent_placeholders_to_none(state, capacity_w, firmware_version):
+    """2026-10-27 (C2 05-power, 실측 iLO 7 DL380 Gen12 전원 Off 스냅샷): State=Absent 슬롯의 `PowerCapacityWatts: 0` · `FirmwareVersion: "0.00"`
+    은 장치 값이 아니라 빈 슬롯 placeholder 다 → null. state 는 그대로 남긴다(Absent 는 그 자체가 정보). Absent 가 아니면 값을 건드리지 않는다."""
+    if _str(state).strip().lower() != 'absent':
+        return capacity_w, firmware_version
+    if capacity_w == 0:
+        capacity_w = None
+    if isinstance(firmware_version, str) and firmware_version.strip() in ('', '0.00'):
+        firmware_version = None
+    return capacity_w, firmware_version
+
+
+def _sensor_is_absent(entry):
+    """2026-10-27 (C10 05-thermal-001, 실측 iLO 7): `Status.State == Absent` 인 센서/팬은 미장착 슬롯이다 — 항목 자체를 두지 않는다
+    (값은 placeholder 0). 호출부가 제외 건수를 notice 1건으로 남긴다. Status 가 없는 응답(CSUS ThermalMetrics)은 Absent 가 아니다."""
+    state = _safe(entry, 'Status', 'State')
+    return isinstance(state, str) and state.strip().lower() == 'absent'
+
+
+def _notice_absent_sensors(absent_temps, absent_fans):
+    if absent_temps or absent_fans:
+        _notice('thermal', 'Absent 센서 %d건 제외 (온도 %d · 팬 %d) — 미장착 슬롯' % (absent_temps + absent_fans, absent_temps, absent_fans))
+
+
+def _psu_zero_input_notice(name, member_id, input_watts, input_volts):
+    """2026-10-27 (C10 05-power-002, 실측 iLO 7 PSU#2 UnavailableOffline · XCC3 PSU1 Critical): 장비가 입력 전력/전압 키를 주었는데 값이 0 이면
+    관측 사실로만 notice 1건 — 'AC 입력 없음' 같은 인과는 적지 않는다(계약 문서 03-fields 6.5). 키가 없거나 null 이면 아무것도 하지 않는다.
+    psu_active · state 는 바꾸지 않는다."""
+    zero_w = input_watts == 0
+    zero_v = input_volts == 0
+    if not (zero_w or zero_v):
+        return
+    label = '%s' % (name or 'PSU')
+    if member_id not in (None, ''):
+        label = '%s[%s]' % (label, member_id)
+    parts = []
+    if zero_w:
+        parts.append('입력 전력 0 W')
+    if zero_v:
+        parts.append('입력 전압 0 V')
+    _notice('power', '전원 공급 장치 %s: %s 관측' % (label, ' / '.join(parts)))
+
+
+def _sensor_reading_if_enabled(entry, reading):
+    """2026-10-27 (C2 05-thermal): Status.State 가 있고 'Enabled' 가 아니면(UnavailableOffline · Absent · Disabled …) 그 reading 은 측정값이
+    아니라 placeholder 다(실측 iLO 7: 전원 Off 호스트의 42 센서 전부 0 °C · 미장착 슬롯 0 °C) → null. state 는 그대로 남긴다.
+    Status 가 없는 응답(실측 CSUS ThermalMetrics 47~63건)은 값을 그대로 둔다 — 없는 상태를 추측하지 않는다."""
+    state = _safe(entry, 'Status', 'State')
+    if isinstance(state, str) and state.strip() and state.strip() != 'Enabled':
+        return None
+    return reading
+
+
+def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     """Chassis/{id}/Thermal — 온도 센서 + 팬 정보 (cycle 2026-06-09, ADR-2026-06-09).
+
+    chassis_body (선택, 2026-10-27 C5 05-power-004): gather_power 와 같은 gating — 섀시 본문에 Thermal·ThermalSubsystem 링크가
+      둘 다 없으면 요청 없이 미지원, Thermal 없이 ThermalSubsystem 만 있으면 신 경로로 바로 간다.
 
     gather_power 패턴 mirror. /Thermal (legacy) 404 시 /ThermalSubsystem fallback
     (DMTF 2020.4 / Redfish 1.13+ 신 schema). HPE Compute Scale-up Server 3200 /
@@ -5401,6 +6004,11 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     if not chassis_uri:
         return {}, [_err('thermal', 'chassis_uri 없음')]
 
+    has_legacy, has_new = _chassis_has_link(chassis_body, 'Thermal'), _chassis_has_link(chassis_body, 'ThermalSubsystem')
+    if has_legacy is False and has_new is False:
+        return {}, [_err('thermal', 'Thermal/ThermalSubsystem 미지원: HTTP 404 (섀시 본문에 링크 없음 — 요청 생략)')]
+    if has_legacy is False and has_new:
+        return _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     thermal_path = _p(chassis_uri) + '/Thermal'
     st, tdata, terr = _get(bmc_ip, thermal_path, username, password, timeout, verify_ssl)
 
@@ -5412,11 +6020,16 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         return {}, [_err('thermal', f'Thermal 정보 실패: {terr or st}')]
 
     temps = []
+    absent_temps, absent_fans = 0, 0
     for t in _dicts(_safe(tdata, 'Temperatures')):  # 비-list/dict 방어 (rule 95 R1 #2)
+        if _sensor_is_absent(t):            # 2026-10-27 (C10 05-thermal-001): 미장착 슬롯 센서는 항목을 두지 않는다
+            absent_temps += 1
+            continue
         temps.append({
             'name':             _safe(t, 'Name'),
             # 2026-06-16 감사 G1: 절삭(_safe_int) → 반올림(_safe_round_int). 44.7→45.
-            'reading_celsius':  _safe_round_int(_safe(t, 'ReadingCelsius')),  # str '42' 방어
+            # 2026-10-27 (C2): Enabled 가 아닌 센서의 값은 placeholder → null (_sensor_reading_if_enabled)
+            'reading_celsius':  _sensor_reading_if_enabled(t, _safe_round_int(_safe(t, 'ReadingCelsius'))),  # str '42' 방어
             'health':           _safe(t, 'Status', 'Health'),
             'state':            _safe(t, 'Status', 'State'),
             'upper_critical':   _safe_round_int(_safe(t, 'UpperThresholdCritical')),
@@ -5424,17 +6037,21 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         })
     fans = []
     for f in _dicts(_safe(tdata, 'Fans')):
+        if _sensor_is_absent(f):            # 2026-10-27 (C10)
+            absent_fans += 1
+            continue
         # 펌웨어별 Reading / ReadingRPM 혼재 (legacy schema)
         reading = _safe(f, 'Reading')
         if reading is None:
             reading = _safe(f, 'ReadingRPM')
         fans.append({
             'name':          _safe(f, 'Name'),
-            'reading':       _safe_int(reading),
+            'reading':       _sensor_reading_if_enabled(f, _safe_int(reading)),   # 2026-10-27 (C2)
             'reading_units': _safe(f, 'ReadingUnits'),
             'health':        _safe(f, 'Status', 'Health'),
             'state':         _safe(f, 'Status', 'State'),
         })
+    _notice_absent_sensors(absent_temps, absent_fans)
     return {'temperatures': temps, 'fans': fans}, errors
 
 
@@ -5496,15 +6113,21 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
         return {}, [_err('thermal', 'ThermalSubsystem 미지원: ' + (f'HTTP {st}' if st else str(terr)))]
 
     temps = []
+    absent_temps, absent_fans = 0, 0
     tm_link = _safe(ts, 'ThermalMetrics', '@odata.id')
     if tm_link:
         mst, tm, _e = _get(bmc_ip, _p(tm_link), username, password, timeout, verify_ssl)
         if mst == 200:
             for tr in _dicts(_safe(tm, 'TemperatureReadingsCelsius')):
+                if _sensor_is_absent(tr):   # 2026-10-27 (C10)
+                    absent_temps += 1
+                    continue
+                # 2026-10-27 (C10 05-thermal-003): DeviceName·Name 이 없으면 DataSourceUri 의 마지막 세그먼트(센서 Id) — 18 label 미발동, 합성만
+                _ds = _str(_safe(tr, 'DataSourceUri')).rstrip('/').split('/')[-1] if _safe(tr, 'DataSourceUri') else None
                 temps.append({
-                    'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name'),
+                    'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name') or _ds or None,
                     # 2026-06-16 감사 G1: 절삭 → 반올림. ThermalMetrics.Reading 은 float (39.3906).
-                    'reading_celsius':  _safe_round_int(_safe(tr, 'Reading')),
+                    'reading_celsius':  _sensor_reading_if_enabled(tr, _safe_round_int(_safe(tr, 'Reading'))),   # 2026-10-27 (C2)
                     'health':           _safe(tr, 'Status', 'Health'),
                     'state':            _safe(tr, 'Status', 'State'),
                     'upper_critical':   None,
@@ -5524,10 +6147,16 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                 fst2, fdata, _e2 = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
                 if fst2 != 200:
                     continue
+                if _sensor_is_absent(fdata):   # 2026-10-27 (C10)
+                    absent_fans += 1
+                    continue
+                # 2026-10-27 (C10 05-thermal-003): SpeedPercent.Reading 이 없고 SpeedPercent.SpeedRPM 이 있으면 RPM 으로 (18 label 미발동, 합성만)
+                _sp_reading = _safe_int(_safe(fdata, 'SpeedPercent', 'Reading'))
+                _sp_rpm = _safe_int(_safe(fdata, 'SpeedPercent', 'SpeedRPM')) if _sp_reading is None else None
                 fans.append({
                     'name':          _safe(fdata, 'Name'),
-                    'reading':       _safe_int(_safe(fdata, 'SpeedPercent', 'Reading')),
-                    'reading_units': 'Percent' if _safe(fdata, 'SpeedPercent') else None,
+                    'reading':       _sensor_reading_if_enabled(fdata, _sp_reading if _sp_reading is not None else _sp_rpm),   # 2026-10-27 (C2/C10)
+                    'reading_units': ('Percent' if _sp_reading is not None else ('RPM' if _sp_rpm is not None else None)) if _safe(fdata, 'SpeedPercent') else None,
                     'health':        _safe(fdata, 'Status', 'Health'),
                     'state':         _safe(fdata, 'Status', 'State'),
                 })
@@ -5540,10 +6169,11 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
             bmc_ip, chassis_uri, fan_uris, username, password, timeout, verify_ssl)
         if rpm_map:
             for i, f in enumerate(fans):
-                if f['reading'] is None and i < len(fan_uris):
+                if f['reading'] is None and i < len(fan_uris) and f.get('state') in (None, 'Enabled'):   # 2026-10-27 (C2)
                     hit = rpm_map.get(fan_uris[i])
                     if hit:
                         f['reading'], f['reading_units'] = hit[0], hit[1]
+    _notice_absent_sensors(absent_temps, absent_fans)
     if not temps and not fans:
         return {}, errors
     return {'temperatures': temps, 'fans': fans}, errors
@@ -5649,9 +6279,9 @@ def _make_section_runner(all_errors, collected, failed, unsupported=None):
     cycle 2026-05-01: 404 시그널은 unsupported list로 분리 (endpoint 부재 = capability 미지원).
     호환성: unsupported 인자 미전달 시 기존 동작 유지 (back-compat).
     """
-    def _run(section, fn, *args):
+    def _run(section, fn, *args, **kwargs):
         try:
-            val, errs = fn(*args)
+            val, errs = fn(*args, **kwargs)
             # 404 only면 unsupported로 분류, errors[]에서 제외 (호출자 noise 차단)
             # EXC-1: 단, collection-level 404(val 비어있음=진짜 미지원)만 unsupported.
             # collection 200 + sub-멤버 404 로 *부분 수집*된 경우(val 채워짐)는 아래 일반 경로로
@@ -5740,12 +6370,15 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     rule 92 R2 Additive only — 기존 `gather_bmc` 함수 변경 0. 다른 vendor 영향 0
     (이 함수는 manager_layout 정의된 vendor 만 호출).
 
-    Returns: {'managers': [{id, uri, role, bmc, log_services}], 'errors': [...]}
+    Returns: {'managers': [{id, uri, role, bmc, log_services}], 'errors': [...], 'complete': bool}
+        complete (2026-10-29, SA-01) — Managers 컬렉션을 끝까지 읽었고 상한 절단이 없음. manager_count 를 정수로 둘 근거다.
     """
     out = {'managers': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, managers_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, managers_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.managers',
             f'Managers 컬렉션 실패: {err}'))
@@ -5783,11 +6416,14 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     return out
 
 
-def _summarize_partition_disks(physical_disks):
+def _summarize_partition_disks(physical_disks, inventory=None):
     """physical_disks[] → storage.summary {groups, grand_total_gb} (per-partition).
 
     top-level normalize_standard.yml 의 _rf_summary_storage 와 동일 grouping 규칙
     (단위용량 × media × protocol × model). cycle 2026-05-29.
+    2026-10-29 (SA-07 · SA-03): grand_total_gb 도 top-level 과 같은 규칙이다 — 드라이브 목록 원천을 읽지 못했거나(inventory.enumerated 가
+    아니고 디스크도 없음) · 미완결이면(inventory.incomplete) None, 원천을 읽었고 비었으면 0(확인한 0), 그 밖은 합(GiB 내림 — 3채널 공통,
+    용량을 모르는 디스크는 종전처럼 그룹 · 합에서 뺀다). inventory 가 없으면(종전 호출부) 디스크가 있을 때만 원천을 읽은 것으로 본다.
     """
     groups, seen, total = [], {}, 0
     for d in (physical_disks or []):
@@ -5806,16 +6442,20 @@ def _summarize_partition_disks(physical_disks):
             groups.append({'unit_capacity_gb': cap_gb, 'model': md, 'media_type': mt,
                            'protocol': pr, 'quantity': 1, 'group_total_gb': cap_gb})
         total += cap_gb
-    return {'groups': groups, 'grand_total_gb': total}
+    inv = inventory if isinstance(inventory, dict) else {}
+    enumerated = inv.get('enumerated') is True or bool(physical_disks)
+    countable = enumerated and inv.get('incomplete') is not True
+    return {'groups': groups, 'grand_total_gb': total if countable else None}
 
 
-def _normalize_storage_raw(raw):
+def _normalize_storage_raw(raw, inventory=None):
     """raw gather_storage {controllers, volumes} → canonical storage section.
 
     cycle 2026-05-29: multi_node.partitions[].storage 가 raw 로 노출되던 문제 해소.
     top-level normalize_standard.yml(Ansible) 과 동일 canonical shape 를 Python 에서 생성
     (multi_node 전용 parallel — 두 경로 모두 같은 schema 보장). hbas/infiniband 는 chassis
     레벨 NetworkAdapter 소관이라 partition storage 에는 빈 list (Additive 자리만 유지).
+    2026-10-29 (SA-07): inventory — gather_storage(inventory_out=) 의 드라이브 목록 근거. summary.grand_total_gb 판정에만 쓴다(출력에 넣지 않음).
     """
     raw = raw if isinstance(raw, dict) else {}
     controllers_out, physical, seen = [], [], set()
@@ -5867,7 +6507,7 @@ def _normalize_storage_raw(raw):
     return {
         'filesystems': [], 'physical_disks': physical, 'datastores': [],
         'controllers': controllers_out, 'logical_volumes': logical,
-        'summary': _summarize_partition_disks(physical),
+        'summary': _summarize_partition_disks(physical, inventory),
         'hbas': [], 'infiniband': [],
     }
 
@@ -5890,6 +6530,11 @@ def _normalize_network_raw(raw_nics):
                 addrs.append({'family': 'ipv4', 'address': addr, 'prefix_length': None,
                               'subnet_mask': a.get('subnet_mask'), 'gateway': a.get('gateway'),
                               'origin': a.get('address_origin')})
+        for a in _as_list(nic.get('ipv6')):   # 2026-10-27 (03-network-006): partitions 도 같은 모양
+            addr = a.get('address') if isinstance(a, dict) else None
+            if addr and addr not in ('::', ''):
+                addrs.append({'family': 'ipv6', 'address': addr, 'prefix_length': a.get('prefix_length'),
+                              'subnet_mask': None, 'gateway': None, 'origin': a.get('address_origin')})
         interfaces.append({
             'id': nic.get('id') or nic.get('name'), 'name': nic.get('name'),
             'kind': 'server_nic', 'mac': nic.get('mac'), 'mtu': nic.get('mtu'),
@@ -5907,40 +6552,81 @@ def _normalize_network_raw(raw_nics):
             'adapters': [], 'ports': [], 'summary': {'groups': []}}
 
 
-def _normalize_cpu_raw(procs):
+# 2026-10-29 (SA-03): CPU 제조사 정규화 표 — normalize_standard.yml 의 cpu.manufacturer · summary.groups[].manufacturer(2026-10-27 FIX 2)와
+#   같은 표다. (소문자 부분 문자열들, 이름) 순서대로 처음 맞는 것, 없으면 원문 strip, 비면 None. 두 표가 갈리지 않게 시험이 대조한다.
+#   CPU 제조사 값의 정규화이지 서버 벤더 분기가 아니다(rule 12).
+_CPU_MFR_CANON = (
+    (('intel',), 'Intel'),
+    (('amd', 'advanced micro devices'), 'AMD'),
+)
+
+
+def _canon_cpu_manufacturer(value):
+    """Processor.Manufacturer → _CPU_MFR_CANON 표의 이름 (2026-10-29, SA-03). 실측 iLO 7 · XCC 3 · RMC 'Intel(R) Corporation' → 'Intel'."""
+    text = str(value).strip() if value is not None else ''
+    low = text.lower()
+    for tokens, name in _CPU_MFR_CANON:
+        if any(t in low for t in tokens):
+            return name
+    return text or None
+
+
+def _cpu_known_cores(proc):
+    """CPU 하나의 코어 수 — TotalCores 가 양의 정수일 때만, 아니면 None(미상). 설치된 CPU 의 0코어는 있을 수 없다 (2026-10-29, SA-04)."""
+    c = _safe_int(proc.get('total_cores'))  # rule 95 R1 #7: 비-숫자 cores str 방어
+    return c if (c is not None and c > 0) else None
+
+
+def _normalize_cpu_raw(procs, raw_sys=None, failed=False):
     """raw gather_processors (list) → canonical cpu section (per-partition).
 
     cycle 2026-05-29: top-level normalize_standard.yml 의 B01 필터 + 합산 + summary 와
     동일 결과를 Python 에서 생성 (multi_node.partitions[].cpu 일관성).
+    2026-10-27 (FIX 1 — 사용자 결정): logical_threads 를 내지 않는다 — top-level cpu 와 같은 정책(BMC 스레드 수는 HT 상태를 확정하지 못한다).
+    2026-10-29 (SA-03 · SA-04): top-level 과 같은 규칙 — 부분 합을 전체 합으로 쓰지 않는다. raw_sys 는 **이 partition 자신의** gather_system 결과,
+      failed 는 그 partition 의 gather_processors 오류 여부(목록 미완결). 목록이 온전하고 모든 CPU 의 코어를 알 때만 목록 수 · 코어 합,
+      아니면 검사를 통과한 ProcessorSummary.Count · CoreCount(_rf_cpu_basis 와 같은 검사), 그것도 없으면 None.
+      그룹에 코어 미상 CPU 가 있으면 그 그룹의 total_cores · cores_per_socket 은 None. 제조사는 _CPU_MFR_CANON 표로 정규화.
     """
     procs = procs if isinstance(procs, list) else []
     cpus = [p for p in procs if isinstance(p, dict)
             and (str(p.get('processor_type') or '').strip().upper() in ('CPU', 'CORE', ''))]
-    cores = sum(_safe_int(p.get('total_cores'), 0) for p in cpus)  # rule 95 R1 #7: 비-숫자 cores str 방어
-    threads = sum(_safe_int(p.get('total_threads'), 0) for p in cpus)
+    known = [_cpu_known_cores(p) for p in cpus]
+    known_sum, unknown = sum(c for c in known if c is not None), sum(1 for c in known if c is None)
+    cs = _safe(raw_sys, 'cpu_summary') if isinstance(raw_sys, dict) else None
+    cnt, cc = _safe_int(_safe(cs, 'count')), _safe_int(_safe(cs, 'core_count'))
+    cnt_ok = cnt is None or cnt >= len(cpus)
+    list_ok = bool(cpus) and not failed
+    cc_ok = cc is not None and cc > 0 and cnt_ok and cc >= known_sum + unknown
     models = [p.get('model') for p in cpus if p.get('model')]
     speeds = [p.get('speed_mhz') for p in cpus if p.get('speed_mhz')]
     archs = [p.get('architecture') for p in cpus if p.get('architecture')]
     isets = [p.get('instruction_set') for p in cpus if p.get('instruction_set')]
-    groups, seen = [], {}
-    for p in cpus:
+    groups, seen, unk = [], {}, set()
+    for p, tc in zip(cpus, known):
         m = p.get('model') or None   # RD-UNK (2026-10-10): 자리표시자 'unknown' 대신 null — 모델을 모르면 모르는 것이다
-        tc = _safe_int(p.get('total_cores'), 0)  # rule 95 R1 #7: grouping 도 동일 방어
         if m in seen:
-            g = groups[seen[m]]
+            i = seen[m]
+            g = groups[i]
             g['sockets'] += 1
-            g['total_cores'] += tc
-            g['cores_per_socket'] = g['total_cores'] // g['sockets']  # Round 2 #1: 혼합 코어 same-model 평균 갱신
+            if tc is None:
+                unk.add(i)
+            if i in unk:
+                g['total_cores'] = g['cores_per_socket'] = None
+            else:
+                g['total_cores'] += tc
+                g['cores_per_socket'] = g['total_cores'] // g['sockets']  # Round 2 #1: 혼합 코어 same-model 평균 갱신
         else:
             seen[m] = len(groups)
-            groups.append({'model': m, 'manufacturer': p.get('manufacturer'),
+            if tc is None:
+                unk.add(seen[m])
+            groups.append({'model': m, 'manufacturer': _canon_cpu_manufacturer(p.get('manufacturer')),
                            'max_speed_mhz': p.get('speed_mhz'),
                            'architecture': p.get('architecture') or p.get('instruction_set'),
                            'sockets': 1, 'cores_per_socket': tc, 'total_cores': tc})
     return {
-        'sockets': (len(cpus) or None),
-        'cores_physical': (cores or None),
-        'logical_threads': (threads or None),
+        'sockets': (len(cpus) if list_ok else (cnt if (cnt is not None and cnt_ok) else None)),
+        'cores_physical': (known_sum if (list_ok and not unknown) else (cc if cc_ok else None)),
         'model': (models[0] if models else None),
         'max_speed_mhz': (speeds[0] if speeds else None),
         'architecture': (archs[0] if archs else (isets[0] if isets else None)),
@@ -5954,22 +6640,35 @@ def _normalize_memory_raw(raw_mem, raw_sys=None):
     cycle 2026-05-29: top-level normalize_standard.yml _rf_summary_memory 와 동일 grouping.
     2026-10-03 (C5): total_mib 가 None/0 이면 **이 partition 자신의** System.MemorySummary 로만 fallback
     (raw_sys = 그 partition 의 gather_system 결과). 상위 System 의 MemorySummary 를 partition 에 중복 적용하지 않는다.
+    2026-10-29 (SA-03 · SA-05): top-level 과 같은 규칙 — 그룹 용량은 반올림(half-even, top-level round 'common' 과 같다)이고 0 GB 그룹은 만들지
+      않는다(종전 내림이라 512 MiB 미만 · 1.5 GiB 경계가 어긋났다). total_mib 가 None(DIMM 합 미완결)이면 아는 DIMM 의 합을 쓰지 않는다. MemorySummary 는
+      양수이고, 용량 미상 DIMM 이 있으면 아는 DIMM 합보다 클 때, 그 밖(멤버를 못 읽음 · 합 0)에는 아는 합 이상일 때만 쓴다(_rf_mem_basis 와 같은 검사).
+      아니면 총량 · grand_total_gb 는 None.
     """
     raw_mem = raw_mem if isinstance(raw_mem, dict) else {}
     slots = raw_mem.get('slots') or []
-    total_mib = raw_mem.get('total_mib')
-    if not total_mib and isinstance(raw_sys, dict):
-        _ms_gib = _safe_int(_safe(raw_sys, 'memory_summary', 'total_gib'))
-        if _ms_gib:
-            total_mib = _ms_gib * 1024
+    tm = _safe_int(raw_mem.get('total_mib'))
+    known_mib, unknown = 0, 0
+    for s in slots:
+        if not isinstance(s, dict):
+            continue
+        c = _safe_int(s.get('capacity_mb') if s.get('capacity_mb') is not None else s.get('capacity_mib'))
+        if c is None:
+            unknown += 1
+        else:
+            known_mib += c
+    ms_gib = _safe_int(_safe(raw_sys, 'memory_summary', 'total_gib')) if isinstance(raw_sys, dict) else None
+    ms_ok = (ms_gib is not None and ms_gib > 0
+             and (ms_gib * MIB_PER_GIB > known_mib if unknown else ms_gib * MIB_PER_GIB >= known_mib))
+    trusted_gib = ms_gib if ms_ok else None
     groups, seen, total_gb = [], {}, 0
     for s in slots:
         if not isinstance(s, dict):
             continue
         cap_mb = _safe_int(s.get('capacity_mb') or s.get('capacity_mib'), 0)  # rule 95 R1 #7: '8GB' 등 단위문자열 방어
-        if cap_mb <= 0:
+        cap_gb = int(round(cap_mb / MIB_PER_GIB)) if cap_mb > 0 else 0
+        if cap_gb <= 0:
             continue
-        cap_gb = cap_mb // MIB_PER_GIB
         t, sp = s.get('type'), s.get('speed_mhz')
         mfr, pn = s.get('manufacturer'), s.get('part_number')
         key = '%s|%s|%s|%s|%s' % (cap_gb, t, sp, mfr, pn)
@@ -5983,10 +6682,15 @@ def _normalize_memory_raw(raw_mem, raw_sys=None):
                            'manufacturer': mfr, 'part_number': pn, 'quantity': 1,
                            'group_total_gb': cap_gb})
         total_gb += cap_gb
+    if tm is not None and tm > 0:
+        total_mib, grand = tm, (total_gb if total_gb > 0 else int(round(tm / MIB_PER_GIB)))
+    else:   # 합 0 · 미완결 · 미수집 → 검사를 통과한 MemorySummary 또는 None (0 은 "메모리 0 GB" 라는 거짓 값)
+        total_mib = trusted_gib * MIB_PER_GIB if trusted_gib is not None else None
+        grand = trusted_gib
     return {
         'total_mb': total_mib, 'total_basis': 'physical_installed',
         'installed_mb': total_mib, 'visible_mb': None, 'free_mb': None,
-        'slots': slots, 'summary': {'groups': groups, 'grand_total_gb': total_gb},
+        'slots': slots, 'summary': {'groups': groups, 'grand_total_gb': grand},
     }
 
 
@@ -6001,12 +6705,15 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
     network = {dns_servers, default_gateways, interfaces, adapters, ports, summary}.
 
     Returns: {'partitions': [{id, system_uri, system, cpu, memory, storage, network, boot}],
-              'errors': [...]}
+              'errors': [...], 'complete': bool}
+        complete (2026-10-29, SA-01) — Systems 컬렉션을 끝까지 읽었고 상한 절단이 없음. partition_count 를 정수로 둘 근거다.
     """
     out = {'partitions': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, systems_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, systems_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.partitions',
             f'Systems 컬렉션 실패: {err}'))
@@ -6021,7 +6728,9 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
         sys_data, sys_errs = gather_system(bmc_ip, m['uri'], vendor, *creds, part_chassis, product_hint)
         cpu_data, cpu_errs = gather_processors(bmc_ip, m['uri'], *creds)
         mem_data, mem_errs = gather_memory(bmc_ip, m['uri'], *creds)
-        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None)  # 2026-10-19 A-8/A-10 동일 적용
+        part_inv = {}   # 2026-10-29 (SA-07): 그 partition 의 드라이브 목록 근거 — summary.grand_total_gb 판정용(출력에 나가지 않음)
+        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None,
+                                            inventory_out=part_inv)  # 2026-10-19 A-8 · 2026-10-29 SA-12 동일 적용
         net_data, net_errs = gather_network(bmc_ip, m['uri'], *creds)
         # cycle 2026-06-09: per-partition boot order (설명 모델 "부팅 순서").
         boot_data, boot_errs = gather_boot(bmc_ip, m['uri'], *creds)
@@ -6032,9 +6741,9 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
             # cycle 2026-05-29: per-partition 전 섹션 canonical 정규화.
             # 구: cpu=raw list / memory=raw dict / storage=raw / network=raw list
             #     → normalize 누락 (top-level 과 shape 불일치 + network 가 list).
-            'cpu':        _normalize_cpu_raw(cpu_data),
+            'cpu':        _normalize_cpu_raw(cpu_data, sys_data, bool(cpu_errs)),   # 2026-10-29 (SA-03): 그 partition 의 요약 · 오류로 판정
             'memory':     _normalize_memory_raw(mem_data, sys_data),
-            'storage':    _normalize_storage_raw(sto_data),
+            'storage':    _normalize_storage_raw(sto_data, part_inv),
             'network':    _normalize_network_raw(net_data),
             # cycle 2026-06-09: boot order (Additive — Boot 미노출 시 {}).
             'boot':       boot_data,
@@ -6078,12 +6787,15 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
     Base / Expansion / Compute Module 구분 + ChassisType 표준 fallback.
 
     Returns: {'chassis': [{id, uri, kind, chassis_type, manufacturer, model, ..., power, thermal}],
-              'errors': [...]}
+              'errors': [...], 'complete': bool}
+        complete (2026-10-29, SA-01) — Chassis 컬렉션을 끝까지 읽었고 상한 절단이 없음. chassis_count 를 정수로 둘 근거다.
     """
     out = {'chassis': [], 'errors': []}
+    coll_state = {}
     members, _st, err = _resolve_all_member_uris(
-        bmc_ip, chassis_coll_uri, username, password, timeout, verify_ssl
+        bmc_ip, chassis_coll_uri, username, password, timeout, verify_ssl, state_out=coll_state
     )
+    out['complete'] = bool(coll_state.get('complete')) and len(members) <= MAX_COLLECTION_MEMBERS
     if err:
         out['errors'].append(_err('multi_node.chassis',
             f'Chassis 컬렉션 실패: {err}'))
@@ -6106,10 +6818,11 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
         # 실패 chassis 에 doomed sub-GET (2 round-trip) + 중복 error noise 차단 — 멤버는
         # append (chassis_count 보존). 설명 모델 "Power 와 Thermal".
         if get_ok:
+            # 2026-10-27 (C5 05-power-004): 이미 받은 섀시 본문으로 링크 없는 Power/Thermal 경로를 요청하지 않는다 (RackGroup/Rack1 8건 · r001u01 3건)
             pwr_data, pwr_errs = gather_power(bmc_ip, m['uri'],
-                                              username, password, timeout, verify_ssl)
+                                              username, password, timeout, verify_ssl, chassis_body=cdata)
             thm_data, thm_errs = gather_thermal(bmc_ip, m['uri'],
-                                                username, password, timeout, verify_ssl)
+                                                username, password, timeout, verify_ssl, chassis_body=cdata)
             # 2026-10-12: Power/Thermal 과 신 schema 가 모두 404 인 chassis(RackGroup 등)는 그 리소스를 두지 않는 것이다 — 미지원이지 실패가 아니다.
             #   섹션 runner 의 404-only 판정과 같은 규칙으로 errors 에 남기지 않는다(종전 {} 반환과 같은 결과). 그 밖의 오류는 그대로 남긴다.
             if pwr_errs and _is_404_only_error(pwr_errs):
@@ -6161,6 +6874,9 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
     lab 부재 — 사이트 실측 시 정정 의무 (NEXT_ACTIONS).
 
     Returns: (dict_or_None, errors_list)
+
+    2026-10-29 (SA-01): resource_block_count 는 ResourceBlocks 컬렉션을 끝까지 읽고 나열된 블록을 모두 읽었을 때만 정수다.
+    링크 없음 · 404 · 컬렉션 실패 · 절단 · 블록 일부 실패는 null(목록 resource_blocks 는 읽은 블록만 — 종전과 같다).
     """
     errors = []
     if not isinstance(service_root, dict):
@@ -6174,6 +6890,7 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                       [_err('multi_node.composition', f'CompositionService 실패: {cerr or st}')])
 
     blocks = []
+    rb_complete = False   # 2026-10-29 (SA-01): 링크 없음 · 실패 · 절단 · 블록 일부 실패면 개수 null
     rb_link = _safe(comp, 'ResourceBlocks', '@odata.id')
     if rb_link:
         rst, rcoll, rerr = _get(bmc_ip, _p(rb_link), username, password, timeout, verify_ssl)
@@ -6182,16 +6899,20 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                 errors.append(_err('multi_node.composition',
                                    f'ResourceBlocks 컬렉션 실패: {rerr or rst}'))
         else:
+            walk = {}
+            rb_complete = True
             for m in _collection_members(bmc_ip, _p(rb_link), rcoll, username, password, timeout,
-                                         verify_ssl, 'multi_node.composition', errors):
+                                         verify_ssl, 'multi_node.composition', errors, state_out=walk):
                 uri = _safe(m, '@odata.id')
                 if not uri:
+                    rb_complete = False
                     continue
                 bst, bd, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
                 if bst != 200 or not isinstance(bd, dict):
                     if bst != 404:   # RD-F18 (2026-10-10): 나열된 멤버를 못 읽었다 — 조용히 세지 않는다
                         errors.append(_err('multi_node.composition', f'ResourceBlock {uri} 실패: {_e or bst}',
                                            detail={'status_code': bst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    rb_complete = False
                     continue
                 # 각 ResourceBlock 의 chassis 대응 + 조합된 ComputerSystems (nPartition) 링크
                 chassis_links = [
@@ -6215,18 +6936,21 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     # 표준 ResourceBlock = Processors/Memory idRef 배열 (DMTF). 비-표준
                     # collection-link(dict) 펌웨어면 0 으로 under-count — lab 부재, 사이트
                     # fixture 확인 시 정정 (NEXT_ACTIONS C9, rule 96 R1-A).
-                    'processor_count':      len(_dicts(_safe(bd, 'Processors'))),
-                    'memory_count':         len(_dicts(_safe(bd, 'Memory'))),
+                    # 2026-10-27 (FIX 6, 실측 CSUS RMC: ResourceBlock 의 Processors/Memory 가 idRef 배열이 아니라 컬렉션 링크(dict)):
+                    #   배열이 아니면 0 으로 날조하지 않고 null — 세지 못한 것과 0개는 다르다.
+                    'processor_count':      (len(_dicts(_safe(bd, 'Processors'))) if isinstance(_safe(bd, 'Processors'), list) else None),
+                    'memory_count':         (len(_dicts(_safe(bd, 'Memory'))) if isinstance(_safe(bd, 'Memory'), list) else None),
                     'chassis':              chassis_links,
                     'computer_systems':     systems_links,
                 })
+            rb_complete = rb_complete and bool(walk.get('complete'))
     return {
         # cycle 2026-06-09 (review): 비-dict/null 200 body 는 enabled=None (정직한 unknown).
         # dict 면 ServiceEnabled 누락 시 DMTF 관례상 True. sibling gather_manager_logs 와 정합.
         'enabled':              (bool(comp.get('ServiceEnabled', True)) if isinstance(comp, dict) else None),
         'state':                _safe(comp, 'Status', 'State'),
         'health':               _safe(comp, 'Status', 'Health'),
-        'resource_block_count': len(blocks),
+        'resource_block_count': (len(blocks) if rb_complete else None),
         'resource_blocks':      blocks,
     }, errors
 
@@ -6236,26 +6960,33 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
 
     kind='switch' → SwitchType / Status. kind='endpoint' → EndpointProtocol / Status.
     source (rule 96 R1-A): DMTF DSP0266 Switch / Endpoint.
+
+    2026-10-29 (SA-01): (멤버 목록, 확인 여부)를 돌려준다. 확인 = 컬렉션을 끝까지 온전히 읽었고 나열된 멤버를 모두 읽음.
+    링크 없음 · 404 · GET 실패 · 절단 · 멤버 일부 실패는 미확인 — 호출부가 개수를 null 로 둔다. 목록은 읽은 멤버만(미제공이면 []).
     """
     if not coll_uri:
-        return []
+        return [], False
     st, coll, cerr = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if cerr or st != 200:
         if st != 404:   # RD-F18 (2026-10-10)
             errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} 컬렉션 {coll_uri} 실패: {cerr or st}',
                                detail={'status_code': st}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
-        return []
+        return [], False
     out = []
+    walk = {}
+    complete = True
     for m in _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout, verify_ssl,
-                                 f'multi_node.fabrics.{kind}', errors):
+                                 f'multi_node.fabrics.{kind}', errors, state_out=walk):
         uri = _safe(m, '@odata.id')
         if not uri:
+            complete = False
             continue
         mst, md, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if mst != 200 or not isinstance(md, dict):
             if mst != 404:   # RD-F18 (2026-10-10)
                 errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} {uri} 실패: {_e or mst}',
                                    detail={'status_code': mst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
             continue
         if kind == 'switch':
             out.append({
@@ -6273,10 +7004,10 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
                 'state':             _safe(md, 'Status', 'State'),
                 'health':            _safe(md, 'Status', 'Health'),
             })
-    return out
+    return out, (complete and bool(walk.get('complete')))
 
 
-def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl):
+def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl, state_out=None):
     """Fabrics + FlexGrid (Switches/Endpoints) 수집 (cycle 2026-06-09, ADR-2026-06-09).
 
     설명 모델 요구 — HPE CSUS 3200 은 NUMAlink fabric 을 표준 Redfish Fabric 모델로
@@ -6291,8 +7022,13 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
     lab 부재 — 사이트 실측 시 정정 의무 (NEXT_ACTIONS).
 
     Returns: (list_of_fabrics_or_None, errors_list)
+
+    2026-10-29 (SA-01): switch_count · endpoint_count 는 그 컬렉션을 확인했을 때만 정수(_gather_fabric_members), 아니면 null.
+    state_out(dict)을 주면 'complete' — Fabrics 컬렉션을 끝까지 읽고 나열된 Fabric 을 모두 읽음(fabric_count 근거)을 적는다.
     """
     errors = []
+    if state_out is not None:
+        state_out['complete'] = False
     if not isinstance(service_root, dict):
         return None, errors
     fab_uri = _safe(service_root, 'Fabrics', '@odata.id')
@@ -6303,21 +7039,25 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
         return None, ([] if st == 404 else
                       [_err('multi_node.fabrics', f'Fabrics 컬렉션 실패: {ferr or st}')])
     fabrics = []
+    walk = {}
+    complete = True
     for m in _collection_members(bmc_ip, _p(fab_uri), fcoll, username, password, timeout, verify_ssl,
-                                 'multi_node.fabrics', errors):
+                                 'multi_node.fabrics', errors, state_out=walk):
         furi = _safe(m, '@odata.id')
         if not furi:
+            complete = False
             continue
         fst, fdata, _e = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
         if fst != 200 or not isinstance(fdata, dict):
             if fst != 404:   # RD-F18 (2026-10-10)
                 errors.append(_err('multi_node.fabrics', f'Fabric {furi} 실패: {_e or fst}',
                                    detail={'status_code': fst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
             continue
-        switches = _gather_fabric_members(
+        switches, switches_ok = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Switches', '@odata.id'),
             username, password, timeout, verify_ssl, errors, kind='switch')
-        endpoints = _gather_fabric_members(
+        endpoints, endpoints_ok = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Endpoints', '@odata.id'),
             username, password, timeout, verify_ssl, errors, kind='endpoint')
         fabrics.append({
@@ -6326,11 +7066,14 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
             'fabric_type':    _safe(fdata, 'FabricType'),
             'state':          _safe(fdata, 'Status', 'State'),
             'health':         _safe(fdata, 'Status', 'Health'),
-            'switch_count':   len(switches),
-            'endpoint_count': len(endpoints),
+            # 2026-10-29 (SA-01, 실측 CSUS FlexGrid: Endpoints 링크 없음 → 종전 0): 확인한 컬렉션만 정수, 미제공 · 실패는 null
+            'switch_count':   (len(switches) if switches_ok else None),
+            'endpoint_count': (len(endpoints) if endpoints_ok else None),
             'switches':       switches,
             'endpoints':      endpoints,
         })
+    if state_out is not None:
+        state_out['complete'] = complete and bool(walk.get('complete'))
     return fabrics, errors
 
 
@@ -6348,7 +7091,7 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
             'layout': str,
             'summary': {partition_count, manager_count, chassis_count,
                         representative_partition,
-                        resource_block_count, fabric_count},
+                        resource_block_count, fabric_count},   # 개수는 int | None (2026-10-29, SA-01)
             'partitions': list, 'managers': list, 'chassis': list,
             'composition': dict | None, 'fabrics': list | None,
             'errors': list,
@@ -6375,11 +7118,12 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     )
     # cycle 2026-06-09: CompositionService/ResourceBlocks + Fabrics/FlexGrid 수집
     # (설명 모델 요구). ServiceRoot 에 링크 부재 시 None (graceful — Additive).
+    fab_state = {}
     composition, comp_errs = gather_composition_service(
         bmc_ip, service_root, username, password, timeout, verify_ssl,
     )
     fabrics, fab_errs = gather_fabrics(
-        bmc_ip, service_root, username, password, timeout, verify_ssl,
+        bmc_ip, service_root, username, password, timeout, verify_ssl, state_out=fab_state,
     )
 
     partitions = sys_result.get('partitions') or []
@@ -6387,18 +7131,20 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     chassis    = chs_result.get('chassis')    or []
 
     representative = partitions[0].get('id') if partitions else None  # rule 95 R1 #2: 방어적 .get (id 누락 KeyError 회피)
-    rb_count = composition.get('resource_block_count', 0) if isinstance(composition, dict) else 0
+    # 2026-10-29 (SA-01 · SA-02): 개수는 원천 컬렉션을 끝까지 읽었을 때만 정수(0 포함)다. 링크 없음 · 404 · 실패 · 절단은 null —
+    #   종전 `else 0` 은 "보지 못함" 을 "0개" 로 적었다. 목록(partitions/managers/chassis/fabrics)은 종전과 같다.
+    rb_count = composition.get('resource_block_count') if isinstance(composition, dict) else None
     return {
         'enabled': True,
         'layout':  manager_layout,
         'summary': {
-            'partition_count':           len(partitions),
-            'manager_count':             len(managers),
-            'chassis_count':             len(chassis),
+            'partition_count':           (len(partitions) if sys_result.get('complete') else None),
+            'manager_count':             (len(managers) if mgr_result.get('complete') else None),
+            'chassis_count':             (len(chassis) if chs_result.get('complete') else None),
             'representative_partition':  representative,
             # cycle 2026-06-09: composition / fabric 규모 (Additive 신 키)
             'resource_block_count':      rb_count,
-            'fabric_count':              len(fabrics) if isinstance(fabrics, list) else 0,
+            'fabric_count':              (len(fabrics) if isinstance(fabrics, list) and fab_state.get('complete') else None),
         },
         'partitions': partitions,
         'managers':   managers,
@@ -6469,7 +7215,7 @@ def _supplement_firmware_from_pcie_psu(bmc_ip, fw_list, chassis_uris, power_sect
     return out
 
 
-def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl, chassis_bodies=None):
     """System 이 연결한 섀시가 2개 이상이면 섀시마다 gather_power 를 돌려 합친다 (2026-10-19, A-11). 1개(실측 전 벤더 · CSUS 4노드)면 종전 gather_power 와 같다.
 
     합치는 규칙: power_supplies 는 이어 붙인다(섀시별 PSU). power_control 의 소비·용량은 모든 섀시 값이 있을 때만 합(하나라도 None 이면 None —
@@ -6478,10 +7224,12 @@ def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, passwo
     """
     uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
     if len(uris) <= 1:
-        return gather_power(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+        _cu = uris[0] if uris else default_uri
+        return gather_power(bmc_ip, _cu, username, password, timeout, verify_ssl,
+                            chassis_body=(chassis_bodies or {}).get(_p(_cu)) if _cu else None)   # 2026-10-27 (C5)
     psus, errors, pcs, used = [], [], [], []
     for cu in _capped(uris, 'power', errors):
-        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl)
+        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl, chassis_body=(chassis_bodies or {}).get(_p(cu)))
         if not d and _is_404_only_error(e):
             _notice('power', '섀시 %s: Power 리소스 없음 — 합산에서 제외' % _p(cu))
             continue
@@ -6513,14 +7261,16 @@ def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, passwo
     return {'power_supplies': psus, 'power_control': power_control}, errors
 
 
-def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl, chassis_bodies=None):
     """System 이 연결한 섀시가 2개 이상이면 섀시마다 gather_thermal 을 돌려 온도·팬을 이어 붙인다 (2026-10-19, A-11). 1개면 종전과 같다."""
     uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
     if len(uris) <= 1:
-        return gather_thermal(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+        _cu = uris[0] if uris else default_uri
+        return gather_thermal(bmc_ip, _cu, username, password, timeout, verify_ssl,
+                              chassis_body=(chassis_bodies or {}).get(_p(_cu)) if _cu else None)   # 2026-10-27 (C5)
     temps, fans, errors, used = [], [], [], []
     for cu in _capped(uris, 'thermal', errors):
-        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl)
+        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl, chassis_body=(chassis_bodies or {}).get(_p(cu)))
         if not d and _is_404_only_error(e):
             _notice('thermal', '섀시 %s: Thermal 리소스 없음 — 합산에서 제외' % _p(cu))
             continue
@@ -6539,7 +7289,8 @@ def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, pass
 def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           username, password, timeout, verify_ssl,
                           all_errors, collected, failed, unsupported=None,
-                          manager_layout=None, product_hint=None, firmware_scope=None):
+                          manager_layout=None, product_hint=None, firmware_scope=None, aux_out=None,
+                          pcie_link_registries=None):
     """10개 섹션 dispatch (system / bmc / processors / memory / storage / network /
     firmware / power / thermal / network_adapters[P4]).
 
@@ -6547,8 +7298,9 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     (capability 미지원 = noise 아님).
 
     cycle 2026-06-14 (Track 4): thermal 단일노드 배선 (이전엔 multi_node 경로만).
-    gather_power 패턴 mirror — /Thermal 404 시 /ThermalSubsystem fallback. 미지원 시
-    {} graceful (collected 이지만 빈 dict). normalize 가 data.thermal 로 passthrough.
+    gather_power 패턴 mirror — /Thermal 404 시 /ThermalSubsystem fallback. 둘 다 404 면
+    sections.thermal 은 not_supported 다(2026-10-12 — 종전 "{} graceful · collected" 서술은 2026-10-27 05-thermal-005 로 정정).
+    normalize 가 data.thermal 로 passthrough.
 
     cycle 2026-05-12 (ADR-2026-05-12): `manager_layout` 옵션 인자 추가 (Additive).
     None 시 기존 동작 100% 보존. RMC primary adapter 만 `gather_bmc` 라벨 분기 활성.
@@ -6557,7 +7309,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     collected / failed / unsupported 에는 넣지 않는다 — 11 섹션·status 계약 불변.
 
     2026-10-19 (CSUS 단일 서버 정합 · 수집 범위 보완 — 전부 "정보가 없을 때만" 발동):
-      - storage 에 System 의 섀시 목록을 넘긴다 (A-8 PCIe 컨트롤러 식별 · A-10 섀시 Drives 폴백).
+      - storage 에 System 의 섀시 목록을 넘긴다 (A-8 PCIe 컨트롤러 식별 · 2026-10-29 SA-12 섀시 Drives 합집합 — 종전 A-10 폴백).
       - power/thermal 은 System 이 연결한 섀시 전체(2개 이상일 때 합산 — A-11). 1개면 종전과 같은 호출.
       - firmware_scope == 'complex_only' (adapter vendor_notes.firmware_inventory_scope) 면 PCIe 장치 · PSU 펌웨어를 firmware[] 에 보충 (A-9).
     """
@@ -6573,29 +7325,39 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
     eff_chassis_uri = sys_chassis[0] if sys_chassis else chassis_uri
     extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]
-    # 2026-10-19: storage(A-8/A-10) · firmware 보충(A-9) 이 보는 "System 의 섀시" — Links.Chassis 전체, 없으면 종전 default 1개
+    # 2026-10-19: storage(A-8 · SA-12 합집합) · firmware 보충(A-9) 이 보는 "System 의 섀시" — Links.Chassis 전체, 없으면 종전 default 1개
     sys_chassis_all = sys_chassis or ([eff_chassis_uri] if eff_chassis_uri else [])
     # system 수집이 ComputerSystem 응답의 Bios 링크를 여기에 기록한다 (재조회 없음).
     bios_link = {}
+    # 2026-10-27 (C9): 구조 근거 수집용 out dict — bmc 는 Manager.Links.ActiveSoftwareImage, firmware 는 멤버 RelatedItem(/Bios). 요청 0.
+    bmc_links, fw_links_by_key = {}, {}
+    fw_release_dates, ndf_mtu = {}, {}   # 2026-10-27 (C8): FirmwareInventory ReleaseDate(dedup key) · NDF MTU(MAC) — data 밖 내부 근거
+    storage_inv = {}   # 2026-10-29 (SA-07): 드라이브 목록 근거 {enumerated, incomplete} — data 밖(aux), normalize 가 grand_total_gb 판정에 쓴다
     sections = {
         'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
-        'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout),
+        'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout, links_out=bmc_links),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
-        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all),
+        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all,
+                                   inventory_out=storage_inv),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
-        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds),
+        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds, links_out=fw_links_by_key,
+                                   dates_out=fw_release_dates),
         # 2026-10-19 (A-11): System 이 연결한 섀시 전체 — 1개면 종전 gather_power(eff_chassis_uri) 와 같은 호출
-        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds),
+        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds,
+                                   chassis_bodies=bios_link.get('chassis_bodies')),   # 2026-10-27 (C5): system 이 받은 섀시 본문 재사용
         # cycle 2026-06-14 (Track 4): 단일노드 thermal (온도 센서 + 팬). 미지원 벤더는 {} graceful.
-        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds),
+        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds,
+                                   chassis_bodies=bios_link.get('chassis_bodies')),
         # P4 (cycle 2026-04-28): NIC 카드 + port-level + FC HBA / InfiniBand 분류
         # cycle 2026-08-03: system_uri 전달 — Chassis 경로 실패 시 Systems 경로 fallback
         # (펌웨어 세대별 NetworkAdapters 부모 리소스 차이. 상세는 함수 docstring).
         # 2026-10-15: System 이 연결한 나머지 섀시 전달 — 소유를 확인한 섀시의 카드만 더한다.
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
-                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
+                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis,
+                                   pcie_link_registries=pcie_link_registries,   # 2026-10-27 (결정 11 A안): adapter 선언 등록부
+                                   mtu_out=ndf_mtu),                             # 2026-10-27 (C8 03-network-007): NDF MTU(MAC) aux
     }
     # 2026-10-18 (X9): NetworkAdapter 의 Model 이 비면 같은 카드의 FirmwareInventory 이름으로 채운다 (두 섹션이 다 끝난 뒤, 요청 0).
     _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
@@ -6607,7 +7369,59 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)
     sections['bios'] = bios
+    # 2026-10-27 (C2, 실측 iLO 7 DL380 Gen12 전원 Off 스냅샷: Storage 멤버 0 · DIMM 16/32 빈 슬롯 · PSU Absent · 센서 전부 0):
+    # 전원 Off 는 관측 사실로만 1회 남긴다 — 섹션 status 는 바꾸지 않고(수집은 성공), 인과 해석은 계약 문서(03-fields 6.7)에 둔다.
+    # 2026-10-28 (독립 검증 F-03, 사용자 결정): 원 이슈(03-storage-001)가 storage/network 신호 없음이라 문구에 '네트워크' 를 넣는다(실측 Off 호스트:
+    #   interfaces 4 link unknown · 카드 Ethernet 포트 4 link unknown — 2026-10-29 SA-13 정정, 종전 주석의 '카드 ports 0' 은 틀렸다).
+    #   조건 · section · 건수는 그대로다.
+    if _str(bios_link.get('power_state')).strip().lower() == 'off':
+        _notice('system', '호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
+    # 2026-10-27 (C9 FIX 7): 구조 근거 firmware_links — 최종 firmware[].id 로 키잉. data 밖(모듈 최상위 firmware_links)으로 나가고
+    # normalize 의 category 가 1순위로 쓴다. 발행 키·요청 수는 늘지 않는다.
+    _fw_links_final = _firmware_links_by_id(
+        sections.get('firmware'), fw_links_by_key,
+        bios_link.get('active_software_image'), bmc_links.get('active_software_image'))
+    # 2026-10-27 (C8 01-hardware-004 ≡ 04-bios-001, 실측 Lenovo XCC3 UEFI.ReleaseDate): System · OEM 에 BIOS 날짜가 없으면 구조 근거
+    #   (firmware_links bios — Bios.Links.ActiveSoftwareImage · RelatedItem /Bios)로 잡힌 FirmwareInventory 항목의 ReleaseDate 를
+    #   hardware.bios_date 에 넣는다 — 기존 키 · 요청 0. 연도 0000 자리표시자(iLO System ROM)는 ISO 가 아니라 쓰지 않는다. OEM 날짜가 있는
+    #   벤더(iLO · iDRAC)는 불변(Dell 은 두 날짜가 같음 — 교차 확인). 어느 항목을 썼는지 notice 로 남긴다.
+    _sysd = sections.get('system')
+    if isinstance(_sysd, dict) and _sysd.get('bios_date') is None:
+        for _fid, _hit in _fw_links_final.items():
+            if not (isinstance(_hit, dict) and _hit.get('bios')):
+                continue
+            _d = _normalize_bios_date(fw_release_dates.get(_fw_dedup_key(_fid)))
+            if isinstance(_d, str) and _valid_iso_date(_d) and not _d.startswith('0000'):
+                _sysd['bios_date'] = _d
+                _notice('system', 'BIOS 날짜를 FirmwareInventory %s 의 ReleaseDate 로 채움 (System · OEM 에 날짜 없음)' % _fid)
+                break
+    if aux_out is not None:
+        aux_out['firmware_links'] = _fw_links_final
+        aux_out['ndf_mtu_by_mac'] = ndf_mtu
+        aux_out['storage_inventory'] = storage_inv
     return sections
+
+
+def _firmware_links_by_id(fw_list, links_by_key, bios_image_uri, bmc_image_uri):
+    """firmware[].id → {'bios': True} | {'bmc': True} | 둘 다 — 구조 근거만 (2026-10-27, C9 04-firmware-001~005 / 008).
+
+    근거 3종: Bios.Links.ActiveSoftwareImage(→ bios) · Manager.Links.ActiveSoftwareImage(→ bmc) · 멤버 RelatedItem 이 …/Bios(→ bios).
+    대조는 status 접두사를 뗀 dedup key 로 한다 — Dell 은 ActiveSoftwareImage 가 'Installed-…' 를 가리키고 firmware[] 에는 first-seen
+    'Current-…' 가 남는다(04-firmware-008). 근거가 없는 항목은 키 자체가 없다(normalize 는 토큰 사슬로 간다).
+    """
+    by_key = {k: dict(v) for k, v in (links_by_key or {}).items() if isinstance(v, dict)}
+    for uri, kind in ((bios_image_uri, 'bios'), (bmc_image_uri, 'bmc')):
+        tail = _str(uri).rstrip('/').split('/')[-1] if isinstance(uri, str) and uri.strip() else ''
+        if tail:
+            by_key.setdefault(_fw_dedup_key(tail), {})[kind] = True
+    out = {}
+    for fw in (fw_list or []):
+        if not isinstance(fw, dict) or not isinstance(fw.get('id'), str):
+            continue
+        hit = by_key.get(_fw_dedup_key(fw['id']))
+        if hit:
+            out[fw['id']] = dict(hit)
+    return out
 
 
 def _compute_final_status(collected, failed, errors=None, first_auth_status=None):
@@ -6973,6 +7787,10 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
             'host_bootstrap': _safe(acc_data, 'HostBootstrapAccount', default=None),
             # Huawei 고유 축 — 계정별 Redfish 접근 스위치 (읽기 전용, 07 §10).
             'login_interfaces': _account_login_interfaces(acc_data),
+            # 2026-10-27 (06-bmc-002, 실측 HPE RMC 7대 `@Redfish.WriteableProperties: ["Password"]`): 장비가 DMTF annotation 으로 선언한
+            #   쓰기 가능 속성 목록. 없으면 None(선언 없음 — iLO 7 · XCC 3 · iDRAC). repair 는 선언이 있을 때 그 밖의 속성을 보내지 않는다.
+            'writable': ([s for s in _as_list(_safe(acc_data, '@Redfish.WriteableProperties')) if isinstance(s, str)]
+                         if _safe(acc_data, '@Redfish.WriteableProperties') is not None else None),
         })
     out['member_read'] = len(out['accounts'])
 
@@ -7616,19 +8434,29 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
         if 'imm2' in hint:
             reasons.append('IMM2 는 Redfish AccountService 근거 미확보 → generic 유지')
             return account_family('generic_collection_post'), reasons
+        # (0) 2026-10-27 (06-bmc-001, 2차 Mock 실측): 장비가 준 Manager.Model 이 세대 근거 1순위다 — Dell 분기와 같은 원칙(hint 는 마지막).
+        #     hint(adapter_id)는 무인증 1차 선택값이라 priority 독식 결과일 수 있다(XCC3 5대가 lenovo_xcc3 로 뽑힌 것은 우연이고, 무인증 facts 가
+        #     채워지면 lenovo_bmc 로 강등돼 hint 에 xcc3 가 없다). 실측: XCC3 "Lenovo XClarity Controller 3"(2차 5대) · "Lenovo Xclarity Controller 3"(1차),
+        #     XCC(1/2) "Lenovo XClarity Controller"(참조 미러 AFBT58B 5.70) — 숫자가 없으면 XCC2 계열. 모델이 없을 때만 hint 가 세대를 말한다.
+        mdl = (mgr.get('model') or '').lower()
+        m_gen = re.search(r'xclarity controller\s*(\d+)?', mdl)                       # nosec rule12-r1
+        model_gen = (int(m_gen.group(1)) if m_gen.group(1) else 2) if m_gen else None
         # (1) 장비가 실제로 노출한 AccountTypes — XCC2/XCC3 의 서명이다.
         exposes_account_types = any(a.get('account_types') for a in accounts)
         # (2) HostBootstrapAccount 는 XCC2/XCC3 계열에만 나타나는 표준 Property 다.
         has_bootstrap = any(a.get('host_bootstrap') is not None for a in accounts)
-        if exposes_account_types or has_bootstrap or 'xcc3' in hint or 'xcc2' in hint:
-            # XCC2 와 XCC3 는 PasswordChangeRequired 계약이 다르다. XCC3 근거가 있을 때만
-            # XCC3 로 좁히고, 그 외에는 XCC2(더 넓은 Property 집합) 를 쓴다.
-            if 'xcc3' in hint:
-                reasons.append('adapter hint xcc3 → PasswordChangeRequired 미지원 Family')  # nosec rule12-r1
+        if exposes_account_types or has_bootstrap or model_gen is not None or 'xcc3' in hint or 'xcc2' in hint:
+            # XCC2 와 XCC3 는 PasswordChangeRequired 계약이 다르다. 세대는 Manager.Model 이 먼저 말하고,
+            # 모델이 세대를 밝히지 않을 때만 hint 를 본다. 그 외에는 XCC2(더 넓은 Property 집합) 를 쓴다.
+            if model_gen is not None and model_gen >= 3:
+                reasons.append(f'Manager.Model={mdl!r} → XCC{model_gen} (PasswordChangeRequired 미지원 Family; hint={hint!r} 는 참고)')  # nosec rule12-r1
+                return account_family('lenovo_xcc3_accounttypes'), reasons
+            if model_gen is None and 'xcc3' in hint:
+                reasons.append('Manager.Model 없음 · adapter hint xcc3 → PasswordChangeRequired 미지원 Family')  # nosec rule12-r1
                 return account_family('lenovo_xcc3_accounttypes'), reasons
             reasons.append(                                                        # nosec rule12-r1
-                f'AccountTypes 관측={exposes_account_types} HostBootstrap 관측={has_bootstrap} '
-                f'hint={hint!r} → AccountTypes 지원 XCC family')  # nosec rule12-r1
+                f'Manager.Model={mdl!r} model_gen={model_gen} AccountTypes 관측={exposes_account_types} '
+                f'HostBootstrap 관측={has_bootstrap} hint={hint!r} → AccountTypes 지원 XCC family')  # nosec rule12-r1
             return account_family('lenovo_xcc2_accounttypes'), reasons
         # (3) Purley 만 pre-populated empty slot PATCH 로 계정을 만든다. Whitley/AMD 는 POST 라
         #     hint 가 그쪽을 가리키면 slot 관측이 있어도 Purley 로 보지 않는다.
@@ -8577,6 +9405,16 @@ def account_service_provision(
         # Locked 가 read-only 인 Family(HPE iLO / Lenovo XCC)에서는 보내지 않는다.
         if existing.get('locked') is True and account_prop_writable(family, 'Locked', 'repair'):
             body_full['Locked'] = False
+        # 2026-10-27 (06-bmc-002): 장비가 `@Redfish.WriteableProperties` 로 쓸 수 있는 속성을 선언했으면 그 밖의 속성은 보내지 않는다
+        #   (read_only 강등 — Family 계약보다 장비 선언이 좁을 때만, vendor 이름 분기 없음). 쓰기 전에 정한다 — 추측성 재시도가 아니다.
+        #   실측 HPE RMC(CSUS 3200) 계정: ["Password"] → RoleId drift 가 있어도 Password 만 쓴다. 선언이 없는 장비(iLO · XCC · iDRAC)는 종전과 같다.
+        _declared = existing.get('writable')
+        if isinstance(_declared, list) and _declared:
+            _demoted = sorted(k for k in list(body_full) if k not in _declared)
+            for _k in _demoted:
+                body_full.pop(_k, None)
+            if _demoted:
+                out['write_demoted_by_device'] = _demoted
         patch_headers = None
         if account_if_match(family, 'repair'):
             # Inspur M6 공식 계약: GET 으로 ETag 를 받고 PATCH 에 If-Match 로 실어야 한다.
@@ -9120,6 +9958,9 @@ def main():
             # 2026-10-19 (A-9): adapter vendor_notes.firmware_inventory_scope — 'complex_only' 면 PCIe 장치 · PSU 펌웨어를 firmware[] 에
             #   보충한다(실측 HPE CSUS 3200: FirmwareInventory 가 complex/nPar 번들 2건만). None/'' 은 종전과 같다.
             firmware_inventory_scope = dict(type='str', default=None, required=False),
+            # 2026-10-27 (03-storage-004 결정 11 A안): adapter vendor_notes.pcie_port_link_condition_registries — PCIeDevice.Status.Conditions 의
+            #   MessageId 등록부 접두(예 H3Alert)를 선언한 adapter 에서만 FC HBA 링크 미제공 notice 에 카드 단위 LinkUp/LinkDown 조건을 덧붙인다.
+            pcie_port_link_condition_registries = dict(type='list', elements='str', default=None, required=False),
         ),
         supports_check_mode=True,
     )
@@ -9280,14 +10121,16 @@ def main():
                 multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
             )
 
+    aux = {}   # 2026-10-27 (C9): data 밖으로 나가는 구조 근거(firmware_links)
     result_data = _collect_all_sections(
         bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         username, password, timeout, verify_ssl,
         all_errors, collected, failed, unsupported,
-        manager_layout=manager_layout,
+        manager_layout=manager_layout, aux_out=aux,
         # A1b (2026-06-04): ServiceRoot.Product 를 hardware.model fallback 로 전달 (check_redfish 동일).
         product_hint=_safe(service_root, 'Product'),
         firmware_scope=(p.get('firmware_inventory_scope') or None),
+        pcie_link_registries=(p.get('pcie_port_link_condition_registries') or None),
     )
 
     # 대표 시리얼 확정. gather_system 의 SerialNumber 값을 마지막에 덮어쓴다.
@@ -9330,6 +10173,12 @@ def main():
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
+        # 2026-10-27 (C9): firmware[].id → 구조 근거 {bios|bmc} — normalize 의 category 1순위. data 밖이라 GOLDEN/envelope 키 불변.
+        firmware_links=aux.get('firmware_links') or {},
+        # 2026-10-27 (C8 03-network-007): NDF Ethernet.MTUSize(MAC 별) — normalize 가 interfaces[].mtu 가 null 인 NIC 만 채운다. data 밖.
+        ndf_mtu_by_mac=aux.get('ndf_mtu_by_mac') or {},
+        # 2026-10-29 (SA-07): 드라이브 목록 근거 {enumerated, incomplete} — normalize 가 storage.summary.grand_total_gb 의 null · 0 을 가른다. data 밖.
+        storage_inventory=aux.get('storage_inventory') or {},
         # 2026-10-03 (P2): 모듈 내부 관측값 — envelope 13 필드에는 들어가지 않는다 (normalize 가 뽑지 않음).
         cache=cache_stats(),
     )

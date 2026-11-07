@@ -41,3 +41,5 @@ python tests/integration/convert_dmtf_mockup.py \
 ```
 
 redfish_gather.py 의 의도된 파싱 변경으로 golden 이 바뀌면 위 명령으로 재생성한다.
+
+- 2026-10-27: `memory.slots[].locator` 순서가 DeviceLocator → `Location.PartLocation.ServiceLabel` → Slot 으로 바뀌어 golden 3건이 `"1"` → `"DIMM 1"` 로 갱신됐다 (`tests/evidence/2026-10-27-redfish-mock2-impl/golden-changes.md` G-13).

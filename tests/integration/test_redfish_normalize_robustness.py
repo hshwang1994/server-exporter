@@ -75,7 +75,7 @@ class TestNormalizeCpuRaw:
                   "model": "Xeon Silver 4310", "processor_type": "CPU"}]
         out = rg._normalize_cpu_raw(procs)
         assert out["cores_physical"] == 12
-        assert out["logical_threads"] == 24
+        assert "logical_threads" not in out   # 2026-10-27 FIX 1 — Redfish 는 스레드 수를 내지 않는다
         assert out["summary"]["groups"][0]["total_cores"] == 12
 
 

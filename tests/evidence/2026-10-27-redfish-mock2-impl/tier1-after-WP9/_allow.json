@@ -1,0 +1,34 @@
+[
+ {
+  "labels": "*",
+  "path_prefix": "data.cpu.logical_threads",
+  "issue": "02-cpu-001/002/006 (FIX 1)",
+  "note": "Redfish 는 cpu.logical_threads 를 내지 않는다 — 18 label 키 소멸(유일한 비-Additive, 사용자 결정)"
+ },
+ {
+  "labels": "*",
+  "path_prefix": "data.cpu.manufacturer",
+  "issue": "02-cpu-003 (FIX 2)",
+  "note": "Processor.Manufacturer 정규화 발행 — 18 label 전부 Intel 기대(iDRAC 'Intel' · 그 밖 'Intel(R) Corporation')"
+ },
+ {
+  "labels": "*",
+  "path_re": "^data\\.cpu\\.summary\\.groups\\[\\d+\\]\\.manufacturer$",
+  "issue": "02-cpu-003 (FIX 2)",
+  "note": "groups[].manufacturer 'Intel(R) Corporation' → 'Intel'(iDRAC 는 이미 'Intel' 이라 불변)"
+ },
+ {
+  "labels": [
+   "csus3200_01",
+   "csus3200_02",
+   "csus3200_03",
+   "r1_HPE_CSUS3200_01",
+   "r1_HPE_CSUS3200_02",
+   "r1_HPE_CSUS3200_03",
+   "r1_HPE_CSUS3200_04"
+  ],
+  "path_re": "^data\\.multi_node\\.partitions\\[\\d+\\]\\.cpu\\.logical_threads$",
+  "issue": "FIX 1",
+  "note": "partitions[].cpu 도 같은 정책 — 키 소멸"
+ }
+]

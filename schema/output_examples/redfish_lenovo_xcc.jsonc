@@ -191,8 +191,8 @@
     "cpu": {
       "sockets": 2,                                     // 물리 socket 수
       "cores_physical": 64,                             // 물리 코어 수
-      "logical_threads": 128,                           // 논리 thread 수 (HT 활성 시 cores × 2)
       "model": "Intel(R) Xeon(R) Gold 6338 CPU @ 2.00GHz",  // 모델명
+      "manufacturer": "Intel",                           // Processor.Manufacturer 정규화 (2026-10-27 FIX 2 — Intel(R) Corporation → Intel)
       "max_speed_mhz": 3200,                            // 최대 속도 (MHz)
       "architecture": "x86",                            // CPU 아키텍처 (Linux="x86_64" / Redfish="x86")
       "summary": {

@@ -38,11 +38,13 @@ def _extract_template(var_name: str) -> str:
     raise AssertionError(f"{var_name} set_fact 미발견")
 
 
-def _render_summary(netad: dict, interfaces: list) -> dict:
+def _render_summary(netad: dict, interfaces: list, collected=("network", "network_adapters")) -> dict:
+    """2026-10-29 (개수 점검): adapter_count · port_count 는 그 섹션을 끝까지 읽었을 때(_rf_raw_collect.collected)만 정수다.
+    이 시험의 발췌는 두 섹션을 모두 수집한 장비 모양이라 기본값이 둘 다 수집이다."""
     env = Environment()  # noqa: S701 — 테스트 전용, autoescape 불필요
     env.filters["regex_replace"] = _regex_replace
     tmpl = env.from_string(_extract_template("_rf_summary_network"))
-    rendered = tmpl.render(_rf_d_netad=netad, _rf_norm_interfaces=interfaces)
+    rendered = tmpl.render(_rf_d_netad=netad, _rf_norm_interfaces=interfaces, _rf_raw_collect={"collected": list(collected)})
     return ast.literal_eval(rendered.strip())
 
 

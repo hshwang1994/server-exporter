@@ -1,0 +1,578 @@
+[
+ {
+  "id": "01-adapter-001",
+  "severity": "HIGH",
+  "title": "Lenovo XCC3 로그인 후 adapter 재선택이 범용 `redfish_lenovo_bmc` 로 강등",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 93
+ },
+ {
+  "id": "01-hardware-002",
+  "severity": "MED",
+  "title": "`hardware.health` 출처(`Status.Health`)와 사전·계약의 \"BMC rollup\" 설명 불일치 — iLO 7 에서 OEM 집계와 갈림",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 108
+ },
+ {
+  "id": "01-multi_node-003",
+  "severity": "MED",
+  "title": "CSUS mock 기반 baseline·계약 예시가 실 7대와 다름 (ADR-2026-05-12 결정 6 의 교체 의무 미이행)",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 120
+ },
+ {
+  "id": "01-hardware-004",
+  "severity": "LOW",
+  "title": "Lenovo XCC3 `bios_date` null — `UpdateService/FirmwareInventory/UEFI.ReleaseDate` 가 있음",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 131
+ },
+ {
+  "id": "01-hardware-005",
+  "severity": "LOW",
+  "title": "Lenovo `hardware.oem` 9키 중 7키가 모든 Lenovo 캡처에서 null — 원천 키가 존재하지 않는 매핑",
+  "certainty": null,
+  "report": "01-system-hardware-multi-node.md",
+  "line": 140
+ },
+ {
+  "id": "01-multi_node-006",
+  "severity": "LOW",
+  "title": "CSUS 고정 경로 404 요청 11개(14건) — Chassis navigation property 를 보지 않는 Power/Thermal 탐색",
+  "certainty": null,
+  "report": "01-system-hardware-multi-node.md",
+  "line": 149
+ },
+ {
+  "id": "01-multi_node-007",
+  "severity": "LOW",
+  "title": "`composition.resource_blocks[].processor_count/memory_count = 0` — 원천 배열이 없을 때 0 은 거짓 값",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 158
+ },
+ {
+  "id": "01-system-008",
+  "severity": "LOW",
+  "title": "`sections.system = not_supported` 인데 `data.system.hostname/fqdn` 은 내보냄 — 계약 정합 결정 필요 (CSUS 는 HostOS 로 더 채울 수 있음)",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 163
+ },
+ {
+  "id": "01-system-009",
+  "severity": "LOW",
+  "title": "ADR-2026-10-15 재검증 — \"RMC 이름 = 서버 이름\" 은 2차 3대에서 성립하지만 `hostname_source=system` 의미는 여전히 어긋남",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 169
+ },
+ {
+  "id": "01-correlation-010",
+  "severity": "LOW",
+  "title": "`correlation.bmc_ip` 정의 문서화 — \"BMC 가 보고한 첫 IPv4 NIC\" 이며 대상 IP 와 다를 수 있음",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 176
+ },
+ {
+  "id": "01-adapter-011",
+  "severity": "LOW",
+  "title": "문서·시험이 Lenovo XCC3 adapter 를 \"사이트 검증 PASS\" 로 기록 — 1차 선택만 검증됐고 재선택은 미검증; HPE 펌웨어 패턴 가상 공백",
+  "certainty": "확정",
+  "report": "01-system-hardware-multi-node.md",
+  "line": 181
+ },
+ {
+  "id": "02-cpu-001",
+  "severity": "HIGH",
+  "title": "HT 비활성 장비에서 `cpu.logical_threads` 가 코어의 2배",
+  "certainty": "추정",
+  "report": "02-cpu-memory.md",
+  "line": 78
+ },
+ {
+  "id": "02-cpu-002",
+  "severity": "MED",
+  "title": "ADR-2026-10-19 A-2 전제(RMC `LogicalProcessorCount` = 코어 수)가 RMC 1.77.30 에서 불성립",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 95
+ },
+ {
+  "id": "02-cpu-003",
+  "severity": "MED",
+  "title": "`cpu.manufacturer` 사전 선언·Redfish 미발행, `groups[].manufacturer` 비정규화",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 108
+ },
+ {
+  "id": "02-cpu-004",
+  "severity": "LOW",
+  "title": "`cpu.architecture` 가 Redfish `x86` vs OS/ESXi `x86_64`",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 120
+ },
+ {
+  "id": "02-cpu-005",
+  "severity": "LOW",
+  "title": "`multi_node.partitions[].cpu` 에 `turbo_max_mhz` 없음 (CSUS 7대)",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 125
+ },
+ {
+  "id": "02-cpu-006",
+  "severity": "LOW",
+  "title": "`cores_physical` 가 `TotalCores`(장착) 합, `TotalEnabledCores` 미사용",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 130
+ },
+ {
+  "id": "02-cpu-007",
+  "severity": "LOW",
+  "title": "`field_dictionary.yml` 에 `cpu.logical_threads` · `cpu.sockets` · `cpu.model` 항목 없음",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 134
+ },
+ {
+  "id": "02-memory-001",
+  "severity": "MED",
+  "title": "dl380_gen12_03: `Status` 없는 빈 슬롯 16개가 `memory.slots[]` 에 포함",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 138
+ },
+ {
+  "id": "02-memory-002",
+  "severity": "MED",
+  "title": "CSUS `slots[].speed_mhz`/`summary.groups[].speed_mhz` 가 실클럭(MHz), 다른 벤더는 MT/s",
+  "certainty": null,
+  "report": "02-cpu-memory.md",
+  "line": 151
+ },
+ {
+  "id": "02-memory-003",
+  "severity": "LOW",
+  "title": "Lenovo `slots[].locator` 가 `MemoryLocation.Slot` 문자열(`\"32\"`), `ServiceLabel \"DIMM 32\"` 미사용",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 163
+ },
+ {
+  "id": "02-memory-004",
+  "severity": "LOW",
+  "title": "CSUS `rank_count`/`error_correction` null (raw 키 없음) — OEM Label 로 rank 보충 가능",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 172
+ },
+ {
+  "id": "02-memory-005",
+  "severity": "LOW",
+  "title": "`memory.summary.groups` 가 part_number 전체 문자열로 묶여 같은 모델이 접미사로 분리 (관찰)",
+  "certainty": "확정",
+  "report": "02-cpu-memory.md",
+  "line": 177
+ },
+ {
+  "id": "02-memory-006",
+  "severity": "?",
+  "title": "`total_basis` 상수 `physical_installed` (관찰)",
+  "certainty": null,
+  "report": "02-cpu-memory.md",
+  "line": 182
+ },
+ {
+  "id": "03-network-001",
+  "severity": "MED",
+  "title": "Lenovo XCC3 가 FC HBA 포트를 호스트 `EthernetInterfaces` 로 노출 → `network.interfaces[]`/`summary` 에 FC 포트가 섞임",
+  "certainty": "확정",
+  "report": "03-network-storage.md",
+  "line": 82
+ },
+ {
+  "id": "03-storage-001",
+  "severity": "MED",
+  "title": "전원 Off 호스트(dl380_gen12_03): Storage 컬렉션 0건·NIC 정보 축약인데 envelope 의 storage/network 에 아무 신호가 없다",
+  "certainty": null,
+  "report": "03-network-storage.md",
+  "line": 96
+ },
+ {
+  "id": "03-network-002",
+  "severity": "LOW",
+  "title": "호스트 NIC 에 LinkStatus/SpeedMbps 가 없을 때 같은 MAC 의 `ports[]` 값을 쓰지 않아 `interfaces[].link_status='unknown'`·`speed_mbps=null` 로 남음",
+  "certainty": "확정",
+  "report": "03-network-storage.md",
+  "line": 110
+ },
+ {
+  "id": "03-network-003",
+  "severity": "LOW",
+  "title": "Lenovo XCC3 호스트 NIC `SpeedMbps` 가 Gbps×1024(25600/32768)라 같은 봉투의 `ports[].current_link_speed_mbps`(25000/32000)와 다르다",
+  "certainty": null,
+  "report": "03-network-storage.md",
+  "line": 120
+ },
+ {
+  "id": "03-network-004",
+  "severity": "LOW",
+  "title": "`_normalize_port_speed` 가 `CurrentLinkSpeedMbps: 0` 은 0 으로 두고 `CurrentSpeedGbps: 0` 은 null 로 바꿔 링크 없는 포트 표기가 벤더별로 갈린다",
+  "certainty": "확정",
+  "report": "03-network-storage.md",
+  "line": 127
+ },
+ {
+  "id": "03-network-005",
+  "severity": "LOW",
+  "title": "Lenovo `ToManager`(Redfish Host Interface USB NIC)가 `interfaces[]`·`summary.port_count` 에 서버 NIC 로 센다",
+  "certainty": "확정",
+  "report": "03-network-storage.md",
+  "line": 133
+ },
+ {
+  "id": "03-network-006",
+  "severity": "LOW",
+  "title": "`gather_network` 가 `IPv6Addresses` 를 읽지 않아 `addresses[]` 에 family ipv6 가 절대 없다",
+  "certainty": null,
+  "report": "03-network-storage.md",
+  "line": 138
+ },
+ {
+  "id": "03-network-007",
+  "severity": "LOW",
+  "title": "`interfaces[].mtu` 가 18대 전부 null — 호스트 NIC 에 MTUSize 가 없고 Lenovo 는 NDF `Ethernet.MTUSize`(1500) 에만 있다",
+  "certainty": "확정",
+  "report": "03-network-storage.md",
+  "line": 142
+ },
+ {
+  "id": "03-storage-002",
+  "severity": "LOW",
+  "title": "`schema/field_dictionary.yml` 의 `storage.controllers[].driver` 가 channel `redfish` 를 포함하지만 Redfish 는 그 키를 내지 않는다",
+  "certainty": "확정",
+  "report": "03-network-storage.md",
+  "line": 146
+ },
+ {
+  "id": "03-storage-003",
+  "severity": "LOW",
+  "title": "`physical_disks[].wwn` 을 Redfish `Drive.Identifiers`(NAA) 로 채울 수 있는데 사전이 channel os/esxi 로 묶여 있어 비어 있다",
+  "certainty": "확정",
+  "report": "03-network-storage.md",
+  "line": 150
+ },
+ {
+  "id": "04-firmware-001",
+  "severity": "MED",
+  "title": "Lenovo BIOS(`UEFI`) · CSUS `Partition0_FW` 가 `category: other`",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 89
+ },
+ {
+  "id": "04-firmware-002",
+  "severity": "MED",
+  "title": "HPE RAID 컨트롤러 `other`, `Embedded Video Controller` 가 `storage_controller`",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 102
+ },
+ {
+  "id": "04-firmware-003",
+  "severity": "MED",
+  "title": "Lenovo 드라이브 백플레인 PSoC 가 `drive`",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 115
+ },
+ {
+  "id": "04-firmware-004",
+  "severity": "LOW",
+  "title": "FC HBA 분류가 벤더 간 다르다 (Dell 만 `storage_controller`)",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 128
+ },
+ {
+  "id": "04-firmware-005",
+  "severity": "LOW",
+  "title": "CPLD/FPGA 등 잔여 `other` 와 `nvme` 토큰 오분류",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 140
+ },
+ {
+  "id": "04-firmware-006",
+  "severity": "MED",
+  "title": "Lenovo `*-Pending` 빈 스테이징 슬롯이 `pending: true` 항목으로 나간다",
+  "certainty": null,
+  "report": "04-firmware-bios.md",
+  "line": 150
+ },
+ {
+  "id": "04-firmware-007",
+  "severity": "LOW",
+  "title": "CSUS 보충 항목의 `updateable` 이 null (사전 type boolean)",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 163
+ },
+ {
+  "id": "04-firmware-008",
+  "severity": "LOW",
+  "title": "Dell first-seen dedup 의 접두사 혼재 (관찰)",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 173
+ },
+ {
+  "id": "04-firmware-009",
+  "severity": "LOW",
+  "title": "전원 Off 스냅샷(dl380_gen12_03)의 13건은 raw 그대로, `updateable` 이 전원 상태를 따른다",
+  "certainty": null,
+  "report": "04-firmware-bios.md",
+  "line": 182
+ },
+ {
+  "id": "04-firmware-010",
+  "severity": "LOW",
+  "title": "Lenovo 버전 표기가 두 가지 (관찰)",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 191
+ },
+ {
+  "id": "04-firmware-011",
+  "severity": "LOW",
+  "title": "CSUS `hardware.bios_version == bmc.firmware_version`(complex 번들) · bios/bmc 항목 없음",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 198
+ },
+ {
+  "id": "04-firmware-012",
+  "severity": "LOW",
+  "title": "계약 문서에 `data.firmware` 절이 없고 category help 가 실제와 다르다",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 207
+ },
+ {
+  "id": "04-bios-001",
+  "severity": "LOW",
+  "title": "Lenovo `hardware.bios_date` null, 원천은 `FirmwareInventory/UEFI.ReleaseDate`",
+  "certainty": null,
+  "report": "04-firmware-bios.md",
+  "line": 213
+ },
+ {
+  "id": "04-bios-002",
+  "severity": "LOW",
+  "title": "`bios.current.attributes` 에 식별·네트워크 정보가 그대로 들어간다 (계약대로, 관찰)",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 224
+ },
+ {
+  "id": "04-bios-003",
+  "severity": "LOW",
+  "title": "CSUS `Bios/Settings` 에 실제 보류 차이 2건 + 주석 키 (계약 밖, 관찰)",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 231
+ },
+ {
+  "id": "04-test-001",
+  "severity": "MED",
+  "title": "Tier 0 순서 의존 실패: `replay_full_mirror.install_fakes` 가 `rg._get` 을 복원 없이 교체",
+  "certainty": "확정",
+  "report": "04-firmware-bios.md",
+  "line": 237
+ },
+ {
+  "id": "05-power-001",
+  "severity": "MED",
+  "title": "전원 Off 호스트(dl380_gen12_03): PSU 2개가 `Absent · 0 W · fw \"0.00\"` placeholder 로 \"PSU 0개\" 가 된다",
+  "certainty": null,
+  "report": "05-thermal-power.md",
+  "line": 108
+ },
+ {
+  "id": "05-power-002",
+  "severity": "MED",
+  "title": "AC 입력 없는 PSU: 벤더별 State 가 달라 `psu_active` 가 갈리고 원인이 봉투에 없다",
+  "certainty": null,
+  "report": "05-thermal-power.md",
+  "line": 121
+ },
+ {
+  "id": "05-power-003",
+  "severity": "LOW",
+  "title": "Lenovo XCC3 PSU `model` 의 패딩 공백이 그대로 나간다",
+  "certainty": "확정",
+  "report": "05-thermal-power.md",
+  "line": 134
+ },
+ {
+  "id": "05-power-004",
+  "severity": "LOW",
+  "title": "CSUS multi_node 섀시 순회가 링크 없는 경로 11건을 요청하고 404 를 재요청한다",
+  "certainty": null,
+  "report": "05-thermal-power.md",
+  "line": 143
+ },
+ {
+  "id": "05-power-005",
+  "severity": "LOW",
+  "title": "`power_control.power_capacity_watts` 의 뜻이 벤더·경로별로 다른데 사전 정의가 없다",
+  "certainty": "확정",
+  "report": "05-thermal-power.md",
+  "line": 153
+ },
+ {
+  "id": "05-power-006",
+  "severity": "LOW",
+  "title": "`schema/field_dictionary.yml` 에 power/thermal 하위 키가 8개뿐이다",
+  "certainty": "확정",
+  "report": "05-thermal-power.md",
+  "line": 160
+ },
+ {
+  "id": "05-power-007",
+  "severity": "LOW",
+  "title": "CSUS 소비전력 폴백 사슬의 정의 불일치: Telemetry = DC 출력 합, 최종 폴백 = AC 입력 합",
+  "certainty": null,
+  "report": "05-thermal-power.md",
+  "line": 164
+ },
+ {
+  "id": "05-thermal-001",
+  "severity": "MED",
+  "title": "iLO legacy Thermal 의 `Absent` 슬롯 센서가 0 °C 로 `temperatures[]` 에 들어간다",
+  "certainty": "확정",
+  "report": "05-thermal-power.md",
+  "line": 171
+ },
+ {
+  "id": "05-thermal-002",
+  "severity": "MED",
+  "title": "전원 Off 호스트(dl380_gen12_03): 온도 42건·팬 6건이 `UnavailableOffline` + 0 으로 \"정상 수집\" 된다",
+  "certainty": null,
+  "report": "05-thermal-power.md",
+  "line": 183
+ },
+ {
+  "id": "05-thermal-003",
+  "severity": "LOW",
+  "title": "신 schema(ThermalSubsystem) 경로의 잠재 공백 3종: 2차 raw 로 확인, 18대에선 미발동",
+  "certainty": null,
+  "report": "05-thermal-power.md",
+  "line": 195
+ },
+ {
+  "id": "05-thermal-004",
+  "severity": "LOW",
+  "title": "음수 \"온도\" 항목: Lenovo `CPUn DTS TMargin`, CSUS `P*_THROT_OFFSET`",
+  "certainty": "확정",
+  "report": "05-thermal-power.md",
+  "line": 204
+ },
+ {
+  "id": "05-thermal-005",
+  "severity": "LOW",
+  "title": "문서·주석 drift 3건",
+  "certainty": "확정",
+  "report": "05-thermal-power.md",
+  "line": 210
+ },
+ {
+  "id": "06-bmc-001",
+  "severity": "MED",
+  "title": "복구 Family hint 가 \"1차 선택 adapter_id\" 라 Lenovo 세대 판정이 장비 값(Manager.Model)이 아니라 adapter 이름에 의존",
+  "certainty": null,
+  "report": "06-bmc.md",
+  "line": 105
+ },
+ {
+  "id": "06-bmc-002",
+  "severity": "LOW",
+  "title": "RMC 가 선언한 `@Redfish.WriteableProperties`(계정: `[\"Password\"]`) 를 쓰기 계약에 쓰지 않음 — 2026-10-14 hotfix 의 미확인 항목(\"RMC 계정이 `Enabled` 를 GET 에서 노출하는가\")은 7/7 미러로 답이 나옴",
+  "certainty": null,
+  "report": "06-bmc.md",
+  "line": 118
+ },
+ {
+  "id": "06-bmc-003",
+  "severity": "LOW",
+  "title": "HPE iLO 7 `bmc.timezone` null — `Managers/1/DateTime`(`Oem.Hpe.Links.DateTimeService`) 에 `TimeZone {Name, Value, UtcOffset}` 가 있음",
+  "certainty": "확정",
+  "report": "06-bmc.md",
+  "line": 127
+ },
+ {
+  "id": "06-bmc-004",
+  "severity": "LOW",
+  "title": "`bmc.datetime` 표기가 벤더마다 다름(iLO: UTC `Z` + `datetime_offset` 분리 / XCC·RMC·iDRAC: 로컬시에 오프셋 포함) — 사전 문구 \"datetime_offset 와 함께 해석\" 이 모호",
+  "certainty": "확정",
+  "report": "06-bmc.md",
+  "line": 134
+ },
+ {
+  "id": "06-bmc-005",
+  "severity": "LOW",
+  "title": "`bmc.ip/mac_address/dns_name` 선택 규칙이 EthernetInterfaces 컬렉션 순서에 의존(\"IPv4 가 있는 첫 NIC\") — iLO 7 의 USB 가상 NIC(`16.1.15.1`)이 뒤에 있어 우연히 안전",
+  "certainty": "확정",
+  "report": "06-bmc.md",
+  "line": 141
+ },
+ {
+  "id": "06-bmc-006",
+  "severity": "LOW",
+  "title": "`bmc.name` 이 adapter `manager_layout` 에만 의존 — CSUS 가 layout 없이 수집되면 `iLO`(장비 값 `ManagerType: RackManager`, `Id: RMC` 를 쓰지 않음)",
+  "certainty": "확정",
+  "report": "06-bmc.md",
+  "line": 148
+ },
+ {
+  "id": "06-bmc-007",
+  "severity": "LOW",
+  "title": "`diagnosis.details` 의 Redfish 전용 키가 계약 문서·baseline 에 없고 `account_service` 의 미진입 shape(`{}`)가 정의돼 있지 않음",
+  "certainty": "확정",
+  "report": "06-bmc.md",
+  "line": 153
+ },
+ {
+  "id": "06-bmc-008",
+  "severity": "LOW",
+  "title": "`replay_full_mirror.install_fakes` 가 `redfish_gather._get`/`_get_noauth` 를 영구 교체하고 되돌리지 않음 — Tier 0 `test_redfish_multi_credential_auth.py` 순서 의존 실패 2건의 원인(제품 영",
+  "certainty": null,
+  "report": "06-bmc.md",
+  "line": 158
+ },
+ {
+  "id": "06-bmc-009",
+  "severity": "LOW",
+  "title": "사전 `bmc.uuid` 설명이 \"Manager.UUID/ServiceIdentification\" 인데 코드는 `UUID` 만 읽고 RMC 의 `ServiceIdentification` 은 UUID 가 아니다",
+  "certainty": "확정",
+  "report": "06-bmc.md",
+  "line": 165
+ },
+ {
+  "id": "06-bmc-010",
+  "severity": "LOW",
+  "title": "성공 경로의 `auth_success: true` 가 무조건이라 익명 수집(vendor 미식별 장비, `used_role: anonymous`) 성공도 \"실제 인증 성공\" 으로 보고된다 — 11대 해당 없음(코드 경로)",
+  "certainty": "확정",
+  "report": "06-bmc.md",
+  "line": 169
+ }
+]

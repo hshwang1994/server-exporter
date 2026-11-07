@@ -1,0 +1,2338 @@
+{
+ "servers": [
+  "csus3200_01",
+  "csus3200_02",
+  "csus3200_03",
+  "dl380_gen12_01",
+  "dl380_gen12_02",
+  "dl380_gen12_03",
+  "dl380_gen12_04",
+  "sr650_v4_01",
+  "sr650_v4_02",
+  "sr650_v4_03",
+  "sr650_v4_04"
+ ],
+ "areas": [
+  "cpu",
+  "system",
+  "network",
+  "storage",
+  "memory",
+  "firmware",
+  "bios",
+  "thermal",
+  "hardware",
+  "bmc",
+  "power",
+  "multi_node"
+ ],
+ "grid": {
+  "csus3200_01": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.77.30; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "PASS",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "ISSUE",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일; hbas: 03-storage-004 카드 단위 링크 조건 미활용 (2026-10-27 메인 추가 검증, analysis/07)",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "NOT_APPLICABLE",
+     "hbas": "ISSUE",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    },
+    "issues": [
+     "03-storage-004"
+    ]
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 32/32; ΣCap==MemorySummary; ",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "ISSUE"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 13건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].updateable', 'firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "ISSUE",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "PASS",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "PASS"
+    }
+   },
+   "bios": {
+    "state": "ISSUE",
+    "evidence": "attributes 76건 raw 와 동일; ISSUE 필드: ['hardware.bios_version ↔ firmware[] bios']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "NOT_APPLICABLE",
+     "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE",
+     "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+    }
+   },
+   "thermal": {
+    "state": "PASS",
+    "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "PASS",
+     "temperatures[].reading_celsius": "PASS",
+     "temperatures[].health/state": "NOT_APPLICABLE",
+     "temperatures[].upper_critical": "NOT_APPLICABLE",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "PASS",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "NOT_APPLICABLE",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "PASS",
+     "oem": "PASS"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "ISSUE",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "NOT_APPLICABLE",
+     "uuid": "NOT_APPLICABLE",
+     "serial": "PASS",
+     "part_number": "PASS",
+     "manufacturer": "PASS",
+     "last_reset_time": "NOT_APPLICABLE",
+     "timezone": "PASS",
+     "datetime": "PASS",
+     "datetime_offset": "PASS",
+     "oem": "NOT_APPLICABLE",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "PASS",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "PASS",
+    "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "PASS",
+     "power_supplies[].power_capacity_w": "NOT_APPLICABLE",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "PASS",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "NOT_APPLICABLE",
+     "power_control.min/avg/max/interval": "NOT_APPLICABLE",
+     "summary": "PASS",
+     "sections.power": "PASS",
+     "multi_node.chassis[].power/thermal": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "ISSUE",
+    "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "enabled_layout": "PASS",
+     "summary": "PASS",
+     "partitions": "PASS",
+     "managers": "PASS",
+     "chassis": "ISSUE",
+     "composition": "ISSUE",
+     "fabrics": "PASS"
+    }
+   }
+  },
+  "csus3200_02": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw RMC 1.77.30; BIOS HThread=Disabled (Bios/Settings 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "ISSUE",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "NOT_APPLICABLE",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 16/16; ΣCap==MemorySummary; ",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "ISSUE"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 9건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].updateable', 'firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "ISSUE",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "PASS",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "PASS"
+    }
+   },
+   "bios": {
+    "state": "ISSUE",
+    "evidence": "attributes 76건 raw 와 동일; ISSUE 필드: ['hardware.bios_version ↔ firmware[] bios']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "NOT_APPLICABLE",
+     "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE",
+     "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+    }
+   },
+   "thermal": {
+    "state": "PASS",
+    "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "PASS",
+     "temperatures[].reading_celsius": "PASS",
+     "temperatures[].health/state": "NOT_APPLICABLE",
+     "temperatures[].upper_critical": "NOT_APPLICABLE",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "PASS",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "NOT_APPLICABLE",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "PASS",
+     "oem": "PASS"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "ISSUE",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "NOT_APPLICABLE",
+     "uuid": "NOT_APPLICABLE",
+     "serial": "PASS",
+     "part_number": "PASS",
+     "manufacturer": "PASS",
+     "last_reset_time": "NOT_APPLICABLE",
+     "timezone": "PASS",
+     "datetime": "PASS",
+     "datetime_offset": "PASS",
+     "oem": "NOT_APPLICABLE",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "PASS",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "PASS",
+    "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "PASS",
+     "power_supplies[].power_capacity_w": "NOT_APPLICABLE",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "PASS",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "NOT_APPLICABLE",
+     "power_control.min/avg/max/interval": "NOT_APPLICABLE",
+     "summary": "PASS",
+     "sections.power": "PASS",
+     "multi_node.chassis[].power/thermal": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "ISSUE",
+    "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "enabled_layout": "PASS",
+     "summary": "PASS",
+     "partitions": "PASS",
+     "managers": "PASS",
+     "chassis": "ISSUE",
+     "composition": "ISSUE",
+     "fabrics": "PASS"
+    }
+   }
+  },
+  "csus3200_03": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.77.30; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "PASS",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "ISSUE",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일; hbas: 03-storage-004 카드 단위 링크 조건 미활용 (2026-10-27 메인 추가 검증, analysis/07)",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "NOT_APPLICABLE",
+     "hbas": "ISSUE",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    },
+    "issues": [
+     "03-storage-004"
+    ]
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 16/16; ΣCap==MemorySummary; ",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "ISSUE"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 13건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].updateable', 'firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "ISSUE",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "PASS",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "PASS"
+    }
+   },
+   "bios": {
+    "state": "ISSUE",
+    "evidence": "attributes 76건 raw 와 동일; ISSUE 필드: ['hardware.bios_version ↔ firmware[] bios']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "NOT_APPLICABLE",
+     "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE",
+     "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+    }
+   },
+   "thermal": {
+    "state": "PASS",
+    "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "PASS",
+     "temperatures[].reading_celsius": "PASS",
+     "temperatures[].health/state": "NOT_APPLICABLE",
+     "temperatures[].upper_critical": "NOT_APPLICABLE",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "PASS",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "NOT_APPLICABLE",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "PASS",
+     "oem": "PASS"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "ISSUE",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "NOT_APPLICABLE",
+     "uuid": "NOT_APPLICABLE",
+     "serial": "PASS",
+     "part_number": "PASS",
+     "manufacturer": "PASS",
+     "last_reset_time": "NOT_APPLICABLE",
+     "timezone": "PASS",
+     "datetime": "PASS",
+     "datetime_offset": "PASS",
+     "oem": "NOT_APPLICABLE",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "PASS",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "PASS",
+    "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "PASS",
+     "power_supplies[].power_capacity_w": "NOT_APPLICABLE",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "PASS",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "NOT_APPLICABLE",
+     "power_control.min/avg/max/interval": "NOT_APPLICABLE",
+     "summary": "PASS",
+     "sections.power": "PASS",
+     "multi_node.chassis[].power/thermal": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "ISSUE",
+    "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "enabled_layout": "PASS",
+     "summary": "PASS",
+     "partitions": "PASS",
+     "managers": "PASS",
+     "chassis": "ISSUE",
+     "composition": "ISSUE",
+     "fabrics": "PASS"
+    }
+   }
+  },
+  "dl380_gen12_01": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "PASS",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "PASS",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 16/32; ΣCap==MemorySummary; ",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "PASS",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 25건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "PASS",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "PASS",
+    "evidence": "attributes 311건 raw 와 동일; ISSUE 필드: []",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "PASS",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "PASS"
+    }
+   },
+   "thermal": {
+    "state": "ISSUE",
+    "evidence": "05-thermal-001 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "ISSUE",
+     "temperatures[].reading_celsius": "ISSUE",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "PASS",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "ISSUE",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "PASS",
+     "power_state": "PASS",
+     "health": "ISSUE",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "PASS",
+     "oem": "PASS"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "NOT_APPLICABLE",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "NOT_APPLICABLE",
+     "timezone": "ISSUE",
+     "datetime": "ISSUE",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "PASS",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-002 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "PASS",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "PASS",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  },
+  "dl380_gen12_02": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "PASS",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "PASS",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 8/32; ΣCap==MemorySummary; ",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "PASS",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 25건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "PASS",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "PASS",
+    "evidence": "attributes 301건 raw 와 동일; ISSUE 필드: []",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "PASS",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "PASS"
+    }
+   },
+   "thermal": {
+    "state": "ISSUE",
+    "evidence": "05-thermal-001 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "ISSUE",
+     "temperatures[].reading_celsius": "ISSUE",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "PASS",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "ISSUE",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "PASS",
+     "power_state": "PASS",
+     "health": "ISSUE",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "PASS",
+     "oem": "PASS"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "NOT_APPLICABLE",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "NOT_APPLICABLE",
+     "timezone": "ISSUE",
+     "datetime": "ISSUE",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "PASS",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-002 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "PASS",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "PASS",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  },
+  "dl380_gen12_03": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Disabled (Bios/Settings 도 Disabled), PowerState Off; manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "ISSUE",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001(교차) — 전원 Off 로 카드 정보가 축약됐는데 network_adapters notice 없음",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "ISSUE",
+     "physical_disks": "ISSUE",
+     "logical_volumes": "ISSUE",
+     "hbas": "PASS",
+     "summary": "ISSUE",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 32/32; ΣCap==MemorySummary; ",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 13건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "PASS",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "PASS",
+    "evidence": "attributes 275건 raw 와 동일; ISSUE 필드: []",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "PASS",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "PASS"
+    }
+   },
+   "thermal": {
+    "state": "ISSUE",
+    "evidence": "05-thermal-002 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "ISSUE",
+     "temperatures[].reading_celsius": "ISSUE",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "ISSUE",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "ISSUE",
+     "fans[].reading/reading_units": "ISSUE",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "PASS",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "PASS",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "PASS",
+     "oem": "PASS"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "NOT_APPLICABLE",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "NOT_APPLICABLE",
+     "timezone": "ISSUE",
+     "datetime": "ISSUE",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "PASS",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-001 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "ISSUE",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "ISSUE",
+     "power_supplies[].firmware_version": "ISSUE",
+     "power_supplies[].model": "ISSUE",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  },
+  "dl380_gen12_04": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "PASS",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "PASS",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 8/32; ΣCap==MemorySummary; ",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "PASS",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 25건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "PASS",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "PASS",
+    "evidence": "attributes 297건 raw 와 동일; ISSUE 필드: []",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "PASS",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "PASS"
+    }
+   },
+   "thermal": {
+    "state": "ISSUE",
+    "evidence": "05-thermal-001 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "ISSUE",
+     "temperatures[].reading_celsius": "ISSUE",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "PASS",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "ISSUE",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "PASS",
+     "power_state": "PASS",
+     "health": "ISSUE",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "PASS",
+     "oem": "PASS"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "NOT_APPLICABLE",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "NOT_APPLICABLE",
+     "timezone": "ISSUE",
+     "datetime": "ISSUE",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "PASS",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-002 (MED)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "PASS",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "PASS",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  },
+  "sr650_v4_01": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "ISSUE",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "PASS",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 2/32; ΣCap==MemorySummary; 02-memory-003 LOW 만",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 28건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].pending', 'firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "ISSUE",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "ISSUE",
+    "evidence": "attributes 778건 raw 와 동일; ISSUE 필드: ['hardware.bios_date', 'hardware.bios_version ↔ firmware[] bios']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "ISSUE",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+    }
+   },
+   "thermal": {
+    "state": "PASS",
+    "evidence": "legacy Thermal 경로 정상",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "PASS",
+     "temperatures[].reading_celsius": "PASS",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "PASS",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "ISSUE",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "ISSUE",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "NOT_APPLICABLE",
+     "oem": "ISSUE"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "PASS",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "PASS",
+     "timezone": "NOT_APPLICABLE",
+     "datetime": "PASS",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "ISSUE",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-002 (MED) · 05-power-003 (LOW)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "PASS",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "ISSUE",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  },
+  "sr650_v4_02": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "ISSUE",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "ISSUE",
+    "evidence": "03-network-001",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "ISSUE",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "ISSUE",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "PASS",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 2/32; ΣCap==MemorySummary; 02-memory-003 LOW 만",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 30건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].pending', 'firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "ISSUE",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "ISSUE",
+    "evidence": "attributes 1116건 raw 와 동일; ISSUE 필드: ['hardware.bios_date', 'hardware.bios_version ↔ firmware[] bios']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "ISSUE",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+    }
+   },
+   "thermal": {
+    "state": "PASS",
+    "evidence": "legacy Thermal 경로 정상",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "PASS",
+     "temperatures[].reading_celsius": "PASS",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "PASS",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "ISSUE",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "ISSUE",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "NOT_APPLICABLE",
+     "oem": "ISSUE"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "PASS",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "PASS",
+     "timezone": "NOT_APPLICABLE",
+     "datetime": "PASS",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "ISSUE",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-002 (MED) · 05-power-003 (LOW)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "PASS",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "ISSUE",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  },
+  "sr650_v4_03": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "PASS",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "ISSUE",
+    "evidence": "03-network-001",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "ISSUE",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "ISSUE",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "PASS",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 16/32; ΣCap==MemorySummary; 02-memory-003 LOW 만",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 40건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].pending', 'firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "ISSUE",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "ISSUE",
+    "evidence": "attributes 1299건 raw 와 동일; ISSUE 필드: ['hardware.bios_date', 'hardware.bios_version ↔ firmware[] bios']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "ISSUE",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+    }
+   },
+   "thermal": {
+    "state": "PASS",
+    "evidence": "legacy Thermal 경로 정상",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "PASS",
+     "temperatures[].reading_celsius": "PASS",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "PASS",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "ISSUE",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "ISSUE",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "NOT_APPLICABLE",
+     "oem": "ISSUE"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "PASS",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "PASS",
+     "timezone": "NOT_APPLICABLE",
+     "datetime": "PASS",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "ISSUE",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-002 (MED) · 05-power-003 (LOW)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "PASS",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "ISSUE",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  },
+  "sr650_v4_04": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "architecture": "PASS",
+     "cores_physical": "PASS",
+     "logical_threads": "ISSUE",
+     "max_speed_mhz": "PASS",
+     "model": "PASS",
+     "sockets": "PASS",
+     "summary": "PASS",
+     "turbo_max_mhz": "PASS",
+     "manufacturer(사전 선언·미발행)": "ISSUE"
+    }
+   },
+   "system": {
+    "state": "ISSUE",
+    "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "hostname": "PASS",
+     "fqdn": "PASS"
+    }
+   },
+   "network": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "interfaces": "PASS",
+     "adapters": "PASS",
+     "ports": "PASS",
+     "dns_servers": "PASS",
+     "default_gateways": "PASS",
+     "summary": "PASS",
+     "driver_map": "NOT_APPLICABLE",
+     "portgroups": "NOT_APPLICABLE",
+     "virtual_switches": "NOT_APPLICABLE"
+    }
+   },
+   "storage": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일",
+    "report": "03-network-storage.coverage.json",
+    "fields": {
+     "controllers": "PASS",
+     "physical_disks": "PASS",
+     "logical_volumes": "PASS",
+     "hbas": "PASS",
+     "summary": "PASS",
+     "datastores": "NOT_APPLICABLE",
+     "filesystems": "NOT_APPLICABLE",
+     "infiniband": "NOT_APPLICABLE"
+    }
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 8/32; ΣCap==MemorySummary; 02-memory-003 LOW 만",
+    "report": "02-cpu-memory.coverage.json",
+    "fields": {
+     "free_mb": "NOT_APPLICABLE",
+     "visible_mb": "NOT_APPLICABLE",
+     "total_mb": "PASS",
+     "installed_mb": "PASS",
+     "total_basis": "PASS",
+     "slots[]": "ISSUE",
+     "summary": "PASS"
+    }
+   },
+   "firmware": {
+    "state": "ISSUE",
+    "evidence": "출력 30건, category 분류 이슈 외 raw 1:1 — ISSUE 필드: ['firmware[].pending', 'firmware[].category']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "sections.firmware": "PASS",
+     "firmware[] (개수·누락·중복)": "PASS",
+     "firmware[].id": "PASS",
+     "firmware[].name": "PASS",
+     "firmware[].version": "PASS",
+     "firmware[].updateable": "PASS",
+     "firmware[].component": "PASS",
+     "firmware[].pending": "ISSUE",
+     "firmware[].category": "ISSUE",
+     "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+    }
+   },
+   "bios": {
+    "state": "ISSUE",
+    "evidence": "attributes 778건 raw 와 동일; ISSUE 필드: ['hardware.bios_date', 'hardware.bios_version ↔ firmware[] bios']",
+    "report": "04-firmware-bios.coverage.json",
+    "fields": {
+     "bios.current.attributes (내용)": "PASS",
+     "bios.current.attributes (키 정렬)": "PASS",
+     "bios.current (키 구조)": "PASS",
+     "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+     "HT 속성 (02-cpu-001 전제)": "PASS",
+     "hardware.bios_version": "PASS",
+     "hardware.bios_date": "ISSUE",
+     "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+     "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+    }
+   },
+   "thermal": {
+    "state": "PASS",
+    "evidence": "legacy Thermal 경로 정상",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "temperatures[]": "PASS",
+     "temperatures[].reading_celsius": "PASS",
+     "temperatures[].health/state": "PASS",
+     "temperatures[].upper_critical": "PASS",
+     "temperatures[].physical_context": "PASS",
+     "fans[]": "PASS",
+     "fans[].reading/reading_units": "PASS",
+     "fans[].health/state": "PASS",
+     "sections.thermal": "PASS"
+    }
+   },
+   "hardware": {
+    "state": "ISSUE",
+    "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {
+     "vendor": "PASS",
+     "model": "PASS",
+     "serial": "PASS",
+     "uuid": "PASS",
+     "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+     "sku": "PASS",
+     "bios_version": "PASS",
+     "bios_date": "ISSUE",
+     "power_state": "PASS",
+     "health": "PASS",
+     "asset_tag": "PASS",
+     "system_type": "PASS",
+     "part_number": "PASS",
+     "last_reset_time": "PASS",
+     "boot_progress": "PASS",
+     "tpm": "NOT_APPLICABLE",
+     "oem": "ISSUE"
+    }
+   },
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0",
+    "report": "06-bmc.coverage.json",
+    "fields": {
+     "name": "PASS",
+     "firmware_version": "PASS",
+     "model": "PASS",
+     "manager_type": "PASS",
+     "health": "PASS",
+     "state": "PASS",
+     "power_state": "PASS",
+     "uuid": "PASS",
+     "serial": "NOT_APPLICABLE",
+     "part_number": "NOT_APPLICABLE",
+     "manufacturer": "NOT_APPLICABLE",
+     "last_reset_time": "PASS",
+     "timezone": "NOT_APPLICABLE",
+     "datetime": "PASS",
+     "datetime_offset": "PASS",
+     "oem": "PASS",
+     "ip": "PASS",
+     "mac_address": "PASS",
+     "dns_name": "PASS",
+     "network_hostname": "PASS",
+     "network.dns_servers": "PASS",
+     "network.default_gateways": "PASS",
+     "correlation.bmc_ip": "PASS",
+     "sections.bmc": "PASS",
+     "diagnosis.details.auth": "PASS",
+     "diagnosis.details.account_service": "PASS",
+     "diagnosis.details.credential_scope": "PASS",
+     "diagnosis.details.precheck": "PASS",
+     "diagnosis.details.notices": "PASS",
+     "meta.adapter_id": "ISSUE",
+     "users": "NOT_APPLICABLE"
+    }
+   },
+   "power": {
+    "state": "ISSUE",
+    "evidence": "05-power-002 (MED) · 05-power-003 (LOW)",
+    "report": "05-thermal-power.coverage.json",
+    "fields": {
+     "power_supplies[]": "PASS",
+     "power_supplies[].state/health": "ISSUE",
+     "power_supplies[].power_capacity_w": "PASS",
+     "power_supplies[].firmware_version": "PASS",
+     "power_supplies[].model": "ISSUE",
+     "power_control.power_consumed_watts": "PASS",
+     "power_control.power_capacity_watts": "PASS",
+     "power_control.min/avg/max/interval": "PASS",
+     "summary": "ISSUE",
+     "sections.power": "PASS"
+    }
+   },
+   "multi_node": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상",
+    "report": "01-system-hardware-multi-node.coverage.json",
+    "fields": {}
+   }
+  }
+ },
+ "counts": {
+  "ISSUE": 77,
+  "PASS": 47,
+  "MOCK_LIMITATION": 0,
+  "NOT_APPLICABLE": 8,
+  "NOT_CHECKED": 0
+ },
+ "total": 132
+}

@@ -1,0 +1,14 @@
+[
+ {"labels": ["sr650_v4_01", "sr650_v4_02", "sr650_v4_03", "sr650_v4_04"],
+  "path_re": "^data\\.network\\.interfaces\\[\\d+\\]\\.(link_status|is_primary)$",
+  "issue": "03-network-002",
+  "note": "F-01 R1 (C1 db606f1c) — NIC 자체 link_status 가 unknown 이면 같은 MAC 포트들의 link_status 가 하나로 일치할 때만 보충. is_primary 는 link 에서 파생"},
+ {"labels": ["sr650_v4_01", "sr650_v4_02", "sr650_v4_03", "sr650_v4_04"],
+  "path_re": "^data\\.network\\.summary\\.(groups\\[\\d+\\]\\.link_up_count|primary_speed_mbps)$",
+  "issue": "03-network-002",
+  "note": "F-01 R1 — summary 의 link_up_count · primary_speed_mbps 는 interfaces 에서 파생"},
+ {"labels": ["dl380_gen12_03"],
+  "path_re": "^diagnosis\\.details\\.notices\\[\\d+\\]\\.message$",
+  "issue": "03-storage-001",
+  "note": "F-03 R3 (C3 ac368a4b) — 전원 Off notice 문구에 '네트워크' 추가(사용자 결정 Q2)"}
+]

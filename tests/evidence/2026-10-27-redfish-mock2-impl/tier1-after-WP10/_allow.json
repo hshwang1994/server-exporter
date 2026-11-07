@@ -1,0 +1,86 @@
+[
+ {
+  "labels": [
+   "r1_DELL_R740_01"
+  ],
+  "path_re": "^data\\.network\\.ports\\[\\d+\\]\\.current_link_speed_mbps$",
+  "issue": "03-network-004",
+  "note": "iDRAC9 NetworkPorts LinkDown 0 Mbps → null (10건)"
+ },
+ {
+  "labels": "*",
+  "path_re": "^data\\.storage\\.physical_disks\\[\\d+\\]\\.wwn$",
+  "issue": "03-storage-003",
+  "note": "최종 physical_disks[] 에 wwn 키(Identifiers NAA 가 있는 iLO 7 Gen12 · iDRAC 값, 그 밖 null)"
+ },
+ {
+  "labels": "*",
+  "path_re": "^data\\.cpu\\.summary\\.groups\\[\\d+\\]\\.(l2|l3)_cache_kb$",
+  "issue": "C8 OEM 캐시",
+  "note": "groups[] 에 소켓당 L2/L3 KB(RMC 는 L3 만 · L2 null)"
+ },
+ {
+  "labels": [
+   "csus3200_01",
+   "csus3200_02",
+   "csus3200_03",
+   "r1_HPE_CSUS3200_01",
+   "r1_HPE_CSUS3200_02",
+   "r1_HPE_CSUS3200_03",
+   "r1_HPE_CSUS3200_04"
+  ],
+  "path_re": "^data\\.(memory\\.slots|multi_node\\.partitions\\[\\d+\\]\\.memory\\.slots)\\[\\d+\\]\\.rank_count$",
+  "issue": "02-memory-004",
+  "note": "RMC RankCount 없음 → HPE Label 1Rx4 → 1"
+ },
+ {
+  "labels": [
+   "csus3200_01",
+   "csus3200_02",
+   "csus3200_03",
+   "r1_HPE_CSUS3200_01",
+   "r1_HPE_CSUS3200_02",
+   "r1_HPE_CSUS3200_03",
+   "r1_HPE_CSUS3200_04"
+  ],
+  "path_re": "^data\\.memory\\.summary\\.groups\\[\\d+\\]\\.",
+  "issue": "02-memory-004",
+  "note": "rank 가 그룹 키에 들어가면 그룹 재구성 가능 — evidence 에 기록"
+ },
+ {
+  "labels": [
+   "sr650_v4_01",
+   "sr650_v4_02",
+   "sr650_v4_03",
+   "sr650_v4_04",
+   "r1_Lenovo_SR650_01"
+  ],
+  "path_prefix": "data.hardware.bios_date",
+  "issue": "01-hardware-004",
+  "note": "null → FirmwareInventory UEFI ReleaseDate (2025-03-15 · 2026-05-11 ×3 · 2026-06-22)"
+ },
+ {
+  "labels": [
+   "sr650_v4_01",
+   "sr650_v4_02",
+   "sr650_v4_03",
+   "sr650_v4_04",
+   "r1_Lenovo_SR650_01"
+  ],
+  "path_prefix": "diagnosis.details.notices",
+  "issue": "01-hardware-004",
+  "note": "notice 'BIOS 날짜를 FirmwareInventory UEFI 의 ReleaseDate 로 채움' 1건"
+ },
+ {
+  "labels": "*",
+  "path_re": "^data\\.network\\.interfaces\\[\\d+\\]\\.mtu$",
+  "issue": "03-network-007",
+  "note": "NDF Ethernet.MTUSize(MAC join) — XCC 3 V4 4 · iLO 7 (1차 · gen12_01) 에서 1500; 그 밖 null 유지"
+ },
+ {
+  "labels": "*",
+  "path_re": "^data\\.network\\.summary\\.",
+  "issue": "03-network-007",
+  "note": "mtu 는 summary 그룹 키가 아니라 변화 없어야 함 — 바뀌면 evidence 에 기록"
+ }
+]

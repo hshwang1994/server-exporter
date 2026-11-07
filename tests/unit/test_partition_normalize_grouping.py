@@ -99,10 +99,12 @@ def test_summarize_zero_and_none_capacity_skipped():
 
 
 def test_summarize_empty():
-    """빈/None → 빈 summary (graceful)."""
+    """빈/None → 빈 summary (graceful). 2026-10-29 (SA-07): 원천을 읽었다는 근거가 없으면 grand null(종전 0), 읽었고 비었으면 0."""
     for raw in ([], None):
         out = rg._summarize_partition_disks(raw)
-        assert out == {"groups": [], "grand_total_gb": 0}
+        assert out == {"groups": [], "grand_total_gb": None}
+    assert rg._summarize_partition_disks([], {"enumerated": True, "incomplete": False}) == {"groups": [], "grand_total_gb": 0}
+    assert rg._summarize_partition_disks([], {"enumerated": True, "incomplete": True}) == {"groups": [], "grand_total_gb": None}
 
 
 def test_summarize_mixed_realistic():
@@ -246,9 +248,9 @@ def test_memory_zero_capacity_slot_skipped():
 
 
 def test_memory_empty_slots():
-    """빈 slots → 빈 summary."""
+    """빈 slots → 빈 summary. 2026-10-29 (SA-03 · SA-05): 총량을 모르면 grand null(종전 0 — '메모리 0 GB' 라는 거짓 값)."""
     out = rg._normalize_memory_raw({"total_mib": None, "slots": []})
-    assert out["summary"] == {"groups": [], "grand_total_gb": 0}
+    assert out["summary"] == {"groups": [], "grand_total_gb": None}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

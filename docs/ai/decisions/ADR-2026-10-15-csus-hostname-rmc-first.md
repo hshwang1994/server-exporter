@@ -64,3 +64,10 @@ Redfish 는 `system.hostname` 을 내지 않았고, `system.fqdn` 에 System.Hos
 - 실장비: production Job #296 — checkout `31f9b804`, 접수 3 = 결과 3, Portal 200, Dell R760 · HPE iLO6 · Cisco 기대값 일치, HBA 수 #295 와 같음. **CSUS 실장비는 lab 부재 — 사이트 재수집으로 확인 필요.**
 - 정규 재승격: main Job 매트릭스 11건(#617~#627) 기대 결과 · CI #58 SUCCESS(집계 COMPLETE_PASS, E2E 증거 88/88) · 작업 PC promote 재실행 gate G11~G15 · G18~G20 PASS → `28c38c17` · drift-check PROVENANCE ·
   세 원격 일치. canary 는 `docs/reference/live-validation.md` 2026-10-15 정규 재승격 절.
+
+## 2026-10-27 재검증 기록 (2차 Mock csus3200_01/02/03 — 01-system-009 · 01-system-008)
+
+- 전제 "CSUS 1대 = RMC 1 = 파티션 1 = OS 1, RMC 이름 = 서버 이름" 은 2차 3대에서 **재확인**됐다(RMC `NetworkProtocol.HostName` == `Partition0.HostName`: yicdspdb01 · yicgsfabap01 · yicgsfabdb01).
+  결정을 뒤집을 새 증거는 없다. 남는 문서 문제 — `hostname_source=system` 이어도 CSUS 값은 RMC 이름(1차 01/02 는 공장 기본명 `RMC<일련번호>`)이라는 점을 계약 8절에 명시했다.
+  공통 builder 에 adapter 분기를 넣는 코드 변경은 본 ADR 이 거절한 대안이므로 하지 않는다.
+- FIX 4(2026-10-27): `sections.system = not_supported` 는 유지하고 `data.system.hostname/fqdn` 만 채운다 — HostOS 로 system 섹션을 승격하지 않는다(계약 3절 각주).

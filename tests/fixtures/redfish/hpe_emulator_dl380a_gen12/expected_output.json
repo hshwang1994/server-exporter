@@ -991,6 +991,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 176128,
+        "l3_cache_kb": 344064,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) 6787P",
@@ -1008,6 +1010,8 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 176128,
+        "l3_cache_kb": 344064,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) 6787P",
@@ -1110,7 +1114,8 @@
               "name": "Kioxia 3.00TB 128G NVME SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "1FE0A0ZH0C93"
+              "serial": "1FE0A0ZH0C93",
+              "wwn": "eui.8c:e3:8e:e3:06:db:11:4d"
             }
           ],
           "health": "OK",
@@ -1136,7 +1141,8 @@
               "name": "Kioxia 3.00TB 128G NVME SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "1FC0A0BK0C93"
+              "serial": "1FC0A0BK0C93",
+              "wwn": "eui.8c:e3:8e:e3:06:d0:c5:bd"
             }
           ],
           "health": "OK",
@@ -1162,7 +1168,8 @@
               "name": "Kioxia 3.00TB 128G NVME SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "1FC0A0BT0C93"
+              "serial": "1FC0A0BT0C93",
+              "wwn": "eui.8c:e3:8e:e3:06:d0:c7:c5"
             }
           ],
           "health": "OK",
@@ -1188,7 +1195,8 @@
               "name": "Kioxia 3.00TB 128G NVME SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "1FE0A1000C93"
+              "serial": "1FE0A1000C93",
+              "wwn": "eui.8c:e3:8e:e3:06:db:2a:70"
             }
           ],
           "health": "OK",
@@ -1214,7 +1222,8 @@
               "name": "480GB 16G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "S711NN0Y210901"
+              "serial": "S711NN0Y210901",
+              "wwn": "eui.ba:5f:89:5c:d3:65:b5:7f"
             },
             {
               "capacity_bytes": 480103981056,
@@ -1228,7 +1237,8 @@
               "name": "480GB 16G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "S711NN0Y210905"
+              "serial": "S711NN0Y210905",
+              "wwn": "eui.a3:9b:e4:5b:d3:65:b5:7f"
             }
           ],
           "health": "OK",

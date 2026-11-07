@@ -3,9 +3,11 @@
 근거는 같은 물리 서버 2쌍의 교차 대조다 (tests/regression/test_cross_channel_consistency.py — Redfish 크롤 ↔ OS/ESXi live envelope):
   - X1  Cisco C220 M5: CIMC System.UUID B190019F-56CE-4ED4-… ↔ ESXi 9f0190b1-ce56-d44e-… (앞 3필드 바이트 순서). Dell 은 OS 와 같다.
   - X2  cpu.max_speed_mhz 는 정격(base) 인데 Redfish 는 MaxSpeedMHz(터보 최대)를 냈다 — Dell 4000 vs Linux 2400, Cisco 4000 vs ESXi 2195.
-  - X3  CIMC 4.1 의 per-processor TotalThreads(22) 는 코어 수다 — ProcessorSummary.LogicalProcessorCount 가 있으면 그것이 정본.
+  - X3  (2026-10-27 FIX 1 로 대체) Redfish 는 cpu.logical_threads 를 내지 않는다 — BMC 스레드 수(TotalThreads · LogicalProcessorCount)는
+        HT 상태를 확정하지 못하고 펌웨어마다 뜻이 다르다(CIMC 4.1 코어 수 · RMC 1.75 코어 수 · 1.77 스레드 수).
+  - FIX 2 (2026-10-27) cpu.manufacturer 를 Processor.Manufacturer 에서 OS/ESXi 와 같은 표로 정규화해 낸다(Intel(R) Corporation → Intel).
   - X9  Dell R760 NIC.Embedded.1 의 Model null — FirmwareInventory 이름("Broadcom NetXtreme Gigabit Ethernet (BCM5720) - <MAC>")으로 채운다.
-normalize_standard.yml 의 실제 식(hardware.uuid · cpu.logical_threads · cpu.max_speed_mhz · cpu.turbo_max_mhz)을 렌더한다.
+normalize_standard.yml 의 실제 식(hardware.uuid · cpu.manufacturer · cpu.max_speed_mhz · cpu.turbo_max_mhz · _rf_summary_cpu)을 렌더한다.
 """
 from __future__ import annotations
 
@@ -110,47 +112,72 @@ def test_normalize_cpu_clock_leaves():
         "정격을 모르면 null — 터보를 정격 자리에 넣지 않는다"
 
 
-# ── X3: 논리 스레드 수 ─────────────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("cpus, lpc, expected", [
-    ([{"total_threads": 22}, {"total_threads": 22}], 88, 88),      # CIMC 4.1 실측: TotalThreads 는 코어 수 — ProcessorSummary 가 정본
-    ([{"total_threads": 48}, {"total_threads": 48}], 96, 96),      # Dell R740 — 둘이 같다
-    ([{"total_threads": 22}, {"total_threads": 22}], None, 44),    # LogicalProcessorCount 없음(iLO · XCC) → 종전 합산
-    ([{"total_threads": 22}, {"total_threads": 22}], 0, 44),       # 0 은 모르는 값
-    ([], 32, 32),                                                  # per-processor 없음(CSUS 파티션) → 요약값
-    ([], None, None),
-])
-def test_logical_threads_prefers_processor_summary(cpus, lpc, expected):
+# ── FIX 1 (2026-10-27, 사용자 결정 — 2차 Mock 02-cpu-001/002/006): Redfish 는 cpu.logical_threads 를 내지 않는다 ──────────────
+def _cpu_leaf(key, cpus, system, failed=()):
+    """2026-10-29 (SA-04): sockets · cores_physical 은 앞 태스크의 _rf_cpu_basis 가 정한다 — 그 식을 먼저 렌더한다."""
+    ctx = {"_rf_d_cpus": cpus, "_rf_d_system": system, "_rf_raw_collect": {"failed_sections": list(failed)}}
+    ctx["_rf_cpu_basis"] = _render(_set_fact_var("_rf_cpu_basis"), **ctx)
+    return _render(_fragment()["cpu"][key], **ctx)
+
+
+def test_redfish_cpu_fragment_has_no_logical_threads_and_keeps_sockets_cores():
     cpu = _fragment()["cpu"]
-    system = {"cpu_summary": {"logical_processor_count": lpc}} if lpc is not None else {"cpu_summary": {}}
-    assert _render(cpu["logical_threads"], _rf_d_cpus=cpus, _rf_d_system=system) == expected
+    assert "logical_threads" not in cpu, "Redfish cpu.logical_threads 는 2026-10-27 FIX 1 로 제거 — OS/ESXi 채널 값만 쓴다"
+    cpus = [{"total_cores": 22, "total_threads": 22}, {"total_cores": 22, "total_threads": 22}]
+    assert _cpu_leaf("sockets", cpus, {}) == 2
+    assert _cpu_leaf("cores_physical", cpus, {}) == 44
+    assert _cpu_leaf("cores_physical", [], {"cpu_summary": {"core_count": 64}}) == 64, "BUG-13 요약 폴백은 그대로"
 
 
-# ── A-2 (2026-10-19): adapter 가 LogicalProcessorCount 를 "코어 수" 라고 밝힌 펌웨어(HPE CSUS 3200 RMC — 실측 4노드 Bios HThread=Enabled,
-#   LogicalProcessorCount == Count × TotalCores, TotalThreads == 2 × TotalCores)는 per-processor 합이 우선이다. 다른 adapter 는 X3 그대로.
-CORES_FLAG = {"vendor_notes": {"processor_summary_logical_count": "cores"}}
-
-
-@pytest.mark.parametrize("cpus, lpc, adapter, expected", [
-    ([{"total_threads": 16}] * 4, 32, CORES_FLAG, 64),             # CSUS node01 실측: 요약 32(코어) → 합 64
-    ([{"total_threads": 32}] * 4, 64, CORES_FLAG, 128),            # CSUS node03 실측
-    ([], 32, CORES_FLAG, 32),                                      # per-processor 를 못 읽었으면 요약값으로 폴백
-    ([{"total_threads": 16}] * 4, 32, {"vendor_notes": {}}, 32),   # 플래그 없음 → X3 그대로(요약 우선)
-    ([{"total_threads": 16}] * 4, 32, {}, 32),
-])
-def test_logical_threads_adapter_flag_cores(cpus, lpc, adapter, expected):
-    cpu = _fragment()["cpu"]
-    system = {"cpu_summary": {"logical_processor_count": lpc}}
-    assert _render(cpu["logical_threads"], _rf_d_cpus=cpus, _rf_d_system=system, _selected_adapter=adapter) == expected
-
-
-def test_only_scaleup_adapters_declare_cores_flag():
-    """플래그는 실측 근거가 있는 CSUS 3200 과, 사용자 지시로 같은 패밀리인 Superdome Flex 두 adapter 에만 있다."""
+def test_no_adapter_declares_the_removed_cores_flag():
+    """processor_summary_logical_count 는 logical_threads 와 함께 삭제됐다 — 재도입 방지(소비처 0)."""
     flagged = set()
-    for p in sorted((REPO / "adapters" / "redfish").glob("*.yml")):
+    for p in sorted(ADAPTERS.glob("*.yml")):
         a = yaml.safe_load(p.read_text(encoding="utf-8"))
-        if ((a.get("vendor_notes") or {}).get("processor_summary_logical_count") or "") == "cores":
+        if "processor_summary_logical_count" in (a.get("vendor_notes") or {}):
             flagged.add(a["adapter_id"])
-    assert flagged == {"redfish_hpe_csus_3200", "redfish_hpe_superdome_flex"}
+    assert flagged == set()
+
+
+# ── FIX 2 (2026-10-27, 02-cpu-003): cpu.manufacturer — OS/ESXi 와 같은 표 ──────────────────────────────────────────────────
+def _set_fact_var(name):
+    for task in yaml.safe_load(NORM.read_text(encoding="utf-8")):
+        sf = task.get("ansible.builtin.set_fact") if isinstance(task, dict) else None
+        if isinstance(sf, dict) and name in sf:
+            return sf[name]
+    raise AssertionError(name)
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("Intel(R) Corporation", "Intel"),          # iLO 7 · XCC 3 · RMC 실측
+    ("Intel", "Intel"),                         # iDRAC 실측
+    ("Advanced Micro Devices, Inc.", "AMD"),    # DMTF mockup / AMD 서버
+    ("AMD", "AMD"),
+    ("Ampere(R)", "Ampere(R)"),                 # 표 밖은 원문 strip
+    ("  ", None), (None, None),
+])
+def test_cpu_manufacturer_normalized_like_os_and_esxi(raw, expected):
+    cpu = _fragment()["cpu"]
+    assert "manufacturer" in cpu, "사전은 2026-09-03 부터 redfish 채널을 선언했는데 2026-10-27 전까지 내지 않았다 (02-cpu-003)"
+    assert _render(cpu["manufacturer"], _rf_d_cpus=[{"manufacturer": raw, "model": "X"}], _rf_d_system={}) == expected
+
+
+def test_cpu_manufacturer_none_without_processors_or_key():
+    cpu = _fragment()["cpu"]
+    assert _render(cpu["manufacturer"], _rf_d_cpus=[], _rf_d_system={}) is None
+    assert _render(cpu["manufacturer"], _rf_d_cpus=[{"model": "X"}], _rf_d_system={}) is None, "구 모듈 출력(키 없음)도 죽지 않는다"
+
+
+def test_cpu_summary_groups_manufacturer_uses_the_same_table():
+    tmpl = _set_fact_var("_rf_summary_cpu")
+    cpus = [{"model": "Intel(R) Xeon(R) 6737P", "manufacturer": "Intel(R) Corporation", "total_cores": 32}] * 2 + \
+           [{"model": "AMD EPYC 9354", "manufacturer": "Advanced Micro Devices, Inc.", "total_cores": 32},
+            {"model": "Other", "manufacturer": None, "total_cores": 8}]
+    out = _render(tmpl, _rf_d_cpus=cpus)
+    by_model = {g["model"]: g for g in out["groups"]}
+    assert by_model["Intel(R) Xeon(R) 6737P"]["manufacturer"] == "Intel" and by_model["Intel(R) Xeon(R) 6737P"]["sockets"] == 2
+    assert by_model["AMD EPYC 9354"]["manufacturer"] == "AMD"
+    assert by_model["Other"]["manufacturer"] is None
 
 
 # ── X1: UUID 바이트 순서 ───────────────────────────────────────────────────────────────────

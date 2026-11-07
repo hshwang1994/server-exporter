@@ -16,7 +16,7 @@
 |---|---|---|---|
 | `dell_baseline.json` | `redfish_dell_idrac9.jsonc` | Redfish | Dell PowerEdge R740 (iDRAC 9, FW 4.00) |
 | `hpe_baseline.json` | `redfish_hpe_ilo6.jsonc` | Redfish | HPE ProLiant DL380 Gen11 (iLO 6, FW 1.73) |
-| `hpe_csus_3200_baseline.json` | `redfish_hpe_csus_3200.jsonc` | Redfish | HPE Compute Scale-up Server 3200. 실장비가 없어 벤더 문서와 DMTF 스키마로 합성한 기준선입니다 |
+| `hpe_csus_3200_baseline.json` | `redfish_hpe_csus_3200.jsonc` | Redfish | HPE Compute Scale-up Server 3200 (RMC 1.77.30, 용인 2차 Mock `csus3200_01`). 2026-10-27 실측 교체 — 전수 미러를 HTTPS 로 재생해 실제 playbook 으로 수집한 봉투입니다(`diagnosis.details.baseline_origin`). 2026-05-29 ~ 2026-10-27 의 합성본은 git 이력에만 있습니다 |
 | `lenovo_baseline.json` | `redfish_lenovo_xcc.jsonc` | Redfish | Lenovo ThinkSystem SR650 V2 (XCC, FW 5.70) |
 | `cisco_baseline.json` | `redfish_cisco_cimc.jsonc` | Redfish | Cisco UCS C220 M4 (CIMC) |
 | `esxi_baseline.json` | `esxi_vmware.jsonc` | ESXi | ESXi 7.0.3 |
@@ -34,6 +34,7 @@
 2. 기준선 JSON의 `diagnosis.details.baseline_origin`에 출처와 교체 조건 명시
 
 합성 기준선 통과는 fixture 통과이지 사이트 실측 통과가 아닙니다. 실장비 응답을 확보하면 실측 기준선으로 바꿉니다 (`docs/develop/08-onsite-capture.md`).
+2026-10-27 현재 합성 기준선은 없습니다 — CSUS 3200 이 마지막 합성본이었고 사용자 결정(FIX 5)으로 실측 봉투로 바뀌었습니다. 미러 재생 봉투도 `baseline_origin` 에 출처·재생 한계·수정 지점을 적습니다.
 
 ## 기준 시점
 

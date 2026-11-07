@@ -77,10 +77,20 @@ def repo(tmp_path):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(content.encode("utf-8"))
     (repo / "production_manifest.yml").write_bytes(MANIFEST.encode("utf-8"))
+    _make_run_sh_executable(repo)
     _git(repo, "add", "-A")
     _git(repo, "update-index", "--chmod=+x", "app/run.sh")
     _git(repo, "commit", "-q", "-m", "init")
     return repo
+
+
+def _make_run_sh_executable(repo):
+    """디스크의 app/run.sh 도 실행 비트를 준다 (2026-10-28, 독립 검증 CI G2).
+
+    index 에만 `--chmod=+x` 를 주면 Linux 기본 `core.fileMode=true` 에서 뒤 시험의 `commit -a` 가 디스크 모드(644)로 되돌려 100644 가 커밋되고
+    G09(모드 · 실행 비트)가 시험 의도와 무관하게 실패한다. Windows 는 실행 비트가 없어 이 호출이 아무것도 바꾸지 않는다(index 모드 그대로).
+    """
+    os.chmod(repo / "app" / "run.sh", 0o755)
 
 
 def test_build_strips_and_writes_provenance(repo, tmp_path):
@@ -172,7 +182,21 @@ def test_promote_refuses_when_build_has_class_b(repo):
     _git(repo, "commit", "-qam", "anchor")
     res = promote(str(repo), "HEAD", str(repo / "production_manifest.yml"), dry_run=True, skip_live=True)
     assert not res["ok"] and res["stage"] == "build"
+    # 2026-10-28 (독립 검증 CI G2): 다른 이유(모드 · gate)로 멈춘 것을 class B 거부로 세지 않게 — 거부 사유가 바로 이 anchor 여야 한다
+    assert [b["path"] for b in res["build"]["class_b"]][:1] == ["app/tasks.yml"], res["build"]
     assert not GitStore(str(repo)).rev_exists("refs/heads/production")
+
+
+def test_g09_refuses_a_source_commit_that_lost_the_exec_bit(repo, tmp_path):
+    """음성 시험 (2026-10-28, 독립 검증 CI G2): 원천 commit 의 app/run.sh 가 100644 면 생성(build)의 G09 모드 대조가 거부한다
+    — fixture 보정(디스크 실행 비트)이 G09 를 무디게 하지 않는다. 거부는 분류 단계라 tree · provenance 를 만들지 않는다(PowerShell 무관)."""
+    _git(repo, "update-index", "--chmod=-x", "app/run.sh")
+    _git(repo, "commit", "-qm", "lose exec bit")
+    sha = _git(repo, "rev-parse", "HEAD")
+    assert _git(repo, "ls-tree", sha, "app/run.sh").split()[0] == "100644"
+    rep = build(str(repo), sha, str(tmp_path / "out"), str(repo / "production_manifest.yml"), live_checkers=False)
+    assert not rep.ok
+    assert "G09 app/run.sh: git mode 100644 != manifest mode 100755" in rep.classification["errors"], rep.classification
 
 
 def test_drift_legacy_mode_without_provenance(repo):

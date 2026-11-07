@@ -591,6 +591,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 15360,
+        "l3_cache_kb": 18432,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) Silver 4310 CPU @ 2.10GHz",
@@ -608,6 +610,8 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 15360,
+        "l3_cache_kb": 18432,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) Silver 4310 CPU @ 2.10GHz",
@@ -642,7 +646,8 @@
               "name": "480GB 6G SATA SSD",
               "predicted_life_percent": 99,
               "protocol": "SATA",
-              "serial": "S521NA0T605357"
+              "serial": "S521NA0T605357",
+              "wwn": "naa.31402ec013a3f46f"
             },
             {
               "capacity_bytes": 480103981056,
@@ -656,7 +661,8 @@
               "name": "480GB 6G SATA SSD",
               "predicted_life_percent": 99,
               "protocol": "SATA",
-              "serial": "S521NA0T605338"
+              "serial": "S521NA0T605338",
+              "wwn": "naa.31402ec013a3f46e"
             }
           ],
           "health": "OK",

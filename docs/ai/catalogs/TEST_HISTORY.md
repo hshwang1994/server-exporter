@@ -15,6 +15,101 @@
 | GitLab 정리 뒤 확인 | 생성기 main `d158ce30` · `git fetch --prune internal` 뒤. `git ls-remote --symref internal HEAD` → `refs/heads/main` `d464de4b` · `--heads`: `main` + 작업 브랜치 5개(사용자 지시로 유지) · `production` 없음. `push-sync --remote origin --remote internal --dry-run` ok — 로컬 = GitHub `production` = GitLab `main` = `d464de4b`, 할 일 0, `preview_refusals` 없음. `drift-check --production origin/production` ok · `PROVENANCE`(C_tree_hash 196 파일 일치 · D_trailers · A1_recorded_generator True) |
 | 미실행 | GitLab `main` 보호 · Mirroring · Webhooks 화면과 jenkins-prod Job 화면 확인(사용자) · 실 승격(배포본 변경 없음) |
 
+## 2026-11-01 — 용량 미상 디스크 합계 정책 문서화 (문서만 · 제품 코드 · 시험 · 증거 변경 0)
+
+> 사용자 결정(2026-11-01) a안 — 현행 유지 + `docs/contract/03-fields.md` 6.3 에 한계 명시. 브랜치 `fix/redfish-mock2-summary-20261028`, 변경 전 HEAD `1e6d4d20`. 환경 Windows Python 3.13.15 · pytest 9.1.1. 문서만 바뀌어 Tier 0 · 1 · 2 는 다시 돌리지 않았다 — 제품 코드 diff 가 0 이라 아래 2026-10-29 · 2026-10-31 측정이 그대로 유효하다.
+
+| 구분 | 결과 |
+|---|---|
+| 변경 범위 | `docs/contract/03-fields.md` · `docs/ai/` 4파일. `git diff --name-only HEAD -- . ':(exclude)docs'` 빈 결과(코드 · 시험 · schema · `tests/evidence/` 변경 0) |
+| 기존 계약 시험 | `tests/unit/test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped` passed — 용량 0 · None 디스크를 그룹 · 합에서 빼는 종전 동작 그대로 |
+| 문서를 읽는 시험 · storage summary 시험 23파일 | 782 passed · 6 skipped · 5 xfailed · 실패 0 (43.65 s) |
+| 정적 · 계약 | `verify_harness_consistency.py` 통과 · `check_project_map_drift.py` 일치 · `validate_field_dictionary.py` PASS(실패 0) · `output_schema_drift_check.py` 정합(sections 11 · fd_paths 264) · `verify_vendor_boundary.py` 통과 |
+| `verify_docs_references.py` | rc 2 — 죽은 참조 1건: `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md:90` → `tests/unit/test_adapter_reselect_real_facts.py`(git 이력에 없는 파일). 변경 전 HEAD `1e6d4d20` 에서도 같다 — 이번 변경과 무관해 고치지 않았다(ci_gate 단계 아님) |
+
+## 2026-10-29 — Redfish Summary 정합성 수정 브랜치 측정 (이 세션 자기 측정 · 독립 재검증 전)
+
+> 정본: `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md` 5 · 7절. 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`). 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7(playbook) · Ubuntu-24.04(HTTPS 미러 재생) — 2026-10-28 과 같은 구성. 측정 2026-10-29, 기록 2026-10-31.
+
+| 구분 | 결과 |
+|---|---|
+| pytest 4묶음(Windows, 커밋 8 `1b125686` 시점) | unit 5531 passed · 33 skipped / integration(`-m "not live"`) 540 passed · 6 skipped · 1 deselected / e2e 876 passed · 6 skipped / regression 222 passed · 6 skipped · 5 xfailed — 실패 0 |
+| 새 시험(HEAD `543a1794`) | 7파일 269 passed + `tests/unit/test_power_summary_b58_b59.py` 22 passed |
+| Tier 1(실제 playbook + HTTPS 미러, 18 label) | 18/18 rc 0 · success · errors 0 · adapter 같음 · 기준 대비 차이 34 = 허용 목록 10항목으로 전부 설명 · 미설명 0 · 새 GET 14 경로 전부 미러 실응답 · 불변 항목 위반 0 · 기준(`104bcaf0`) 재실행 = 2026-10-28 `tier1-A`(차이 0) |
+| Tier 2(모듈 재생, 18 label) | 18/18 success · golden 15 label GOLDEN_KEYS 차이 0 |
+| 합성 미러 9건(Tier 1) | 등록 기준 head 7/9 PASS — FAIL 2 는 기대값의 경로 오기(`data.system.power_state` → 실제 `data.hardware.power_state`)이고 값 단정은 PASS. 사후 점검 head 9/9 · base 9/9 결함 재현(사전 등록 PASS 로 세지 않음, `synthetic/ERRATUM.md`) |
+| A/B/C 독립 비교 | head PASS 666 · CM 36 · FAIL 0(두 번 실행 바이트 같음) / base PASS 642 · CM 36 · FAIL 24 |
+| 변이 | 31/31 KILLED |
+| 보존 | 개수 정합 18/18(2026-10-28 `_parity.md` 와 제목 줄만 다름) · 판별기 대조(불일치 69) · 132칸 · 처분 재집계(73) = 2026-10-28 산출과 sha256 같음 · LinkStatus 값 분포 2026-10-28 과 같음 · CSUS 7대 PCIe 카드 49개 링크 조건 모두 LinkUp |
+| 정적(HEAD = 커밋 11 `90f9c0eb`, Windows, 2026-10-31) | Jinja 전체 컴파일(`pre_commit_jinja_compile_check.py --all --blocking`, self-test 5/5) · namespace 검사(`normalize_standard.yml`) 통과 · `verify_no_plaintext_secret.py --base 104bcaf0` 변경 427건 평문 0 · 변경 YAML/JSON 251 파싱 · 변경 Python 33 컴파일 오류 0 · `verify_harness_consistency.py` · `check_project_map_drift.py` 통과. yamllint 는 미설치 · 저장소 설정 없음 — YAML 파싱으로 대신했다 |
+| Tier 0 ci_gate(HEAD = 커밋 11 `90f9c0eb`, 2026-10-31) | Linux 공식 등가(WSL ext4 새 clone · 격리 venv Python 3.12.3 · ansible-core 2.20.3 · pytest 9.2.0 · `env -i` · pwsh 없음 · `Jenkinsfile_ci` Gate 명령) `RESULT: PASS` rc 0 — pytest 6504 passed · 183 skipped · 5 xfailed / integration 563 passed · 4 skipped · 1 deselected · JUnit failures 0 · errors 0 · corpus 20/20 MATCH · schema 정합(sections 11 · 사전 경로 264) · syntax-check 3 채널. Windows 작업 트리(`core.autocrlf=true`, ansible 없음) `RESULT: PARTIAL` rc 2 — 단계 FAIL 0, syntax-check 건너뜀(설계상) · pytest 6642 passed · 45 skipped · 5 xfailed / integration 540 passed · 6 skipped · 1 deselected · JUnit failures 0 · errors 0. 두 실행은 겹치지 않게 차례로 돌렸다. **공식 runner NOT_RUN** (`tests/evidence/2026-10-29-redfish-summary-fix/tier0/` · handoff 7절) |
+| 훅 우회 | 커밋 9(`0bc68f71`)는 additive-only 훅이 종전의 틀린 help 문장 삭제를 막아 `ADDITIVE_SKIP_NEW_CYCLE=1` 로 그 훅만 건너뛰었다 — `--no-verify` 미사용, 다른 훅은 모두 실행 |
+
+## 2026-10-28 — 독립 검증 결함 정정 브랜치 재측정 (이 세션 자기 측정 · 독립 재검증 전)
+
+> 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(REVIEW_FIX_HANDOFF 5 · 7절 · tier1-A/B · tier2-A · parity-A · oracle-A · cell_check · recount · tier0). 브랜치 `fix/redfish-mock2-review-20261028`. 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7(playbook) · Ubuntu-24.04(HTTPS 미러 재생) — 구현 · 독립 검증과 같은 구성.
+
+| 구분 | 결과 |
+|---|---|
+| `pytest tests/unit tests/e2e tests/regression`(Windows 작업 트리, 한 프로세스, 제품 코드 = C6 `499ed7c5`) | 6388 passed · 45 skipped · 5 xfailed · 실패 0 (1607 s, `pytest/unit_e2e_regression.log`) |
+| `pytest tests/integration -m "not live"`(같은 조건) | 502 passed · 6 skipped · 1 deselected · 실패 0 (`pytest/integration.log`) |
+| 정적 · 계약 | `validate_field_dictionary.py` PASS(실패 0) · `output_schema_drift_check.py` 정합(sections 11 · 사전 262) · `verify_vendor_boundary.py` 통과 · `verify_harness_consistency.py` 통과 · `verify_no_plaintext_secret.py --base f92ebe6a` 평문 0(C7 `3490f210` 시점 변경 399건 — vault literal 전수 검사는 비밀번호 파일을 쓰지 않아 건너뜀) |
+| Tier 1 A · B(실제 playbook + HTTPS 미러, 18 label) | 18/18 rc 0 · success · errors 0 · A = B 차이 0(허용 목록 없음) · 구현 측 `tier1-final` 대비 설명된 차이 34 · 미설명 0 · 요청 차이 0 · 독립 검증 `out/tier1-after` 대비 같음 |
+| Tier 2(모듈 재생, 18 label) | 18/18 success · golden 15 label GOLDEN_KEYS 차이 0 · 구현 측 `tier2-final` 대비 차이 0 |
+| 개수 정합(디스크 · FC 포트) | 18/18 PASS — 구현 측 `inventory-parity.md` 와 같은 수 |
+| 판별기 대조(독립 검증 `oracle_compare.py` 사본) | 불일치 69 — 구현 측 최종 · 독립 검증 `cmp_after.json` 과 내용이 같음(새 불일치 0) |
+| 132칸 · 처분 재집계 | 120/2/2/8 불변 · 근거 13칸 정정 / 73 = FIXED 43 · DOC 19 · OBS 11, 병기 HOLD 3 |
+| `tests/integration/test_request_budget.py` | 30 passed |
+| Tier 0 ci_gate(HEAD = C8 `d552ae06`) · 묶음별 FAIL → PASS | Linux 공식 등가(WSL ext4 새 clone · 격리 venv · `env -i` · pwsh 없음 · `Jenkinsfile_ci` Gate 명령) `RESULT: PASS` rc 0 — pytest 6250 passed · 183 skipped · 5 xfailed / integration 525 passed · syntax-check 3 채널 · corpus 20/20. Windows 새 clone(`core.autocrlf=true` · 전역 `MSYS_NO_PATHCONV=1`) `RESULT: PARTIAL` rc 2 — 실패 0, syntax-check 건너뜀(ansible 없음 — 설계상) · pytest 6388 passed / integration 502 passed. 묶음별(수정 전 `f92ebe6a` → 수정 후): G1 2 failed → 2 passed · G2 4 failed → 19 passed · G4 · G5 15 failed → 67 passed · G3 81 failed = 81 failed(실패 ID 같음 — 후속). **공식 runner NOT_RUN**. 동시 실행한 Windows gate 1회는 메모리 부족 중단 — 판정 제외(`tier0/tier0.md`) |
+
+## 2026-10-27 — Redfish 2차 Mock 구현 Round WP2~WP12 + FIX 5 — 최종 측정 (구현 세션 자기 측정 · 독립 검증 전)
+
+> 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/IMPLEMENTATION_SUMMARY.md` 3절 · `tier0/*.log` · `tier1-final/` · `tier2-final/` · `coverage-132-after.md` · `inventory-parity.md`. 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7 / WSL Ubuntu-24.04 HTTPS 미러.
+
+| 구분 | 결과 |
+|---|---|
+| `pytest tests/unit` 전체 | **5226 passed · 33 skipped · 0 failed** (WP11 뒤, `tier0/pytest_unit_after_wp11.log`; WP 별 5118 → 5127 → 5197 → 5226) |
+| `pytest tests/integration -m "not live"` | **497 passed · 6 skipped** (FIX 5 뒤, `tier0/pytest_integration_notlive_after_fix5.log`) |
+| `pytest tests/e2e tests/regression` | **1098 passed · 12 skipped · 5 xfailed** (FIX 5 뒤; 종전 1094 + CSUS 실측 가드) |
+| WSL 엔진 2파일 · `ansible-playbook --syntax-check` 3채널 | 23 passed · 3/3 OK |
+| Tier 1 최종(실제 playbook + HTTPS 미러, 18 label) | 18/18 rc 0 · success · errors 0 · `tier1-after-WP11` 대비 봉투·요청 차이 0 · `tier1-before` 대비 차이는 WP 별 allowlist 로 전부 설명(미설명 0) |
+| Tier 2 최종(`tier2_replay.py`, 18 label) | 18/18 success · golden 보유 15 label GOLDEN_KEYS 차이 0 |
+| 개수 정합(디스크·FC 포트, 18 label) · INV-5 | 18/18 PASS · UNEXPLAINED 0 · INV-5 위반 0 |
+| 132칸 재판정 | PASS 120 · ISSUE 2(dl380_gen12_03 storage/firmware — HOLD 원인) · MOCK_LIMITATION 2(csus3200_01/03 storage) · N/A 8 (2026-10-28 재대조: 수 불변, 근거 문장 13칸 정정 — 2026-10-28 절) |
+| 게이트 | `validate_field_dictionary.py` PASS(262) · schema drift 정합 · vendor boundary 통과(`b31d131d` 표기 보강 뒤) · harness consistency 통과 · 평문 비밀 0 |
+
+## 2026-10-27 — Redfish 2차 Mock 구현 Round WP0~WP1 — 기준선 재측정 · 테스트 격리 뒤 재실행 (제품 코드 변경 0)
+
+> 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/00-baseline-recheck.md`(수치·bisect·Tier 1/2) · `01-fixtures-origin.md`. 실행 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7 / pytest 9.0.3.
+
+| 구분 | 수정 전(WP0 재측정) | WP1(a) seam 복원 뒤 |
+|---|---|---|
+| `pytest tests/e2e tests/regression` | 1094 passed · 12 skipped · 6 xfailed | 1094 passed · 12 skipped · 6 xfailed (같음) |
+| `pytest tests/integration -m "not live"` | 366 passed · 6 skipped · 1 deselected | **496 passed** · 6 skipped · 1 deselected (2차 fixture 11세트 자동 등록 + 개수 정합·zip 재생 시험 추가) |
+| `pytest tests/unit` 전체 | **19 failed** · 4853 passed · 33 skipped | **4915 passed · 33 skipped · 1 failed(= WP1(d) 로 바뀐 fixture 를 가정한 기대값 1건, 갱신 뒤 PASS — seam 누출 19 → 0)** |
+| `tests/unit tests/e2e tests/regression` 한 프로세스 | **36 failed** · 5930 passed · 45 skipped · 6 xfailed | **6009 passed · 45 skipped · 6 xfailed · 1 failed(같은 1건 — seam 누출 36 → 0)** |
+| 쌍 실행 bisect (오염원 1 + 실패 파일 8) | 8 파일 전부 재현(합 36) — 단일 원인 | 8/8 PASS |
+| WSL 엔진 2파일 | 23 passed | 23 passed |
+| `ansible-playbook --syntax-check` 3채널 | 3/3 OK | — |
+| Tier 1 (편입판 runner, 18 label) | 18/18 success · 분석 Round 기준선과 봉투·요청 차이 0 | — |
+| Tier 2 (편입판 replay, 18 label) | 18/18 success · golden 15세트 차이 0 | — |
+| 개수 정합 (`inventory_parity.py`, 18 label 전수 미러 × Tier 1 봉투) | 18/18 PASS (UNEXPLAINED 0) | — |
+
+## 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round — 수정 전 기준선 (코드 변경 0)
+
+> 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/baseline/README.md`(한계 목록 포함). 실행 환경 Windows Python 3.13.15 + WSL Ubuntu(ansible-core 2.20.7, 운영 2.20.3 과 다름).
+
+| 구분 | 결과 |
+|---|---|
+| `pytest tests/e2e tests/regression` | **1094 passed, 12 skipped, 6 xfailed** (73.6 s, 2026-10-22 기록과 같음) |
+| `pytest tests/integration -m "not live"` | **366 passed, 6 skipped, 1 deselected** |
+| WSL `test_build_output_no_data_playbook.py` + `test_addon_hook_playbook.py`(Windows 에서는 skip 되는 엔진 테스트) | **23 passed** |
+| `pytest tests/unit` 전체 | **19 failed, 4853 passed, 33 skipped** — 순서 의존: `replay_full_mirror.install_fakes` 가 `rg._get`/`_get_noauth` 를 복원 없이 교체(04-test-001). `test_full_mirror_dryrun.py::test_v2_tree_is_consumed_by_replay_and_convert` 1개 + `test_redfish_bios_current.py` 쌍으로 8 failed 재현, 단독 통과. 수정하지 않음 |
+| `tests/unit tests/e2e tests/regression` 한 프로세스 | 36 failed, 5930 passed, 45 skipped, 6 xfailed (같은 원인) |
+| Tier 1 — 실제 `ansible-playbook`(`redfish-gather/site.yml`, 실제 vault, 설정 주입 0) + 미러 재생 HTTPS 서버 | 18 label(2차 11 + 1차 7) rc=0 · status success · errors 0. Lenovo 5 label 은 adapter 재선택 강등 관측(01-adapter-001) |
+| Tier 2 — `emulator_harness.run_gather` 모듈 재생 | 18/18 success; 1차 4 golden ↔ 전체 미러 재생 차이 = bios 1건(golden 이 `gather_bios` 이전), CSUS adapter 모드 차이 0; zip 추출본 재생 = 원본 11/11 |
+| 아카이브 대조 | zip 11 재추출 ↔ 원본 파일 수·경로·sha256 누락 0·차이 0, SHA256SUMS 일치, 비밀값 4종 0건 |
+
 ## 2026-10-22 (3) — sanitize_mirror 1.0 (반출용 IP·호스트 이름 치환) — 시험 19건 · Python 3.6.8 · 실측 미러 7개 · 번들 실행
 
 > 정본: `docs/develop/08-onsite-capture.md` 9절 · `tests/unit/test_sanitize_mirror.py`. 합성 데이터와 저장소 밖의 기존 실측 미러 재생 — **용인 11대 데이터로는 돌려 보지 않았다(NEXT_ACTIONS)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).

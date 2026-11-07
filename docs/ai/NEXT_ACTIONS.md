@@ -16,6 +16,63 @@
 - [INFO] 다음 승격: prodgen 소스 변경으로 `generator_hash` 가 바뀌었다 — 이 커밋 이전 SHA 의 CI 보고서는 `--verify-report` 로 재사용되지 않는다. CI Promote 의 GitLab 경로(`se-gitlab-push` 가 있을 때만)는 그대로 두었고 같은 매핑을 쓴다.
 - [INFO] fix 브랜치(`fix/redfish-mock2-summary-20261028`)를 main 에 병합할 때 `CURRENT_STATE` · `NEXT_ACTIONS` · `TEST_HISTORY` · `decision-log` 의 맨 위 항목이 겹친다 — 양쪽 다 남기면 된다.
 
+## Redfish Summary 정합성 수정 (2026-10-29) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md`(9 · 10절) · 브랜치 `fix/redfish-mock2-summary-20261028`(분기 `104bcaf0`, main 미병합) · `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`. 제품 동작 변경은 Redfish 2파일 + ESXi `filter_plugins/power_summary.py`(SA-06).
+
+- [ ] **[HIGH / 사용자 — 새 독립 세션] 독립 재검증** — handoff 6절 명령(Tier 1 · 2 · 합성 · A/B/C · 변이 · 보존)과 감사 12절 7단계(감사 도구 `recheck.py` · 합성 10종 재실행 — 이 세션은 독립성을 위해 돌리지 않음). handoff 10절 질문 5건(S 번호 정의 · 합성 정오표 수용 · SA-12 합집합 · CM 36 · FD 표기).
+- [ ] **[HIGH / 운영 담당자] 공식 runner ci_gate (NOT_RUN)** — 아래 2026-10-28 절과 같은 방법(Runner 셸에서 이 브랜치 clone → `scripts/ai/ci_gate.sh`). 그 전까지 Tier 0 은 "로컬 Linux 등가" 로만 보고한다.
+- [ ] **[HIGH / 사용자 승인] `main` 병합(squash, rule 93 R2 4요소) → `prodgen promote` + canary** — 재검증 PASS · 공식 runner PASS 뒤, 병합과 승격을 각각 승인. 이 브랜치는 2026-10-28 정정 브랜치(`104bcaf0`)를 포함한다. 호출자 공지: handoff 3.1 · 3.4절(값이 null 로 나오는 조건이 넓어진 키 목록).
+- [ ] **[MED / 운영 담당자] Portal 등 소비자의 null 처리 확인** — 새로 null 이 나올 수 있는 키: `multi_node` 개수 · `fabrics[].switch_count` · `endpoint_count` · `network.summary.adapter_count` · `port_count` · cpu 그룹 `total_cores` · `cores_per_socket` · `storage.summary.grand_total_gb`(파티션 summary 포함).
+- [x] **[DONE 2026-11-01 — 사용자 결정 a안] 용량 미상 디스크가 섞인 storage 합계** — 현행 유지: 용량을 확인한 디스크만 합하고 용량 미상 디스크(`total_mb` null · 0)는 그룹 · 합에서 뺀다. 그 디스크 때문에 합을 null 로 만들지 않는다. 한계(실제 전체 용량보다 작을 수 있음 · Redfish Storage/섀시 경로의 빈 슬롯 필터)는 `docs/contract/03-fields.md` 6.3 의 2026-11-01 메모. 제품 코드 · 기존 시험 변경 0(`test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped` 그대로). 증거(handoff)는 바꾸지 않았다 — handoff 9절의 이 행은 결정 전 기록이다.
+- [ ] **[MED / 실장비] SA-12 섀시 드라이브 합집합** — 섀시에만 드라이브가 노출되는 장비(NVMe direct-attach 등) · golden recording 에 없는 새 경로 8 fixture 의 실장비 응답 · 선택 링크가 5xx 를 줄 때의 동작 · HPE 에뮬레이터 4세트 경로(NO_MIRROR).
+- [ ] **[MED / 실장비] SA-07 storage 0 · null** — 다른 벤더가 전원 Off 에서 내는 드라이브 목록 원천(`Drives: []` 를 주는 BMC 는 "확인한 0" 이 되는 한계) · 디스크 없는 장비가 원천을 노출하지 않으면 null.
+- [ ] **[LOW / 실장비] SA-09 · SA-17** — Starting · Training 을 실제로 내는 장비(18 미러 관측 0) · Telemetry 소비전력 정밀도.
+- [ ] **[LOW / 설계] `power.summary.psu_count` 신호** — PSU 목록만 노출되지 않은 경우를 가를 신호가 없다.
+- [ ] **[LOW / 사용자 결정] OS · ESXi storage 미관측 정책** — SA-07 은 Redfish 만 바꿨다(OS · ESXi 는 수집 실패면 섹션 failed). 같은 구분이 필요한지.
+- [ ] **[LOW / 후속] S22 중복 제거 키 구분자** — `normalize_standard.yml` physical_disks 키 `name~model~serial`(감사도 NOT_RUN · 낮은 위험).
+- [ ] **[LOW / 확인] 감사 S 번호 정의** — S3 · S4 · S5 · S7 · S8 · S11 · S12 · S13 · S21 은 감사 폴더 어디에도 없다(`audit_case_test_map.md` 0절).
+- [ ] **[LOW / 선택] `tests/unit/test_power_summary_b58_b59.py` 복사 구현 정리** — 운영 템플릿 동치 시험(`543a1794`)이 drift 를 잡으므로 복사본 제거는 선택.
+- [ ] **[HOLD] 아래 2026-10-28 절의 HOLD 3건** — 03-network-002 잔여 2 NIC(HOLD-a) · 05-thermal-003 (b)(HOLD-b) · 03-storage-001 (b)(HOLD-c). 이번 범위 밖, 그대로.
+- [ ] **[LOW / 환경] Windows 실행 주의** — (1) pytest 묶음 · Tier 0 gate 를 겹쳐 돌리면 메모리 부족으로 중단된다(2026-10-28 과 같음) — 한 번에 하나씩. (2) `tests/unit/test_linux_hba_ib_markers.py::test_rate_parsing_keeps_decimal_and_nulls_when_not_active`(Git `sh.exe` 하위 실행)가 Windows 에서 가끔 멈췄다 — 변경과 무관, 그 파일만 다시 돌리면 통과. 2026-10-31 Windows gate 에서는 11개 경우 모두 통과(가장 긴 경우 7.8 s). 원인 미조사.
+- [x] **[DONE 2026-10-31] 이 세션 임시물 정리** — scratchpad worktree(`wt_base` · `wt_c5` · `wt_c6`) · WSL `~/se-fix-20261029`(Tier 0 clone) · WSL `/root/se_syn_20261029`(합성 사본)를 지웠다. WSL venv `~/venv-se-ci-20261028` 은 Tier 0 재실행용으로 남겼다. 감사 폴더 `se-indep-20261027` · `se-indep-20261028` 과 그 worktree 3개는 건드리지 않았다.
+
+## Redfish 2차 Mock 독립 검증 결함 정정 (2026-10-28) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-28-redfish-mock2-review-fix/REVIEW_FIX_HANDOFF.md`(9절) · 브랜치 `fix/redfish-mock2-review-20261028`(분기 `f92ebe6a`, main 미병합). 제품 동작 변경 3곳(R1 NIC 링크 보충 · R2 HBA up 값 · R3 전원 Off 문구).
+
+- [ ] **[HIGH / 사용자 — 새 독립 세션] 재검증** — 새 브랜치 최종 SHA 에서 `REVIEW_FIX_HANDOFF.md` 4절 명령(Tier 0/1/2 · 대조 · 재집계)을 다시 돌린다. 이 세션은 자기 결과를 PASS 로 확정하지 않았다.
+- [ ] **[HIGH / 운영 담당자] 공식 runner ci_gate (NOT_RUN)** — `clovirone-server-gather-ci` 는 `*/main` 수동 빌드라 새 브랜치를 그대로 못 돌린다. Runner 셸에서 새 브랜치 clone 뒤 `. scripts/activate_ansible_venv.sh && bash scripts/ai/ci_gate.sh`, 또는 브랜치 지정 시험 Job 사본. 확인: venv `include-system-site-packages = false` · Gate PATH 에 pwsh 없음 · `core.autocrlf` · `core.fileMode` · `RESULT: PASS` · JUnit 보관. 그 전까지 Tier 0 은 "Linux 공식 등가 PASS, 공식 runner NOT_RUN" 이다.
+- [ ] **[HIGH / 사용자 승인] `main` 병합(squash, rule 93 R2 4요소) → `prodgen promote` + canary** — 재검증 PASS · 공식 runner PASS 뒤. 호출자 공지 추가: SR650 V4 `network.interfaces[].link_status` unknown → up/down · `is_primary` · `summary.groups[].link_up_count` · `primary_speed_mbps`(R1), HBA `LinkStatus` 값 `Enabled`/`Active` → down + notice(R2, 미러 · fixture 실측 0).
+- [ ] **[MED / 사용자 승인 — 보호 경로] 03-network-002 잔여 2 NIC** — sr650_v4_02 `NIC6` · _04 `NIC4` 는 `unknown`(본딩 영구 주소 — 포트 `AssociatedMACAddresses` 둘째 값 · NDF `PermanentMACAddress` · `PhysicalNetworkPortAssignment` 로만 이어진다). 재개 조건: 모듈이 그 값을 내보내는 변경 승인 + golden 원장(G-26 이후) + 18 미러 조인 대조(`01-f01-nic-link-fill.md` 5절).
+- [ ] **[MED / 실장비 + 사용자 승인] 05-thermal-003 (b) Sensor 보충** — `DataSourceUri` → Sensor GET 으로 health · state · upper_critical. 재개 조건: Sensor 에 `Status` · `Thresholds` 값이 있는 실장비 캡처 + 요청 예산 승인(CSUS 7대 +377 GET, 미러 Sensor 값 0).
+- [ ] **[LOW / 조건부] OEM 포트별 링크 정규화** — 표준 `LinkStatus` 가 없거나 미확정일 때, 포트별 OEM 필드가 Link Up 을 뜻한다는 근거(벤더 공식 문서 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가 확인되면 `_extract_oem_*` 계열 + origin 주석으로 별도 정규화(사용자 결정 Q1). 카드 수준 값(CSUS H3Alert 등)은 대상이 아니다(`02-hba-link-policy.md` 5절).
+- [ ] **[LOW / 사용자 결정] DL380 iLO NIC 16개 포트 속도 보충** — 자체 link `up` · speed null 인 NIC(dl380_gen12_01 4 · _02 2 · _04 8 · 1차 DL380 2)에 같은 MAC 포트 `current_link_speed_mbps` 25000 을 채울지. 기능 개선이라 이번엔 하지 않았다(`01-f01-nic-link-fill.md` 2절).
+- [ ] **[LOW / 별도 승인] G3 WSL interop PowerShell 탐침 81건** — WSL 기본 PATH 에서 `tests/unit/test_windows_*` 5파일이 interop `powershell.exe` 를 쓸 수 있는 PowerShell 로 보고 Linux 경로를 넘겨 실패(수정 전 `b8985826` 도 같음). `_usable_powershell()` 이 interop 바이너리를 거르게 하는 안은 skip 동작 변경이라 승인 대상(공식 runner 에는 PowerShell 이 없다).
+- [ ] **[LOW / 후속] 루트 `tests/conftest.py` seam 가드 보고 줄의 인코딩** — UTF-8 모드가 아닌 cp949 콘솔에서는 보고 줄이 `\uXXXX` 로 escape 되어 나온다(메시지에 cp949 로 못 쓰는 '—' U+2014 포함). 가드 시험은 하위 실행을 UTF-8 로 고정해 통과(C4)했고 메시지 자체는 그대로다.
+- [ ] **[LOW / 후속] 독립 검증 부록 A 의 범위 밖 항목** — XCC3 잠재 경계(`bmc_model` 공백 + 펌웨어 AFBT/TAOT/USX), 06-bmc-010 시험 강도(문자열 존재 시험 — 렌더 · 재생 없음), 사람용 문서의 범위 이전 `docs/ai` · `tests/evidence` 참조(03-fields 기존 8건 등).
+- [ ] **[LOW / 문서] `lenovo_xcc3.yml` RedfishVersion 주석 · metadata 정리(DRIFT-032)** — 2026-06-15 캡처 근거를 확인한 뒤 펌웨어별(IHX414J 1.22 → 1.17.0 · IHX438R 2.97 → 1.22.0)로 적는다.
+- [ ] **[LOW / 정리] 이 세션 임시물** — 추출본 `C:\github\ClovirONE\mock2-fix-20261028\`, WSL `/root/se_mirrors_fix_20261028`, WSL `~/se-fix-20261028` · `~/se-fix-20261028-base`(그 clone 의 worktree) · `~/venv-se-ci-20261028`, Windows clone `C:\github\ClovirONE\se-fix-20261028-win\`(new · base).
+
+## Redfish 2차 Mock 전수 분석 (2026-10-26) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/ISSUES.md`(§7 사용자 결정) · `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md`(작업 묶음 WP1~WP11). 분석 산출물은 브랜치 `docs/redfish-mock2-audit-20261026`(main 미병합), Mock 은 main `7c22ca4a`. 제품 코드 변경 0.
+
+- [x] **[DONE 2026-10-28 — FAIL 10(LOW) · Tier 0 미통과 → 정정 브랜치 `fix/redfish-mock2-review-20261028`, 위 2026-10-28 절의 재검증으로 이어짐] 독립 검증** — 브랜치 `fix/redfish-mock2-20261027` 최종 SHA 에서 Tier 0/1/2 재실행 + 73건 처분표·golden 원장 대조(`tests/evidence/2026-10-27-redfish-mock2-impl/INDEPENDENT_REVIEW_HANDOFF.md`). 결과는 `INDEPENDENT_REVIEW_RESULT.md`.
+- [ ] **[HIGH / 사용자 승인] `main` 병합(squash 기본, rule 93 R2 4요소) → `python -m scripts.ai.prodgen promote` production 승격 + canary** — 독립 검증 PASS 뒤(2026-10-28: 위 절의 재검증 · 공식 runner PASS 뒤로 옮김). 호출자 공지: Redfish `data.cpu.logical_threads` 키 소멸(FIX 1, 유일한 비-Additive).
+- [ ] **[MED / 사용자 결정] 03-storage-001 (b) 전원 Off 호스트 controllers 보강(PCIeFunctions)** — 구현 Round 의 HOLD(2026-10-28 정정: HOLD 3건 중 하나 — 05-thermal-003 (b) · 03-network-002 잔여 2 NIC 추가, 위 절). dl380_gen12_03 의 storage/firmware 칸(MR416i-o category other)이 ISSUE 로 남는 원인.
+- [ ] **[LOW / 실장비] MOCK_LIMITATION 2건 실장비 확인** — CSUS FC 포트 단위 링크(03-storage-004, A안 notice 로만 기재) · Lenovo XCC3 복구 경로 401 → Family 세대(06-bmc-001). RMC `@Redfish.WriteableProperties` repair 거동(06-bmc-002)도 실장비에서만 확인된다.
+- [ ] **[LOW / 문서] `schema/output_examples/redfish_hpe_csus_3200.jsonc` 를 실측 구조(1 파티션 · 1 RMC · 3 섀시)로 재작성** — 주석 예시라 OBSERVATION 으로 둠(FIX 5 범위 밖).
+- [x] **[DONE 2026-10-22 캡처 · 2026-10-26 보관] 용인 11대 전수 미러** — 아래 절의 HIGH 항목 완료. `tests/reference/redfish/mock2/`(zip 11, 치환 없음 — 사용자 결정).
+- [x] **[DONE 2026-10-27] 사용자 결정 12건 → FIX 1~11 + 결정 11 A안 확정(지시서 2)** — 구현 Round 에 반영(`tests/evidence/2026-10-27-redfish-mock2-impl/ISSUE_DISPOSITION.md`).
+- [x] **[DONE 2026-10-27] WP2 adapter 재선택 규칙 (01-adapter-001)** — opt-in `match.bmc_model_patterns`(facts `bmc_model`), 커밋 `6b3dae27`, evidence 02(31 adapter 점수 불변 증명).
+- [x] **[대체 2026-10-27 — FIX 1] WP9 CPU HT 규칙 (02-cpu-001/002)** — HT 계산은 폐기, Redfish `data.cpu.logical_threads` 키 제거(커밋 `e650cb47`), OS/ESXi 불변, evidence 09.
+- [x] **[DONE 2026-10-27] WP1 테스트 기반** — `installed_fakes` context manager + 루트 `tests/conftest.py` seam 누출 가드(04-test-001 해소: `tests/unit` 4915 passed · 33 skipped · 1 failed(= WP1(d) 로 바뀐 fixture 를 가정한 기대값 1건, 갱신 뒤 PASS — seam 누출 19 → 0) · 한 프로세스 6009 passed · 45 skipped · 6 xfailed · 1 failed(같은 1건 — seam 누출 36 → 0)), 2차 11대 축약 fixture(`real_*_0N`, golden = 수정 전 기준선) + 1차 3세트 Bios 보강(FIX 9 G-01~03), Tier 1/2 도구 `tests/redfish-probe/mirror_replay/` 편입(FIX 8), 개수 정합 판별기(사용자 3차 지시). evidence `tests/evidence/2026-10-27-redfish-mock2-impl/`.
+- [x] **[DONE 2026-10-27] WP3 전원 Off · WP4 firmware category · WP5 XCC3 모양 · WP6 전원·온도 · WP7 CSUS 섀시 gating(+결정 11 A안) · WP11 bmc/diagnosis** — evidence 03~07 · 11, 처분표.
+- [x] **[DONE 2026-10-27] WP8 계약·사전 drift 묶음 + ADR 정정 기록(원문 보존 append)** — evidence 08, 사전 262 항목.
+- [x] **[DONE 2026-10-27] WP10 기존 필드 보강** — mtu · wwn · 캐시 · rank · bios_date · ports 0 → null · IPv6, 요청 0 증가, evidence 10.
+- [ ] **[LOW / 정리] 분석 임시물** — 추출본 `C:\github\ClovirONE\mock2-audit-20261026\extract\`, WSL `/root/se_mirrors`·`/root/se_mirror_tls`, WSL `~/.se_vault_pass`(600 사본), 로컬 `git config core.longpaths true` 정리 여부.
+
 ## Redfish 전수 미러 v2.2 (2026-10-22) — 남은 항목
 
 > 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22. 도구 · 시험 · 문서는 같은 날 main 에 들어갔다 (`tests/**` 는 production 제외 경로 — 승격 해당 없음. `production_manifest.yml` 의 `runtime_roots` 에 닿지 않음).
@@ -54,7 +111,7 @@
       S1~S4 · E2E-D · E2E-E 봉투에서 기대값 확인 뒤 `python -m scripts.ai.prodgen promote --sha <main sha>`(자격 파일은 사용자 보관 — 2026-10-18 항목). 승격 전까지 production 은 `027409f4`.
 - [ ] **[HIGH / 사이트 — 사용자] CSUS "디스크 있음 · hbas 없음" 장비 2대 체크리스트** — 장비 JSON 에서 ① `data.network.adapters[].model` 에 FC HBA 카드 유무 ② `diagnosis.details.notices` 의 `section: network_adapters`(404 / 빈 목록 / 소유 미확인 / NetworkInterfaces 링크) ③ `errors[]` `section: network`
       ④ `data.multi_node.summary.chassis_count` ⑤ production 체크아웃 SHA(2026-10-15~18 빌드면 재수집). 실 4노드 미러에서는 디스크 · hbas 가 함께 나와 코드로 재현되지 않았다. 결과를 알려 주면 그 경로를 고친다.
-- [ ] **[HIGH / 실장비 — lab 부재] CSUS 재수집 확인** — `cpu.logical_threads` 64/128 · `hardware.part_number R9N70A` · `power.summary.total_capacity_w null` · `network.summary.adapter_count` 0/4 · `storage.controllers[]`(디스크 있는 장비는 RAID 모델 채움, 없는 장비는 []) · `firmware[]` 6/15 · 요청 수 +7/+2.
+- [ ] **[HIGH / 실장비 — lab 부재] CSUS 재수집 확인** — (`cpu.logical_threads` 는 2026-10-27 FIX 1 로 Redfish 에서 제거 — 확인 항목에서 뺌) `hardware.part_number R9N70A` · `power.summary.total_capacity_w null` · `network.summary.adapter_count` 0/4 · `storage.controllers[]`(디스크 있는 장비는 RAID 모델 채움, 없는 장비는 []) · `firmware[]` 6/15 · 요청 수 +7/+2.
 - [ ] **[MED / Portal 소비자] 안내** — 전 벤더 `power.summary.total_capacity_w` · `consumed_capacity_pct` 0 → null(용량 미제공 장비) · `network.summary.adapter_count` 감소(FC 카드 보유 장비) · OS/ESXi `network.summary.groups` 에 `speed_mbps: null` 그룹 추가 · ESXi `physical_disks[].protocol` 값 ·
       Linux `memory.summary.grand_total_gb` 0 → null · ESXi/Superdome 시리얼 `-NNN` 제거 · ESXi datastore `free_mb/used_mb/usage_percent` null 가능 · ESXi `hostname` IPv4 꼴 → null.
 - [x] **[DONE 2026-10-20] `schema/baseline_v1/esxi_baseline.json`** — 셋째 라운드 canary #314 봉투로 갱신하면서 `link_type ethernet` · `protocol`(esxi02 는 RAID LUN null) 도 실측값이 됐다. Linux/Windows baseline 은 shape 비교라 영향 없음.
@@ -69,9 +126,9 @@
       | Redfish `PCIeFunction` · `PCIeSlots` · HPE OEM `HpeServerDevice/HpeServerPciDevice/HpeServerPCISlot` · Dell OEM `DellNIC/DellMemory/DellProcessor/DellController/DellPhysicalDisk/DellSlot` · `LenovoSlot` | 전수 크롤에서 미요청(인벤토리성) | 슬롯 점유표 · PCI ID · 제조일 등 — 새 필드라 schema 결정 필요(rule 92 R5) |
       | Windows `Win32_BaseBoard` · ESXi `otherIdentifyingInfo(SerialNumberTag/EnclosureSerialNumberTag)` | 미읽음 | 보드 시리얼 — `hardware.serial` 과 다른 식별자(계약 결정) |
 - [ ] **[LOW / 결정] CSUS 를 OS 채널로 수집하면 `vendor` 가 `hp`(Redfish 는 `hpCsus`)** — 채널 간 vendor 표시 불일치. 어느 쪽으로 맞출지 사용자 결정.
-- [ ] **[LOW / 결정] CSUS mock baseline(`schema/baseline_v1/hpe_csus_3200_baseline.json`, 3파티션 합성)을 실측으로 교체(BASE-01)** — 실 봉투는 WSL ansible + 미러 서빙 + vault 비밀번호가 있어야 만든다(사용자 몫).
+- [x] **[DONE 2026-10-27 — FIX 5] CSUS mock baseline 실측 교체(BASE-01)** — `hpe_csus_3200_baseline.json` 을 2차 Mock csus3200_01 의 Tier 1 봉투(WSL ansible + HTTPS 미러)로 교체, registry `hpe_csus_3200_redfish`, 가드 테스트 실측 구조로 재작성(`tests/regression/test_csus_mock_consistency.py`).
 - [ ] **[LOW / 기록만] 채널 간 뜻 차이(변경 없음)** — OS `network.summary` 는 논리 NIC, Redfish 는 물리 포트/카드(계약 문서 기재). Windows `physical_disks[].model` PnP 접미사(" SCSI Disk Device") · ESXi 모델 vendor 접두 — 그룹 model 불일치. AMD L3 폴백 · DIMM type 다단어 절단 · Windows multipath 미접기.
-- [ ] **[LOW / 실장비 미검증] Superdome Flex** — `-NNN` 제거 · `processor_summary_logical_count: cores` · `firmware_inventory_scope: complex_only` 는 CSUS 와 같다고 본 사용자 지시(lab · 미러 없음). 실측 시 정정. A-11 다중 섀시 Power/Thermal 도 합성 시험만.
+- [ ] **[LOW / 실장비 미검증] Superdome Flex** — `-NNN` 제거 · `firmware_inventory_scope: complex_only` 는(`processor_summary_logical_count` 는 2026-10-27 FIX 1 로 삭제) CSUS 와 같다고 본 사용자 지시(lab · 미러 없음). 실측 시 정정. A-11 다중 섀시 Power/Thermal 도 합성 시험만.
 
 ## link_status up/down 둘뿐 · ESXi hbas 그대로 · Windows `system.version` 연도 접두 (2026-10-19) — 남은 항목
 
@@ -119,7 +176,7 @@
       `storage.logical_volumes[]` 가 OS/ESXi 에서도 채워짐 · `hardware.uuid` 가 Cisco Redfish 에서 OS 와 같은 표기로 바뀜.
 - [ ] **[LOW / lab] ESXi PERC(bcm_mpi3) 뒤 LUN 실측** — .91/.92/.93 은 PERC 에 VD 가 없어 `logical_volumes` 가 `[]` 다. VD 가 있는 PERC 호스트(또는 r760 ESXi 재구성)에서 RAID 뒤 LUN → logical_volumes · media_type null 을 확인한다. MegaRAID(lsi_mr3) 경로는 esxi01~03 에서 확인됐다(2026-10-18 #661).
 - [ ] **[LOW] `esxi_baseline.json` hbas 재캡처** — 현행 코드와 3필드 불일치(수작업 값 · 대문자 WWPN). 사이트/lab 실측으로 교체(rule 13 R4).
-- [ ] **[LOW] 사전 항목 부재** — 코드가 내는 `cpu.sockets` · `cpu.logical_threads` · `cpu.model` 이 `schema/field_dictionary.yml` 에 없다(이번 조사에서 확인). 사전 추가는 schema 작업으로 따로(rule 92 R5).
+- [x] **[LOW] 사전 항목 부재** — 2026-10-27 WP8 등재: `cpu.sockets` · `cpu.model`(3채널) · `cpu.logical_threads`(channel [os, esxi] — Redfish 는 FIX 1 로 내지 않음) + power/thermal 하위 34 · composition 5 · diagnosis.details 10 · correlation.bmc_ip.
 - [x] **[대체 2026-10-19] `storage.infiniband[].link_status`** — 위 2026-10-19 절의 LOW 항목으로 대체(hbas 는 up/down 둘뿐이 됐고 IB 는 미결).
 
 
@@ -913,7 +970,7 @@
 
 ### 잔여 — gated (보호 경로 / Ansible(Linux) / lab 실측 / envelope 계약 — 자율 미수정)
 
-- [ ] **[HIGH] CSUS baseline 실측 교체 (BASE-01)**: `schema/baseline_v1/hpe_csus_3200_baseline.json` 이 구 MOCK
+- [x] **[DONE 2026-10-27 — FIX 5, 위 BASE-01 참조] CSUS baseline 실측 교체 (BASE-01)**: (종전 기술) `schema/baseline_v1/hpe_csus_3200_baseline.json` 이 구 MOCK
   (가상 3-partition/4-manager, 날조 PSU/WWPN/토폴로지) — 실 4노드와 전면 불일치. 라이브러리는 정상(faithful),
   회귀 기준선 무력. **Ansible control node(Linux) 필요 — 본 Windows 환경 미지원**(DL380 과 동일 제약). 실 site.yml
   실행으로 정규화 envelope 생성 후 교체 (rule 13 R4 — AI 임의 편집 금지). 교체 시 `test_csus_mock_consistency.py` MOCK 가드 동반 갱신.

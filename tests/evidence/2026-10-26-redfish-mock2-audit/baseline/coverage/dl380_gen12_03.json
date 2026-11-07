@@ -1,0 +1,1318 @@
+{
+  "allowlist": "C:\\github\\ClovirONE\\clovirone-server-gathering\\tests\\reference\\redfish\\coverage_allowlist.yml",
+  "classification": {
+    "allowed": {
+      "AccountService": 1,
+      "Assembly": 13,
+      "BatteryCollection": 1,
+      "BootOption": 12,
+      "BootOptionCollection": 1,
+      "Certificate": 22,
+      "CertificateCollection": 28,
+      "CertificateLocations": 1,
+      "CertificateService": 1,
+      "ComponentIntegrity": 1,
+      "ComponentIntegrityCollection": 1,
+      "EnvironmentMetrics": 1,
+      "EventDestinationCollection": 1,
+      "EventService": 1,
+      "HostInterface": 1,
+      "HostInterfaceCollection": 1,
+      "HpeBaseConfigs": 6,
+      "HpeBiosMapping": 1,
+      "HpeBundleUpdateReport": 2,
+      "HpeBundleUpdateReportCollection": 1,
+      "HpeCertAuth": 1,
+      "HpeCertificateCollection": 2,
+      "HpeComponent": 7,
+      "HpeComponentCollection": 1,
+      "HpeComponentInstallSet": 1,
+      "HpeComponentInstallSetCollection": 1,
+      "HpeComponentUpdateEntryCollection": 2,
+      "HpeComponentUpdateTaskQueueCollection": 1,
+      "HpeDirectoryTest": 1,
+      "HpeESKM": 1,
+      "HpeFallbackSensorCollection": 1,
+      "HpeHttpsCert": 1,
+      "HpeInvalidImageCollection": 1,
+      "HpeMaintenanceWindowCollection": 1,
+      "HpeNvmeOfSoftwareInitiator": 2,
+      "HpePowerMeter": 3,
+      "HpeRemoteSupport": 1,
+      "HpeSNMPAlertDestinationCollection": 1,
+      "HpeSNMPUsersCollection": 1,
+      "HpeSecureEraseReportCollection": 1,
+      "HpeSecureEraseReportService": 1,
+      "HpeSecurityService": 1,
+      "HpeServerBootSettings": 2,
+      "HpeServerConfigLock": 2,
+      "HpeServerDevice": 10,
+      "HpeServerDeviceCollection": 1,
+      "HpeServerPCISlot": 7,
+      "HpeServerPCISlotCollection": 1,
+      "HpeServerPciDevice": 4,
+      "HpeServerPciDeviceCollection": 1,
+      "HpeTlsConfig": 2,
+      "HpeUSBDevicesCollection": 1,
+      "HpeUSBPort": 10,
+      "HpeUSBPortsCollection": 1,
+      "HpeWorkloadPerformanceAdvisorCollection": 1,
+      "HpeiLOAccountCertificateMap": 3,
+      "HpeiLOAccountCertificateMapCollection": 1,
+      "HpeiLOActiveHealthSystem": 1,
+      "HpeiLOBackupFileCollection": 1,
+      "HpeiLOBackupRestoreService": 1,
+      "HpeiLODateTime": 1,
+      "HpeiLOGUIService": 1,
+      "HpeiLOLicense": 1,
+      "HpeiLOLicenseCollection": 1,
+      "HpeiLOResourceDirectory": 1,
+      "HpeiLOSSO": 1,
+      "HpeiLOSecurityDashboard": 1,
+      "HpeiLOSecurityParam": 10,
+      "HpeiLOSecurityParamCollection": 1,
+      "HpeiLOSnmpService": 1,
+      "HpeiSCSISoftwareInitiator": 2,
+      "JsonSchemaFile": 260,
+      "JsonSchemaFileCollection": 2,
+      "KeyCollection": 3,
+      "LogEntry": 478,
+      "LogEntryCollection": 5,
+      "LogService": 5,
+      "LogServiceCollection": 2,
+      "ManagerAccount": 3,
+      "ManagerAccountCollection": 2,
+      "ManagerDiagnosticData": 1,
+      "MemoryDomainCollection": 1,
+      "MessageRegistryFile": 14,
+      "MessageRegistryFileCollection": 1,
+      "PowerSupplyMetrics": 2,
+      "PumpCollection": 1,
+      "Role": 5,
+      "RoleCollection": 1,
+      "SecureBoot": 1,
+      "SecureBootDatabase": 12,
+      "SecureBootDatabaseCollection": 1,
+      "SecurityPolicy": 1,
+      "Sensor": 44,
+      "SensorCollection": 1,
+      "SerialInterface": 1,
+      "SerialInterfaceCollection": 1,
+      "SessionCollection": 1,
+      "SessionService": 1,
+      "SignatureCollection": 8,
+      "TaskCollection": 1,
+      "TaskService": 1,
+      "ThermalMetrics": 1,
+      "UpdateService": 1,
+      "VirtualMedia": 2,
+      "VirtualMediaCollection": 1
+    },
+    "allowlist_unused": [
+      "ActionInfo",
+      "CapacitySource",
+      "Chassis",
+      "Control",
+      "ControlCollection",
+      "DellAssembly",
+      "DellAttributes",
+      "DellBIOSService",
+      "DellBootSources",
+      "DellCertificate",
+      "DellCertificateCollection",
+      "DellCertificateStoreCollection",
+      "DellChassis",
+      "DellChassisCollection",
+      "DellController",
+      "DellControllerBattery",
+      "DellD4D",
+      "DellEnclosure",
+      "DellFirmwareImageHash",
+      "DellFirmwareImageHashCollection",
+      "DellGPUSensor",
+      "DellGPUSensorCollection",
+      "DellJob",
+      "DellJobCollection",
+      "DellJobService",
+      "DellLCService",
+      "DellLicensableDevice",
+      "DellLicensableDeviceCollection",
+      "DellLicense",
+      "DellLicenseCollection",
+      "DellLicenseManagementService",
+      "DellMemory",
+      "DellMetricService",
+      "DellNIC",
+      "DellNICCapabilities",
+      "DellNICPortMetrics",
+      "DellNetworkTransceiver",
+      "DellNumericSensor",
+      "DellNumericSensorCollection",
+      "DellOSDeploymentService",
+      "DellOpaqueManagementDataCollection",
+      "DellPSNumericSensor",
+      "DellPSNumericSensorCollection",
+      "DellPersistentStorageService",
+      "DellPhysicalDisk",
+      "DellPowerSupply",
+      "DellPowerSupplyView",
+      "DellPresenceAndStatusSensorCollection",
+      "DellProcessor",
+      "DellRaidService",
+      "DellRollupStatus",
+      "DellRollupStatusCollection",
+      "DellSensor",
+      "DellSensorCollection",
+      "DellSlot",
+      "DellSlotCollection",
+      "DellSoftwareInstallationService",
+      "DellSoftwareInventory",
+      "DellSwitchConnection",
+      "DellSwitchConnectionCollection",
+      "DellSwitchConnectionService",
+      "DellSystem",
+      "DellSystemManagementService",
+      "DellSystemQuickSyncCollection",
+      "DellTimeService",
+      "DellUSBDeviceCollection",
+      "DellVideo",
+      "DellVideoCollection",
+      "DellVideoNetworkCollection",
+      "DellVirtualDisk",
+      "DelliDRACCard",
+      "DelliDRACCardService",
+      "DellvFlashCollection",
+      "DriveCollection",
+      "EventDestination",
+      "Fabric",
+      "HpeAutomaticCertEnrollment",
+      "HpeH3DebugLogCollection",
+      "HpeKmsConfig",
+      "HpeWorkloadPerformanceAdvisor",
+      "HpeiLOEmbeddedMedia",
+      "HpeiLOFederatedGroupCapping",
+      "HpeiLOFederationGroup",
+      "HpeiLOFederationGroupCollection",
+      "HpeiLOFederationPeers",
+      "HpeiLOFederationPeersCollection",
+      "Job",
+      "JobCollection",
+      "JobService",
+      "LenovoAlertRecipientCollection",
+      "LenovoBootManager",
+      "LenovoBootManagerCollection",
+      "LenovoConfigurationService",
+      "LenovoDNS",
+      "LenovoDateTimeService",
+      "LenovoFirmwareService",
+      "LenovoFirmwareServiceCollection",
+      "LenovoFoDKey",
+      "LenovoFoDKeyCollection",
+      "LenovoFoDService",
+      "LenovoHistoryMemRecovery",
+      "LenovoHistoryMetricValue",
+      "LenovoHistoryMetricValueContainer",
+      "LenovoHistoryMetricValueContainerCollection",
+      "LenovoLDAPClient",
+      "LenovoLED",
+      "LenovoLEDCollection",
+      "LenovoPortForwarding",
+      "LenovoPortForwardingMap",
+      "LenovoPortForwardingMapCollection",
+      "LenovoRemoteControlService",
+      "LenovoRemoteControlSession",
+      "LenovoRemoteControlSessionCollection",
+      "LenovoRemoteMapMediaCollection",
+      "LenovoRemoteMapService",
+      "LenovoRemoteMountMediaCollection",
+      "LenovoSMTPClient",
+      "LenovoSNMPProtocol",
+      "LenovoScheduledPowerAction",
+      "LenovoScheduledPowerActionCollection",
+      "LenovoSecureKeyLifecycle",
+      "LenovoSecurityService",
+      "LenovoServerProfileService",
+      "LenovoServiceData",
+      "LenovoSlot",
+      "LenovoSlotCollection",
+      "LenovoWatchdog",
+      "LenovoWatchdogCollection",
+      "License",
+      "LicenseCollection",
+      "LicenseService",
+      "MemoryMetrics",
+      "MetricDefinition",
+      "MetricDefinitionCollection",
+      "MetricReport",
+      "MetricReportCollection",
+      "MetricReportDefinition",
+      "MetricReportDefinitionCollection",
+      "NetworkAdapterMetrics",
+      "NetworkDeviceFunctionMetrics",
+      "PortMetrics",
+      "PrivilegeRegistry",
+      "ProcessorMetrics",
+      "RegisteredClient",
+      "RegisteredClientCollection",
+      "SUT",
+      "SUTSystemInventory",
+      "SUTTaskSettings",
+      "ServiceConditions",
+      "Session",
+      "Signature",
+      "SimpleStorage",
+      "SimpleStorageCollection",
+      "StorageController",
+      "StorageControllerCollection",
+      "StorageControllerMetrics",
+      "StoragePool",
+      "StoragePoolCollection",
+      "Switch",
+      "SwitchCollection",
+      "Task",
+      "TelemetryService",
+      "Triggers",
+      "TriggersCollection",
+      "TrustedComponent",
+      "TrustedComponentCollection"
+    ],
+    "conditional": {
+      "FabricCollection": [
+        "/redfish/v1/Fabrics"
+      ],
+      "Fan": [
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/0",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/1",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/2",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/3",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/4",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/5",
+        "/redfish/v1/Chassis/1/Thermalsubsystem/Fans/0",
+        "/redfish/v1/Chassis/1/Thermalsubsystem/Fans/1",
+        "/redfish/v1/Chassis/1/Thermalsubsystem/Fans/2",
+        "/redfish/v1/Chassis/1/Thermalsubsystem/Fans/3",
+        "/redfish/v1/Chassis/1/Thermalsubsystem/Fans/4",
+        "/redfish/v1/Chassis/1/Thermalsubsystem/Fans/5"
+      ],
+      "FanCollection": [
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans"
+      ],
+      "NetworkInterface": [
+        "/redfish/v1/Systems/1/NetworkInterfaces/DA000004",
+        "/redfish/v1/Systems/1/NetworkInterfaces/DA000007"
+      ],
+      "NetworkInterfaceCollection": [
+        "/redfish/v1/Systems/1/NetworkInterfaces"
+      ],
+      "PCIeDevice": [
+        "/redfish/v1/Chassis/1/PCIeDevices/269",
+        "/redfish/v1/Chassis/1/PCIeDevices/271",
+        "/redfish/v1/Chassis/1/PCIeDevices/274",
+        "/redfish/v1/Chassis/1/PCIeDevices/276"
+      ],
+      "PCIeDeviceCollection": [
+        "/redfish/v1/Chassis/1/PCIeDevices"
+      ],
+      "PCIeFunction": [
+        "/redfish/v1/Chassis/1/PCIeDevices/269/PCIeFunctions/1",
+        "/redfish/v1/Chassis/1/PCIeDevices/271/PCIeFunctions/1",
+        "/redfish/v1/Chassis/1/PCIeDevices/274/PCIeFunctions/1",
+        "/redfish/v1/Chassis/1/PCIeDevices/276/PCIeFunctions/1",
+        "/redfish/v1/Chassis/1/PCIeDevices/276/PCIeFunctions/2"
+      ],
+      "PCIeFunctionCollection": [
+        "/redfish/v1/Chassis/1/PCIeDevices/269/PCIeFunctions",
+        "/redfish/v1/Chassis/1/PCIeDevices/271/PCIeFunctions",
+        "/redfish/v1/Chassis/1/PCIeDevices/274/PCIeFunctions",
+        "/redfish/v1/Chassis/1/PCIeDevices/276/PCIeFunctions"
+      ],
+      "PCIeSlots": [
+        "/redfish/v1/Chassis/1/PCIeSlots"
+      ],
+      "Port": [
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Ports/1/Settings",
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Ports/2/Settings",
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Ports/1/Settings",
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Ports/2/Settings",
+        "/redfish/v1/Managers/1/DedicatedNetworkPorts/1"
+      ],
+      "PortCollection": [
+        "/redfish/v1/Managers/1/DedicatedNetworkPorts"
+      ],
+      "PowerSubsystem": [
+        "/redfish/v1/Chassis/1/PowerSubsystem"
+      ],
+      "PowerSupply": [
+        "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/0",
+        "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/1"
+      ],
+      "PowerSupplyCollection": [
+        "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies"
+      ],
+      "ThermalSubsystem": [
+        "/redfish/v1/Chassis/1/ThermalSubsystem"
+      ]
+    },
+    "pattern": {
+      "(?i)/(Settings|Pending)/?$": [
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Settings",
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Settings",
+        "/redfish/v1/systems/1/bios/settings"
+      ],
+      "/NetworkAdapters/[^/]+/NetworkDeviceFunctions/?$": [
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/NetworkDeviceFunctions",
+        "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/NetworkDeviceFunctions"
+      ],
+      "/UpdateService/SoftwareInventory(/|$)": [
+        "/redfish/v1/UpdateService/SoftwareInventory"
+      ]
+    },
+    "unlisted": {
+      "(none)": [
+        "/redfish/v1/Managers/1/SecurityService/PlatformCertService/InventoryManifest",
+        "/redfish/v1/odata"
+      ],
+      "CertificateEnrollmentCollection": [
+        "/redfish/v1/CertificateService/CertificateEnrollments"
+      ],
+      "HpeInvalidImage": [
+        "/redfish/v1/UpdateService/InvalidImageRepository/440860f0"
+      ],
+      "HpePlatformCertService": [
+        "/redfish/v1/Managers/1/SecurityService/PlatformCertService"
+      ],
+      "HpeiLORunningSoftwareInventoryCollection": [
+        "/redfish/v1/UpdateService/RunningSoftwareInventory"
+      ]
+    }
+  },
+  "collected": [
+    "bmc",
+    "firmware",
+    "memory",
+    "network",
+    "network_adapters",
+    "power",
+    "processors",
+    "storage",
+    "system",
+    "thermal"
+  ],
+  "error_count": 0,
+  "exposed_by_type": {
+    "(none)": 2,
+    "AccountService": 1,
+    "Assembly": 13,
+    "BatteryCollection": 1,
+    "Bios": 2,
+    "BootOption": 12,
+    "BootOptionCollection": 1,
+    "Certificate": 22,
+    "CertificateCollection": 28,
+    "CertificateEnrollmentCollection": 1,
+    "CertificateLocations": 1,
+    "CertificateService": 1,
+    "Chassis": 1,
+    "ChassisCollection": 1,
+    "ComponentIntegrity": 1,
+    "ComponentIntegrityCollection": 1,
+    "ComputerSystem": 1,
+    "ComputerSystemCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EthernetInterface": 7,
+    "EthernetInterfaceCollection": 2,
+    "EventDestinationCollection": 1,
+    "EventService": 1,
+    "FabricCollection": 1,
+    "Fan": 12,
+    "FanCollection": 1,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "HpeBaseConfigs": 6,
+    "HpeBiosMapping": 1,
+    "HpeBundleUpdateReport": 2,
+    "HpeBundleUpdateReportCollection": 1,
+    "HpeCertAuth": 1,
+    "HpeCertificateCollection": 2,
+    "HpeComponent": 7,
+    "HpeComponentCollection": 1,
+    "HpeComponentInstallSet": 1,
+    "HpeComponentInstallSetCollection": 1,
+    "HpeComponentUpdateEntryCollection": 2,
+    "HpeComponentUpdateTaskQueueCollection": 1,
+    "HpeDirectoryTest": 1,
+    "HpeESKM": 1,
+    "HpeFallbackSensorCollection": 1,
+    "HpeHttpsCert": 1,
+    "HpeInvalidImage": 1,
+    "HpeInvalidImageCollection": 1,
+    "HpeMaintenanceWindowCollection": 1,
+    "HpeNvmeOfSoftwareInitiator": 2,
+    "HpePlatformCertService": 1,
+    "HpePowerMeter": 3,
+    "HpeRemoteSupport": 1,
+    "HpeSNMPAlertDestinationCollection": 1,
+    "HpeSNMPUsersCollection": 1,
+    "HpeSecureEraseReportCollection": 1,
+    "HpeSecureEraseReportService": 1,
+    "HpeSecurityService": 1,
+    "HpeServerBootSettings": 2,
+    "HpeServerConfigLock": 2,
+    "HpeServerDevice": 10,
+    "HpeServerDeviceCollection": 1,
+    "HpeServerPCISlot": 7,
+    "HpeServerPCISlotCollection": 1,
+    "HpeServerPciDevice": 4,
+    "HpeServerPciDeviceCollection": 1,
+    "HpeTlsConfig": 2,
+    "HpeUSBDevicesCollection": 1,
+    "HpeUSBPort": 10,
+    "HpeUSBPortsCollection": 1,
+    "HpeWorkloadPerformanceAdvisorCollection": 1,
+    "HpeiLOAccountCertificateMap": 3,
+    "HpeiLOAccountCertificateMapCollection": 1,
+    "HpeiLOActiveHealthSystem": 1,
+    "HpeiLOBackupFileCollection": 1,
+    "HpeiLOBackupRestoreService": 1,
+    "HpeiLODateTime": 1,
+    "HpeiLOGUIService": 1,
+    "HpeiLOLicense": 1,
+    "HpeiLOLicenseCollection": 1,
+    "HpeiLOResourceDirectory": 1,
+    "HpeiLORunningSoftwareInventoryCollection": 1,
+    "HpeiLOSSO": 1,
+    "HpeiLOSecurityDashboard": 1,
+    "HpeiLOSecurityParam": 10,
+    "HpeiLOSecurityParamCollection": 1,
+    "HpeiLOSnmpService": 1,
+    "HpeiSCSISoftwareInitiator": 2,
+    "JsonSchemaFile": 260,
+    "JsonSchemaFileCollection": 2,
+    "KeyCollection": 3,
+    "LogEntry": 478,
+    "LogEntryCollection": 5,
+    "LogService": 5,
+    "LogServiceCollection": 2,
+    "Manager": 1,
+    "ManagerAccount": 3,
+    "ManagerAccountCollection": 2,
+    "ManagerCollection": 1,
+    "ManagerDiagnosticData": 1,
+    "ManagerNetworkProtocol": 1,
+    "Memory": 32,
+    "MemoryCollection": 1,
+    "MemoryDomainCollection": 1,
+    "MessageRegistryFile": 14,
+    "MessageRegistryFileCollection": 1,
+    "NetworkAdapter": 4,
+    "NetworkAdapterCollection": 1,
+    "NetworkDeviceFunctionCollection": 2,
+    "NetworkInterface": 2,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 4,
+    "PCIeDeviceCollection": 1,
+    "PCIeFunction": 5,
+    "PCIeFunctionCollection": 4,
+    "PCIeSlots": 1,
+    "Port": 9,
+    "PortCollection": 3,
+    "Power": 1,
+    "PowerSubsystem": 1,
+    "PowerSupply": 2,
+    "PowerSupplyCollection": 1,
+    "PowerSupplyMetrics": 2,
+    "Processor": 2,
+    "ProcessorCollection": 1,
+    "PumpCollection": 1,
+    "Role": 5,
+    "RoleCollection": 1,
+    "SecureBoot": 1,
+    "SecureBootDatabase": 12,
+    "SecureBootDatabaseCollection": 1,
+    "SecurityPolicy": 1,
+    "Sensor": 44,
+    "SensorCollection": 1,
+    "SerialInterface": 1,
+    "SerialInterfaceCollection": 1,
+    "ServiceRoot": 1,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "SignatureCollection": 8,
+    "SoftwareInventory": 13,
+    "SoftwareInventoryCollection": 2,
+    "StorageCollection": 1,
+    "TaskCollection": 1,
+    "TaskService": 1,
+    "Thermal": 1,
+    "ThermalMetrics": 1,
+    "ThermalSubsystem": 1,
+    "UpdateService": 1,
+    "VirtualMedia": 2,
+    "VirtualMediaCollection": 1
+  },
+  "exposed_readable": 1201,
+  "exposed_unreadable": 372,
+  "failed_sections": [],
+  "format": "mirror",
+  "manager_layout": null,
+  "noauth_requests": {
+    "": 1
+  },
+  "requested_distinct": 80,
+  "requested_hit": 80,
+  "requested_missing": [],
+  "requested_total": 80,
+  "source": "C:\\github\\ClovirONE\\mock2-audit-20261026\\extract\\dl380_gen12_03",
+  "source_stats": {
+    "dupes": 0,
+    "files": 1203,
+    "fragments_folded": 0,
+    "keyed": 1200
+  },
+  "status": "success",
+  "unreadable_by_status": {
+    "400": 5,
+    "404": 90,
+    "405": 1,
+    "406": 276
+  },
+  "unsupported_sections": [],
+  "untouched": 1121,
+  "untouched_by_type": {
+    "(none)": 2,
+    "AccountService": 1,
+    "Assembly": 13,
+    "BatteryCollection": 1,
+    "Bios": 1,
+    "BootOption": 12,
+    "BootOptionCollection": 1,
+    "Certificate": 22,
+    "CertificateCollection": 28,
+    "CertificateEnrollmentCollection": 1,
+    "CertificateLocations": 1,
+    "CertificateService": 1,
+    "ComponentIntegrity": 1,
+    "ComponentIntegrityCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EventDestinationCollection": 1,
+    "EventService": 1,
+    "FabricCollection": 1,
+    "Fan": 12,
+    "FanCollection": 1,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "HpeBaseConfigs": 6,
+    "HpeBiosMapping": 1,
+    "HpeBundleUpdateReport": 2,
+    "HpeBundleUpdateReportCollection": 1,
+    "HpeCertAuth": 1,
+    "HpeCertificateCollection": 2,
+    "HpeComponent": 7,
+    "HpeComponentCollection": 1,
+    "HpeComponentInstallSet": 1,
+    "HpeComponentInstallSetCollection": 1,
+    "HpeComponentUpdateEntryCollection": 2,
+    "HpeComponentUpdateTaskQueueCollection": 1,
+    "HpeDirectoryTest": 1,
+    "HpeESKM": 1,
+    "HpeFallbackSensorCollection": 1,
+    "HpeHttpsCert": 1,
+    "HpeInvalidImage": 1,
+    "HpeInvalidImageCollection": 1,
+    "HpeMaintenanceWindowCollection": 1,
+    "HpeNvmeOfSoftwareInitiator": 2,
+    "HpePlatformCertService": 1,
+    "HpePowerMeter": 3,
+    "HpeRemoteSupport": 1,
+    "HpeSNMPAlertDestinationCollection": 1,
+    "HpeSNMPUsersCollection": 1,
+    "HpeSecureEraseReportCollection": 1,
+    "HpeSecureEraseReportService": 1,
+    "HpeSecurityService": 1,
+    "HpeServerBootSettings": 2,
+    "HpeServerConfigLock": 2,
+    "HpeServerDevice": 10,
+    "HpeServerDeviceCollection": 1,
+    "HpeServerPCISlot": 7,
+    "HpeServerPCISlotCollection": 1,
+    "HpeServerPciDevice": 4,
+    "HpeServerPciDeviceCollection": 1,
+    "HpeTlsConfig": 2,
+    "HpeUSBDevicesCollection": 1,
+    "HpeUSBPort": 10,
+    "HpeUSBPortsCollection": 1,
+    "HpeWorkloadPerformanceAdvisorCollection": 1,
+    "HpeiLOAccountCertificateMap": 3,
+    "HpeiLOAccountCertificateMapCollection": 1,
+    "HpeiLOActiveHealthSystem": 1,
+    "HpeiLOBackupFileCollection": 1,
+    "HpeiLOBackupRestoreService": 1,
+    "HpeiLODateTime": 1,
+    "HpeiLOGUIService": 1,
+    "HpeiLOLicense": 1,
+    "HpeiLOLicenseCollection": 1,
+    "HpeiLOResourceDirectory": 1,
+    "HpeiLORunningSoftwareInventoryCollection": 1,
+    "HpeiLOSSO": 1,
+    "HpeiLOSecurityDashboard": 1,
+    "HpeiLOSecurityParam": 10,
+    "HpeiLOSecurityParamCollection": 1,
+    "HpeiLOSnmpService": 1,
+    "HpeiSCSISoftwareInitiator": 2,
+    "JsonSchemaFile": 260,
+    "JsonSchemaFileCollection": 2,
+    "KeyCollection": 3,
+    "LogEntry": 478,
+    "LogEntryCollection": 5,
+    "LogService": 5,
+    "LogServiceCollection": 2,
+    "ManagerAccount": 3,
+    "ManagerAccountCollection": 2,
+    "ManagerDiagnosticData": 1,
+    "MemoryDomainCollection": 1,
+    "MessageRegistryFile": 14,
+    "MessageRegistryFileCollection": 1,
+    "NetworkAdapter": 2,
+    "NetworkDeviceFunctionCollection": 2,
+    "NetworkInterface": 2,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 4,
+    "PCIeDeviceCollection": 1,
+    "PCIeFunction": 5,
+    "PCIeFunctionCollection": 4,
+    "PCIeSlots": 1,
+    "Port": 5,
+    "PortCollection": 1,
+    "PowerSubsystem": 1,
+    "PowerSupply": 2,
+    "PowerSupplyCollection": 1,
+    "PowerSupplyMetrics": 2,
+    "PumpCollection": 1,
+    "Role": 5,
+    "RoleCollection": 1,
+    "SecureBoot": 1,
+    "SecureBootDatabase": 12,
+    "SecureBootDatabaseCollection": 1,
+    "SecurityPolicy": 1,
+    "Sensor": 44,
+    "SensorCollection": 1,
+    "SerialInterface": 1,
+    "SerialInterfaceCollection": 1,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "SignatureCollection": 8,
+    "SoftwareInventoryCollection": 1,
+    "TaskCollection": 1,
+    "TaskService": 1,
+    "ThermalMetrics": 1,
+    "ThermalSubsystem": 1,
+    "UpdateService": 1,
+    "VirtualMedia": 2,
+    "VirtualMediaCollection": 1
+  },
+  "untouched_examples": {
+    "(none)": [
+      "/redfish/v1/Managers/1/SecurityService/PlatformCertService/InventoryManifest",
+      "/redfish/v1/odata"
+    ],
+    "AccountService": [
+      "/redfish/v1/AccountService"
+    ],
+    "Assembly": [
+      "/redfish/v1/Chassis/1/Assembly",
+      "/redfish/v1/Chassis/1/PCIeDevices/269/Assembly",
+      "/redfish/v1/Chassis/1/PCIeDevices/271/Assembly"
+    ],
+    "BatteryCollection": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/Batteries"
+    ],
+    "Bios": [
+      "/redfish/v1/systems/1/bios/settings"
+    ],
+    "BootOption": [
+      "/redfish/v1/Systems/1/BootOptions/1",
+      "/redfish/v1/Systems/1/BootOptions/10",
+      "/redfish/v1/Systems/1/BootOptions/11"
+    ],
+    "BootOptionCollection": [
+      "/redfish/v1/Systems/1/BootOptions"
+    ],
+    "Certificate": [
+      "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates/1",
+      "/redfish/v1/Managers/1/SecurityPolicy/SPDM/TrustedCertificates/0",
+      "/redfish/v1/Managers/1/SecurityPolicy/SPDM/TrustedCertificates/1"
+    ],
+    "CertificateCollection": [
+      "/redfish/v1/AccountService/ExternalAccountProviders/LDAP/Certificates",
+      "/redfish/v1/CertificateService/EnrollmentCACertificates",
+      "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates"
+    ],
+    "CertificateEnrollmentCollection": [
+      "/redfish/v1/CertificateService/CertificateEnrollments"
+    ],
+    "CertificateLocations": [
+      "/redfish/v1/CertificateService/CertificateLocations"
+    ],
+    "CertificateService": [
+      "/redfish/v1/CertificateService"
+    ],
+    "ComponentIntegrity": [
+      "/redfish/v1/ComponentIntegrity/TPM-1"
+    ],
+    "ComponentIntegrityCollection": [
+      "/redfish/v1/ComponentIntegrity"
+    ],
+    "EnvironmentMetrics": [
+      "/redfish/v1/Chassis/1/EnvironmentMetrics"
+    ],
+    "EventDestinationCollection": [
+      "/redfish/v1/EventService/Subscriptions"
+    ],
+    "EventService": [
+      "/redfish/v1/EventService"
+    ],
+    "FabricCollection": [
+      "/redfish/v1/Fabrics"
+    ],
+    "Fan": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/0",
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/1",
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/2"
+    ],
+    "FanCollection": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans"
+    ],
+    "HostInterface": [
+      "/redfish/v1/Managers/1/HostInterfaces/1"
+    ],
+    "HostInterfaceCollection": [
+      "/redfish/v1/Managers/1/HostInterfaces"
+    ],
+    "HpeBaseConfigs": [
+      "/redfish/v1/systems/1/bios/oem/hpe/baseconfigs",
+      "/redfish/v1/systems/1/bios/oem/hpe/boot/baseconfigs",
+      "/redfish/v1/systems/1/bios/oem/hpe/iscsi/baseconfigs"
+    ],
+    "HpeBiosMapping": [
+      "/redfish/v1/systems/1/bios/oem/hpe/mappings"
+    ],
+    "HpeBundleUpdateReport": [
+      "/redfish/v1/UpdateService/BundleUpdateReport/Completed",
+      "/redfish/v1/UpdateService/BundleUpdateReport/Current"
+    ],
+    "HpeBundleUpdateReportCollection": [
+      "/redfish/v1/UpdateService/BundleUpdateReport"
+    ],
+    "HpeCertAuth": [
+      "/redfish/v1/Managers/1/SecurityService/CertificateAuthentication"
+    ],
+    "HpeCertificateCollection": [
+      "/redfish/v1/EventService/CACertificates",
+      "/redfish/v1/Managers/1/SecurityService/CertificateAuthentication/CACertificates"
+    ],
+    "HpeComponent": [
+      "/redfish/v1/UpdateService/ComponentRepository/610ab395",
+      "/redfish/v1/UpdateService/ComponentRepository/623e4798",
+      "/redfish/v1/UpdateService/ComponentRepository/7222fe17"
+    ],
+    "HpeComponentCollection": [
+      "/redfish/v1/UpdateService/ComponentRepository"
+    ],
+    "HpeComponentInstallSet": [
+      "/redfish/v1/UpdateService/InstallSets/a74b22b6"
+    ],
+    "HpeComponentInstallSetCollection": [
+      "/redfish/v1/UpdateService/InstallSets"
+    ],
+    "HpeComponentUpdateEntryCollection": [
+      "/redfish/v1/UpdateService/BundleUpdateReport/Completed/Entries",
+      "/redfish/v1/UpdateService/BundleUpdateReport/Current/Entries"
+    ],
+    "HpeComponentUpdateTaskQueueCollection": [
+      "/redfish/v1/UpdateService/UpdateTaskQueue"
+    ],
+    "HpeDirectoryTest": [
+      "/redfish/v1/AccountService/DirectoryTest"
+    ],
+    "HpeESKM": [
+      "/redfish/v1/Managers/1/SecurityService/ESKM"
+    ],
+    "HpeFallbackSensorCollection": [
+      "/redfish/v1/Chassis/1/FallbackSensors"
+    ],
+    "HpeHttpsCert": [
+      "/redfish/v1/Managers/1/SecurityService/HttpsCert"
+    ],
+    "HpeInvalidImage": [
+      "/redfish/v1/UpdateService/InvalidImageRepository/440860f0"
+    ],
+    "HpeInvalidImageCollection": [
+      "/redfish/v1/UpdateService/InvalidImageRepository"
+    ],
+    "HpeMaintenanceWindowCollection": [
+      "/redfish/v1/UpdateService/MaintenanceWindows"
+    ],
+    "HpeNvmeOfSoftwareInitiator": [
+      "/redfish/v1/systems/1/bios/oem/hpe/nvmeof",
+      "/redfish/v1/systems/1/bios/oem/hpe/nvmeof/settings"
+    ],
+    "HpePlatformCertService": [
+      "/redfish/v1/Managers/1/SecurityService/PlatformCertService"
+    ],
+    "HpePowerMeter": [
+      "/redfish/v1/Chassis/1/Power/FastPowerMeter",
+      "/redfish/v1/Chassis/1/Power/PowerMeter",
+      "/redfish/v1/Chassis/1/Power/SlowPowerMeter"
+    ],
+    "HpeRemoteSupport": [
+      "/redfish/v1/Managers/1/RemoteSupportService"
+    ],
+    "HpeSNMPAlertDestinationCollection": [
+      "/redfish/v1/Managers/1/SnmpService/SNMPAlertDestinations"
+    ],
+    "HpeSNMPUsersCollection": [
+      "/redfish/v1/Managers/1/SnmpService/SNMPUsers"
+    ],
+    "HpeSecureEraseReportCollection": [
+      "/redfish/v1/Systems/1/SecureEraseReportService/SecureEraseReportEntries"
+    ],
+    "HpeSecureEraseReportService": [
+      "/redfish/v1/Systems/1/SecureEraseReportService"
+    ],
+    "HpeSecurityService": [
+      "/redfish/v1/Managers/1/SecurityService"
+    ],
+    "HpeServerBootSettings": [
+      "/redfish/v1/systems/1/bios/oem/hpe/boot",
+      "/redfish/v1/systems/1/bios/oem/hpe/boot/settings"
+    ],
+    "HpeServerConfigLock": [
+      "/redfish/v1/systems/1/bios/oem/hpe/serverconfiglock",
+      "/redfish/v1/systems/1/bios/oem/hpe/serverconfiglock/settings"
+    ],
+    "HpeServerDevice": [
+      "/redfish/v1/Chassis/1/Devices/1",
+      "/redfish/v1/Chassis/1/Devices/10",
+      "/redfish/v1/Chassis/1/Devices/2"
+    ],
+    "HpeServerDeviceCollection": [
+      "/redfish/v1/Chassis/1/Devices"
+    ],
+    "HpeServerPCISlot": [
+      "/redfish/v1/Systems/1/PCISlots/1",
+      "/redfish/v1/Systems/1/PCISlots/2",
+      "/redfish/v1/Systems/1/PCISlots/3"
+    ],
+    "HpeServerPCISlotCollection": [
+      "/redfish/v1/Systems/1/PCISlots"
+    ],
+    "HpeServerPciDevice": [
+      "/redfish/v1/Systems/1/PCIDevices/1",
+      "/redfish/v1/Systems/1/PCIDevices/2",
+      "/redfish/v1/Systems/1/PCIDevices/3"
+    ],
+    "HpeServerPciDeviceCollection": [
+      "/redfish/v1/Systems/1/PCIDevices"
+    ],
+    "HpeTlsConfig": [
+      "/redfish/v1/systems/1/bios/oem/hpe/tlsconfig",
+      "/redfish/v1/systems/1/bios/oem/hpe/tlsconfig/settings"
+    ],
+    "HpeUSBDevicesCollection": [
+      "/redfish/v1/Systems/1/USBDevices"
+    ],
+    "HpeUSBPort": [
+      "/redfish/v1/Systems/1/USBPorts/1",
+      "/redfish/v1/Systems/1/USBPorts/10",
+      "/redfish/v1/Systems/1/USBPorts/2"
+    ],
+    "HpeUSBPortsCollection": [
+      "/redfish/v1/Systems/1/USBPorts"
+    ],
+    "HpeWorkloadPerformanceAdvisorCollection": [
+      "/redfish/v1/Systems/1/WorkloadPerformanceAdvisor"
+    ],
+    "HpeiLOAccountCertificateMap": [
+      "/redfish/v1/AccountService/UserCertificateMapping/65536",
+      "/redfish/v1/AccountService/UserCertificateMapping/65546",
+      "/redfish/v1/AccountService/UserCertificateMapping/65547"
+    ],
+    "HpeiLOAccountCertificateMapCollection": [
+      "/redfish/v1/AccountService/UserCertificateMapping"
+    ],
+    "HpeiLOActiveHealthSystem": [
+      "/redfish/v1/Managers/1/ActiveHealthSystem"
+    ],
+    "HpeiLOBackupFileCollection": [
+      "/redfish/v1/Managers/1/BackupRestoreService/BackupFiles"
+    ],
+    "HpeiLOBackupRestoreService": [
+      "/redfish/v1/Managers/1/BackupRestoreService"
+    ],
+    "HpeiLODateTime": [
+      "/redfish/v1/Managers/1/DateTime"
+    ],
+    "HpeiLOGUIService": [
+      "/redfish/v1/Managers/1/GUIService"
+    ],
+    "HpeiLOLicense": [
+      "/redfish/v1/Managers/1/LicenseService/1"
+    ],
+    "HpeiLOLicenseCollection": [
+      "/redfish/v1/Managers/1/LicenseService"
+    ],
+    "HpeiLOResourceDirectory": [
+      "/redfish/v1/ResourceDirectory"
+    ],
+    "HpeiLORunningSoftwareInventoryCollection": [
+      "/redfish/v1/UpdateService/RunningSoftwareInventory"
+    ],
+    "HpeiLOSSO": [
+      "/redfish/v1/Managers/1/SecurityService/SSO"
+    ],
+    "HpeiLOSecurityDashboard": [
+      "/redfish/v1/Managers/1/SecurityService/SecurityDashboard"
+    ],
+    "HpeiLOSecurityParam": [
+      "/redfish/v1/Managers/1/SecurityService/SecurityDashboard/SecurityParams/0",
+      "/redfish/v1/Managers/1/SecurityService/SecurityDashboard/SecurityParams/1",
+      "/redfish/v1/Managers/1/SecurityService/SecurityDashboard/SecurityParams/2"
+    ],
+    "HpeiLOSecurityParamCollection": [
+      "/redfish/v1/Managers/1/SecurityService/SecurityDashboard/SecurityParams"
+    ],
+    "HpeiLOSnmpService": [
+      "/redfish/v1/Managers/1/SnmpService"
+    ],
+    "HpeiSCSISoftwareInitiator": [
+      "/redfish/v1/systems/1/bios/oem/hpe/iscsi",
+      "/redfish/v1/systems/1/bios/oem/hpe/iscsi/settings"
+    ],
+    "JsonSchemaFile": [
+      "/redfish/v1/JsonSchemas/AccountService",
+      "/redfish/v1/JsonSchemas/Assembly",
+      "/redfish/v1/JsonSchemas/AttributeRegistry.v1_2_1.AttributeRegistry"
+    ],
+    "JsonSchemaFileCollection": [
+      "/redfish/v1/JsonSchemas",
+      "/redfish/v1/Schemas"
+    ],
+    "KeyCollection": [
+      "/redfish/v1/AccountService/Accounts/65536/Keys",
+      "/redfish/v1/AccountService/Accounts/65546/Keys",
+      "/redfish/v1/AccountService/Accounts/65547/Keys"
+    ],
+    "LogEntry": [
+      "/redfish/v1/Managers/1/LogServices/IEL/Entries/1",
+      "/redfish/v1/Managers/1/LogServices/IEL/Entries/10",
+      "/redfish/v1/Managers/1/LogServices/IEL/Entries/100"
+    ],
+    "LogEntryCollection": [
+      "/redfish/v1/Managers/1/LogServices/IEL/Entries",
+      "/redfish/v1/Managers/1/RemoteSupportService/ServiceEventLogs",
+      "/redfish/v1/Systems/1/LogServices/Event/Entries"
+    ],
+    "LogService": [
+      "/redfish/v1/Managers/1/LogServices/IEL",
+      "/redfish/v1/Systems/1/LogServices/CrashDump",
+      "/redfish/v1/Systems/1/LogServices/Event"
+    ],
+    "LogServiceCollection": [
+      "/redfish/v1/Managers/1/LogServices",
+      "/redfish/v1/Systems/1/LogServices"
+    ],
+    "ManagerAccount": [
+      "/redfish/v1/AccountService/Accounts/65536",
+      "/redfish/v1/AccountService/Accounts/65546",
+      "/redfish/v1/AccountService/Accounts/65547"
+    ],
+    "ManagerAccountCollection": [
+      "/redfish/v1/AccountService/Accounts",
+      "/redfish/v1/AccountService/Oem/Hpe/AppAccounts"
+    ],
+    "ManagerDiagnosticData": [
+      "/redfish/v1/Managers/1/ManagerDiagnosticData"
+    ],
+    "MemoryDomainCollection": [
+      "/redfish/v1/Systems/1/MemoryDomains"
+    ],
+    "MessageRegistryFile": [
+      "/redfish/v1/Registries/Base",
+      "/redfish/v1/Registries/BiosAttributeRegistryU68.v1_1_82",
+      "/redfish/v1/Registries/HpeBiosMessageRegistry.v1_0_0"
+    ],
+    "MessageRegistryFileCollection": [
+      "/redfish/v1/Registries"
+    ],
+    "NetworkAdapter": [
+      "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Settings",
+      "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Settings"
+    ],
+    "NetworkDeviceFunctionCollection": [
+      "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/NetworkDeviceFunctions",
+      "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/NetworkDeviceFunctions"
+    ],
+    "NetworkInterface": [
+      "/redfish/v1/Systems/1/NetworkInterfaces/DA000004",
+      "/redfish/v1/Systems/1/NetworkInterfaces/DA000007"
+    ],
+    "NetworkInterfaceCollection": [
+      "/redfish/v1/Systems/1/NetworkInterfaces"
+    ],
+    "PCIeDevice": [
+      "/redfish/v1/Chassis/1/PCIeDevices/269",
+      "/redfish/v1/Chassis/1/PCIeDevices/271",
+      "/redfish/v1/Chassis/1/PCIeDevices/274"
+    ],
+    "PCIeDeviceCollection": [
+      "/redfish/v1/Chassis/1/PCIeDevices"
+    ],
+    "PCIeFunction": [
+      "/redfish/v1/Chassis/1/PCIeDevices/269/PCIeFunctions/1",
+      "/redfish/v1/Chassis/1/PCIeDevices/271/PCIeFunctions/1",
+      "/redfish/v1/Chassis/1/PCIeDevices/274/PCIeFunctions/1"
+    ],
+    "PCIeFunctionCollection": [
+      "/redfish/v1/Chassis/1/PCIeDevices/269/PCIeFunctions",
+      "/redfish/v1/Chassis/1/PCIeDevices/271/PCIeFunctions",
+      "/redfish/v1/Chassis/1/PCIeDevices/274/PCIeFunctions"
+    ],
+    "PCIeSlots": [
+      "/redfish/v1/Chassis/1/PCIeSlots"
+    ],
+    "Port": [
+      "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Ports/1/Settings",
+      "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Ports/2/Settings",
+      "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Ports/1/Settings"
+    ],
+    "PortCollection": [
+      "/redfish/v1/Managers/1/DedicatedNetworkPorts"
+    ],
+    "PowerSubsystem": [
+      "/redfish/v1/Chassis/1/PowerSubsystem"
+    ],
+    "PowerSupply": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/0",
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/1"
+    ],
+    "PowerSupplyCollection": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies"
+    ],
+    "PowerSupplyMetrics": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/0/Metrics",
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/1/Metrics"
+    ],
+    "PumpCollection": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Pumps"
+    ],
+    "Role": [
+      "/redfish/v1/AccountService/Roles/Administrator",
+      "/redfish/v1/AccountService/Roles/Operator",
+      "/redfish/v1/AccountService/Roles/ReadOnly"
+    ],
+    "RoleCollection": [
+      "/redfish/v1/AccountService/Roles"
+    ],
+    "SecureBoot": [
+      "/redfish/v1/Systems/1/SecureBoot"
+    ],
+    "SecureBootDatabase": [
+      "/redfish/v1/Systems/1/SecureBoot/SecureBootDatabases/KEK",
+      "/redfish/v1/Systems/1/SecureBoot/SecureBootDatabases/KEKDefault",
+      "/redfish/v1/Systems/1/SecureBoot/SecureBootDatabases/PK"
+    ],
+    "SecureBootDatabaseCollection": [
+      "/redfish/v1/Systems/1/SecureBoot/SecureBootDatabases"
+    ],
+    "SecurityPolicy": [
+      "/redfish/v1/Managers/1/SecurityPolicy"
+    ],
+    "Sensor": [
+      "/redfish/v1/Chassis/1/Sensors/0",
+      "/redfish/v1/Chassis/1/Sensors/1",
+      "/redfish/v1/Chassis/1/Sensors/10"
+    ],
+    "SensorCollection": [
+      "/redfish/v1/Chassis/1/Sensors"
+    ],
+    "SerialInterface": [
+      "/redfish/v1/Managers/1/SerialInterfaces/1"
+    ],
+    "SerialInterfaceCollection": [
+      "/redfish/v1/Managers/1/SerialInterfaces"
+    ],
+    "SessionCollection": [
+      "/redfish/v1/SessionService/Sessions"
+    ],
+    "SessionService": [
+      "/redfish/v1/SessionService"
+    ],
+    "SignatureCollection": [
+      "/redfish/v1/Systems/1/SecureBoot/SecureBootDatabases/db/Signatures",
+      "/redfish/v1/Systems/1/SecureBoot/SecureBootDatabases/dbDefault/Signatures",
+      "/redfish/v1/Systems/1/SecureBoot/SecureBootDatabases/dbr/Signatures"
+    ],
+    "SoftwareInventoryCollection": [
+      "/redfish/v1/UpdateService/SoftwareInventory"
+    ],
+    "TaskCollection": [
+      "/redfish/v1/TaskService/Tasks"
+    ],
+    "TaskService": [
+      "/redfish/v1/TaskService"
+    ],
+    "ThermalMetrics": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem/ThermalMetrics"
+    ],
+    "ThermalSubsystem": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem"
+    ],
+    "UpdateService": [
+      "/redfish/v1/UpdateService"
+    ],
+    "VirtualMedia": [
+      "/redfish/v1/Managers/1/VirtualMedia/1",
+      "/redfish/v1/Managers/1/VirtualMedia/2"
+    ],
+    "VirtualMediaCollection": [
+      "/redfish/v1/Managers/1/VirtualMedia"
+    ]
+  },
+  "untouched_linked_by_type": {
+    "AccountService": 1,
+    "Assembly": 1,
+    "Bios": 1,
+    "BootOptionCollection": 1,
+    "CertificateCollection": 3,
+    "CertificateService": 1,
+    "ComponentIntegrityCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EventService": 1,
+    "FabricCollection": 1,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "HpeBaseConfigs": 1,
+    "HpeBiosMapping": 1,
+    "HpeFallbackSensorCollection": 1,
+    "HpeNvmeOfSoftwareInitiator": 1,
+    "HpePowerMeter": 3,
+    "HpeRemoteSupport": 1,
+    "HpeSecureEraseReportService": 1,
+    "HpeSecurityService": 1,
+    "HpeServerBootSettings": 1,
+    "HpeServerConfigLock": 1,
+    "HpeServerDeviceCollection": 1,
+    "HpeServerPCISlotCollection": 1,
+    "HpeServerPciDeviceCollection": 1,
+    "HpeTlsConfig": 1,
+    "HpeUSBDevicesCollection": 1,
+    "HpeUSBPortsCollection": 1,
+    "HpeWorkloadPerformanceAdvisorCollection": 1,
+    "HpeiLOActiveHealthSystem": 1,
+    "HpeiLOBackupRestoreService": 1,
+    "HpeiLODateTime": 1,
+    "HpeiLOGUIService": 1,
+    "HpeiLOLicenseCollection": 1,
+    "HpeiLOResourceDirectory": 1,
+    "HpeiLOSnmpService": 1,
+    "HpeiSCSISoftwareInitiator": 1,
+    "JsonSchemaFileCollection": 1,
+    "LogServiceCollection": 2,
+    "ManagerDiagnosticData": 1,
+    "MemoryDomainCollection": 1,
+    "MessageRegistryFileCollection": 1,
+    "NetworkAdapter": 2,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 2,
+    "PCIeDeviceCollection": 1,
+    "PCIeSlots": 1,
+    "Port": 5,
+    "PortCollection": 1,
+    "PowerSubsystem": 1,
+    "SecureBoot": 1,
+    "SecurityPolicy": 1,
+    "SensorCollection": 1,
+    "SerialInterfaceCollection": 1,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "TaskService": 1,
+    "ThermalSubsystem": 1,
+    "UpdateService": 1,
+    "VirtualMediaCollection": 1
+  },
+  "untouched_linked_paths": [
+    "/redfish/v1/AccountService",
+    "/redfish/v1/CertificateService",
+    "/redfish/v1/Chassis/1/Assembly",
+    "/redfish/v1/Chassis/1/Devices",
+    "/redfish/v1/Chassis/1/EnvironmentMetrics",
+    "/redfish/v1/Chassis/1/FallbackSensors",
+    "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Ports/1/Settings",
+    "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Ports/2/Settings",
+    "/redfish/v1/Chassis/1/NetworkAdapters/DA000004/Settings",
+    "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Ports/1/Settings",
+    "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Ports/2/Settings",
+    "/redfish/v1/Chassis/1/NetworkAdapters/DA000007/Settings",
+    "/redfish/v1/Chassis/1/PCIeDevices",
+    "/redfish/v1/Chassis/1/PCIeDevices/271",
+    "/redfish/v1/Chassis/1/PCIeDevices/274",
+    "/redfish/v1/Chassis/1/PCIeSlots",
+    "/redfish/v1/Chassis/1/Power/FastPowerMeter",
+    "/redfish/v1/Chassis/1/Power/PowerMeter",
+    "/redfish/v1/Chassis/1/Power/SlowPowerMeter",
+    "/redfish/v1/Chassis/1/PowerSubsystem",
+    "/redfish/v1/Chassis/1/Sensors",
+    "/redfish/v1/Chassis/1/ThermalSubsystem",
+    "/redfish/v1/ComponentIntegrity",
+    "/redfish/v1/EventService",
+    "/redfish/v1/Fabrics",
+    "/redfish/v1/JsonSchemas",
+    "/redfish/v1/Managers/1/ActiveHealthSystem",
+    "/redfish/v1/Managers/1/BackupRestoreService",
+    "/redfish/v1/Managers/1/DateTime",
+    "/redfish/v1/Managers/1/DedicatedNetworkPorts",
+    "/redfish/v1/Managers/1/DedicatedNetworkPorts/1",
+    "/redfish/v1/Managers/1/GUIService",
+    "/redfish/v1/Managers/1/HostInterfaces",
+    "/redfish/v1/Managers/1/HostInterfaces/1",
+    "/redfish/v1/Managers/1/LicenseService",
+    "/redfish/v1/Managers/1/LogServices",
+    "/redfish/v1/Managers/1/ManagerDiagnosticData",
+    "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates",
+    "/redfish/v1/Managers/1/RemoteSupportService",
+    "/redfish/v1/Managers/1/SecurityPolicy",
+    "/redfish/v1/Managers/1/SecurityService",
+    "/redfish/v1/Managers/1/SerialInterfaces",
+    "/redfish/v1/Managers/1/SnmpService",
+    "/redfish/v1/Managers/1/VirtualMedia",
+    "/redfish/v1/Registries",
+    "/redfish/v1/ResourceDirectory",
+    "/redfish/v1/SessionService",
+    "/redfish/v1/SessionService/Sessions",
+    "/redfish/v1/Systems/1/BootOptions",
+    "/redfish/v1/Systems/1/KeyManagement/KMIPCertificates",
+    "/redfish/v1/Systems/1/KeyManagement/KMIPClientCertificates",
+    "/redfish/v1/Systems/1/LogServices",
+    "/redfish/v1/Systems/1/MemoryDomains",
+    "/redfish/v1/Systems/1/NetworkInterfaces",
+    "/redfish/v1/Systems/1/PCIDevices",
+    "/redfish/v1/Systems/1/PCISlots",
+    "/redfish/v1/Systems/1/SecureBoot",
+    "/redfish/v1/Systems/1/SecureEraseReportService",
+    "/redfish/v1/Systems/1/USBDevices",
+    "/redfish/v1/Systems/1/USBPorts",
+    "/redfish/v1/Systems/1/WorkloadPerformanceAdvisor",
+    "/redfish/v1/TaskService",
+    "/redfish/v1/UpdateService",
+    "/redfish/v1/systems/1/bios/oem/hpe/baseconfigs",
+    "/redfish/v1/systems/1/bios/oem/hpe/boot",
+    "/redfish/v1/systems/1/bios/oem/hpe/iscsi",
+    "/redfish/v1/systems/1/bios/oem/hpe/mappings",
+    "/redfish/v1/systems/1/bios/oem/hpe/nvmeof",
+    "/redfish/v1/systems/1/bios/oem/hpe/serverconfiglock",
+    "/redfish/v1/systems/1/bios/oem/hpe/tlsconfig",
+    "/redfish/v1/systems/1/bios/settings"
+  ],
+  "untouched_ratio": 0.9333888426311407,
+  "vendor": "hpe"
+}

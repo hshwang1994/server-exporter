@@ -188,6 +188,8 @@ ESXi 채널은 2026-10-19 부터 적용한다(사용자 결정 — 종전 "CSUS 
 | **ESXi** | success | success | not_supported | success | success | success | success | not_supported | not_supported | not_supported | not_supported |
 
 2026-10-11 production 명부 실행(`#275`~`#279`)에서 확인한 값입니다. `power`와 `thermal`은 BMC 가 해당 리소스를 주지 않으면 `not_supported` 입니다.
+2026-10-27 (FIX 1/2): Redfish `data.cpu` 는 `logical_threads` 를 내지 않고(BMC 스레드 수는 HT 상태를 확정하지 못함 — OS/ESXi 값만 씀) `manufacturer` 를 냅니다(`Processor.Manufacturer` 정규화,
+OS/ESXi 와 같은 표). 계약 `docs/contract/03-fields.md` 6.2 앞 2026-10-27 메모 · 사전 `cpu.logical_threads`(channel os/esxi) 참조.
 
 ---
 

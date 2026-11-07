@@ -51,24 +51,27 @@ class TestCsusSingleServer:
         assert sysd["part_number"] == "R9N70A", "Partition0 에 없는 PartNumber 는 섀시(r001u01) 값 (A-7)"
         assert csus["multi_node"]["partitions"][0]["system"]["serial"] == "SGHD3TLNDD-000", "multi_node 는 그대로 (사용자 결정 2026-10-19)"
 
-    def test_logical_threads_use_per_processor_sum_for_rmc(self, csus):
+    def test_redfish_cpu_has_no_logical_threads_key(self, csus):
+        """2026-10-27 FIX 1: BMC 스레드 수(RMC 1.75 는 LogicalProcessorCount 가 코어 수 32, 1.77 은 스레드 수)는 OS 와 같은 값을 보장하지 못해
+        Redfish 는 cpu.logical_threads 를 내지 않는다 — top-level 과 multi_node.partitions[].cpu 둘 다. 모듈 raw 요약값은 BMC 원값으로 남는다."""
         frag = _set_fact("build standard fragment")["_data_fragment"]
-        cpus = csus["data"]["processors"]
-        assert csus["data"]["system"]["cpu_summary"]["logical_processor_count"] == 32, "RMC 는 코어 수를 LogicalProcessorCount 로 낸다 (실측)"
-        assert _render(frag["cpu"]["logical_threads"], _rf_d_cpus=cpus, _rf_d_system=csus["data"]["system"],
-                       _selected_adapter=ADAPTER) == 64
-        assert csus["multi_node"]["partitions"][0]["cpu"]["logical_threads"] == 64, "봉투 안 두 값이 같아진다"
+        assert "logical_threads" not in frag["cpu"]
+        assert "manufacturer" in frag["cpu"], "FIX 2 — Processor.Manufacturer 정규화 발행"
+        assert csus["data"]["system"]["cpu_summary"]["logical_processor_count"] == 32, "RMC 1.75.108 fixture — raw 는 그대로 보존"
+        assert "logical_threads" not in csus["multi_node"]["partitions"][0]["cpu"]
+        assert csus["multi_node"]["partitions"][0]["cpu"]["cores_physical"] == 32
 
     def test_power_summary_has_no_fabricated_zero(self, csus):
         s = _render(_set_fact("compute group summaries")["_rf_power_summary"], _rf_d_power=csus["data"]["power"])
         assert s["psu_count"] == 4 and s["capacity_unknown_count"] == 4
         assert s["total_capacity_w"] is None and s["consumed_capacity_pct"] is None
-        assert s["consumed_watts"] == 591
+        assert s["consumed_watts"] == 592, "TotalPowerConsumedWatts '591.5' — 2026-10-29 (SA-17) 정수 반올림(종전 절삭 591)"
 
     def test_network_summary_does_not_count_fc_hba_cards(self, csus):
         netad = csus["data"]["network_adapters"]
         assert len(netad["fc_hbas"]) == 4 and len(netad["adapters"]) == 2, "HBA 4 · FC 카드 2 (불변)"
-        s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[])
+        # _rf_raw_collect = 모듈 출력 그대로 — network · network_adapters 를 수집했으므로 개수는 정수(2026-10-29: 미수집이면 null)
+        s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[], _rf_raw_collect=csus)
         assert s["adapter_count"] == 0 and s["port_count"] == 0
 
     def test_empty_storage_container_dropped_and_firmware_supplemented(self, csus):
@@ -90,5 +93,6 @@ def test_other_vendors_power_and_adapter_count_unchanged_semantics(case):
     assert s["total_capacity_w"] == sum(p["power_capacity_w"] for p in power["power_supplies"] if p.get("power_capacity_w") is not None)
     netad = result["data"]["network_adapters"]
     fc_only = {h["adapter_id"] for h in netad["fc_hbas"]} - {p["adapter_id"] for p in netad["ports"] if p.get("port_type") == "Ethernet"}
-    s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[])
+    assert "network_adapters" in result["collected"]
+    s = _render(_set_fact("compute group summaries")["_rf_summary_network"], _rf_d_netad=netad, _rf_norm_interfaces=[], _rf_raw_collect=result)
     assert s["adapter_count"] == len(netad["adapters"]) - len(fc_only)

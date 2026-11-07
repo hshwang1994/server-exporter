@@ -1185,3 +1185,149 @@
 - 수정: adapter 플래그 `processor_summary_logical_count: cores`(값으로 가름) · A-5~A-11 조건부 수집 경로 · null 규칙(A-3 · B-1) · FC 카드 제외(A-4) · B-2~B-12 — `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`
 - 재발 방지: (1) 펌웨어 의미 차이는 adapter `vendor_notes` 값으로 선언하고 common 코드는 값으로 가른다(rule 12). (2) `tests/regression/test_redfish_coverage_audit.py` · `test_esxi_property_coverage.py` · `test_os_command_coverage.py` — 노출 자원 중 허용 목록(사유 포함)에 없는 미요청 인벤토리가 생기면 실패. 새 미러 · 크롤 · 덤프를 들일 때 먼저 이 대조를 돌린다(`scripts/ai/redfish_coverage_diff.py <mirror|crawl> [--layout]`). (3) summary 산식은 "모르면 null" 을 전 채널 공통 규칙으로(rule 13 "unknown → null, never 0")
 - 관련 rule: rule 12 R1 · rule 25 R7-A-1(사용자 실측 > spec) · rule 95 R1 #11 · rule 96 R1 · R4
+
+## 2026-10-27 — "표준 리소스에 키가 없다" 에서 조사를 멈춰 같은 신호의 OEM 조건·OEM 로그를 놓쳤다 (CSUS FC HBA 링크)
+
+- 카테고리: scope-miss (표준 경로 1곳만 보고 "미제공" 확정 · 값 역추적·어휘 전수 스캔 생략) · ADR 전제를 검증 대상이 아니라 사실로 사용
+- 발견 위치: 사용자 질문(2026-10-27 "FC Port 밖 어느 곳에서나 절대 찾을 수 없나, 유추할 수 있는 어떤 값도") → `tests/evidence/2026-10-26-redfish-mock2-audit/analysis/07-main-addendum-csus-hba-link.md`
+- 증상: 작업자 03 보고서 §6 와 메인 교차 검증이 "CSUS FC Port 키가 FibreChannel/Id/Name 뿐 → ADR-2026-10-19 대로 down + notice, 일치" 로 종결했다. 실제로는 같은 카드의 `Chassis/r001u01/PCIeDevices/{N}.Status.Conditions` 에 HPE 등록부 `H3Alert.1.8.LinkUp/LinkDown`("external Ethernet or Fibre Channel HBA port link", 카드 단위)이 1차 4대·2차 3대 전부에 있고, 2차 OEM `LogService/Oem/Iel` 의 `DCD_FCHBA_LINK_UP/DOWN` 이벤트 시각이 그 Timestamp 와 초 단위로 일치했다. 그 PCIeDevices 응답은 Tier 1 수집이 이미 요청하고 있었다(펌웨어 보강 CSUS-R16)
+- 원인: (1) ADR-2026-10-18 의 "RMC 는 FC Port 에 링크 상태 속성 자체가 없어 Redfish 로는 수집할 수 없었다" 를 검증 대상이 아니라 전제로 썼다(지시서 2026-10-26 수정 1 "코드·테스트·ADR 은 모두 검증 대상" 위반). (2) 조사 단위가 "출력 필드 ← 표준 리소스" 1홉이라 `Status.Conditions`·OEM 로그·등록부(`Registries/*`) 메시지 정의를 보지 않았다. (3) WWN·슬롯 라벨로 같은 장치를 가리키는 다른 리소스를 역추적하지 않았다
+- 영향: 분석 산출물(ISSUES 72 → 73건, coverage csus3200_01·03 storage PASS → ISSUE), ADR-2026-10-18 전제 정정 제안·사용자 결정 11 추가. 제품 코드 변경 0(구현은 결정 뒤 WP7)
+- 수정: `analysis/07` addendum, ISSUES `03-storage-004`(MED) + §5 행 + §7 결정 11, coverage-132·SUMMARY·CURRENT_STATE·decision-log·티켓 WP7·NEXT_ACTIONS 갱신(2026-10-27)
+- 재발 방지: "장비가 주지 않는다 → 미제공" 으로 판정하기 전 3단계를 거친다 — (1) 식별값(WWN·MAC·시리얼·슬롯 라벨)을 미러 전 파일에서 역추적해 같은 장치를 가리키는 리소스를 모은다, (2) 링크·상태 어휘를 바이너리·로그까지 전 파일 스캔한다, (3) `Status.Conditions`·OEM 로그·등록부 메시지 정의를 읽어 뜻을 확정한다. ADR 의 "장비가 안 준다" 문장은 새 미러가 들어올 때마다 재검증 항목으로 등록한다
+- 관련 rule: rule 25 R7-B(추정 → 실측 격상 금지) · rule 95 R1 #8(single-vendor silent) · rule 96 R2(외부 계약 질의 우선) · 지시서 검증 기준(2026-10-26 사용자 수정 1)
+
+## 2026-10-27 — 셸 heredoc 의 백슬래시가 제어문자로 들어가 evidence 경로가 깨졌고, 패치 스크립트의 사전 수정 실패를 체인하지 않아 틀린 문장이 문서에 적용됐다
+
+- 카테고리: tooling-escape (Git Bash heredoc 안 `\\` 가 `\` 로 접히고 Python 비-raw 문자열의 `'\1'`·`'\01'` 이 chr(1) 이 됨) · process-miss (수정 단계 실패를 `&&` 로 묶지 않아 다음 단계가 옛 텍스트로 실행)
+- 발견 위치: `tests/evidence/2026-10-27-redfish-mock2-impl/golden-changes.md` G-24 · `00-baseline-recheck.md`(경로 `서버mock데이터\1차` 가 `…데이터` + U+0001 + `차`) · `docs/ai/contracts/serial-number.md`(FIX 5 문서 패치 1문장)
+- 증상: 원장·evidence 의 Windows 경로에 U+0001 제어문자가 들어갔다(렌더링에선 보이지 않는다). serial-number 계약에 "hbas serial 은 null" 이라는 사실과 다른 문장이 한 번 적용됐다(실측은 `network.adapters[].serial_number` 6장 전부 값 있음).
+- 원인: (1) Bash 도구가 heredoc 본문의 `\\` 를 접어 Python 8진 escape 로 해석됐다. (2) 패치 스크립트를 고치는 python 단계와 실행 단계를 개행으로만 이어 앞 단계가 실패(assert)해도 뒤 단계가 돌았다.
+- 영향: 문서 3곳(제품 코드 0). 같은 세션(WP11/FIX 5/WP12)에서 발견·정정 — 제어문자 전수 스캔(`[\x00-\x08\x0b\x0c\x0e-\x1f]`) 0, 문장은 봉투 값으로 재확인.
+- 수정: 백슬래시가 든 문자열은 `chr(92)` 조합 또는 Write 도구로 쓰고 heredoc 에는 넣지 않는다; 다단계 패치는 `&&` 체인 + 결과 assert; 패치 뒤 `git diff` 로 문장을 다시 읽는다.
+- 재발 방지: WP 마무리 절차에 evidence·docs 제어문자 스캔을 넣는다; 문서 문장은 실제 봉투 값(`grep`/python 조회)으로 확인한 뒤 적는다(rule 25 R7-B — 추정을 사실로 쓰지 않음).
+- 관련 rule: rule 25 R7-A/R7-B · rule 70 R3(실제 결과만 기록)
+
+## 2026-10-28 — 분석 제안의 조건 문장을 그대로 코드로 옮겨 실측 형태(NIC 속도 있음)에서 보충이 일어나지 않았는데 FIXED 로 처분했다 (F-01)
+
+- 카테고리: scope-miss (조건을 실측 형태 전수에 대조하지 않음 · 합성 시험이 같은 가정을 공유) · 처분 과대 표기
+- 발견 위치: Opus 독립 검증(2026-10-28) F-01 — `redfish-gather/tasks/normalize_standard.yml` NIC 링크 보충 조건 `link == 'unknown' and speed is none` · `tests/unit/test_redfish_xcc3_shape.py`(speed null NIC 만) · `tests/evidence/2026-10-27-redfish-mock2-impl/05-xcc3-shape.md` §4
+- 증상: SR650 V4 4대의 호스트 NIC 는 `LinkStatus` 키가 없고 `SpeedMbps`(25600 · 0)가 있어 조건이 거짓 → 같은 MAC 포트가 LinkUp/LinkDown 인데도 20건 전부 `unknown` 이었고, 03-network-002 는 FIXED 로 처분됐다. MAC → 포트 dict 는 같은 MAC 의 둘째 포트가 앞 포트를 덮었다
+- 원인: (1) 분석 제안 문장("link unknown 이고 speed 없음")을 조건으로 그대로 옮겼다. (2) 합성 시험 · evidence 가 같은 가정을 공유해 미발동 이유를 "값이 이미 있음" 으로 적었다. (3) 132칸 판정 기준(interfaces 수 · FC 혼입)이 링크 값을 보지 않아 칸 통계에 드러나지 않았다
+- 영향: SR650 V4 4대 link 20건 · is_primary 4 · summary(호출자 값만 — shape 0)
+- 수정: `db606f1c` — MAC → 포트 목록, NIC link unknown 이면 같은 MAC 포트 link 가 하나의 값일 때만 보충(속도 조건 제거), NIC 값은 덮지 않음. 잔여 2 NIC(본딩 영구 주소)는 HOLD
+- 재발 방지: 보충 · 폴백 조건은 실제 미러 전 label 의 "원천 필드 존재 조합" 표를 먼저 만들고 조합마다 기대 결과를 시험으로 고정한다. FIXED 는 대상 label 봉투 값의 before/after 변화를 확인한 뒤에만 쓴다
+- 관련 rule: rule 25 R7-B · rule 95 R1 #10 · rule 24 R2
+
+## 2026-10-28 — 원 이슈 범위(저장/네트워크) 일부를 구현 문구가 빠뜨렸는데 그 문구를 132칸 판정 근거로 썼다 (F-03)
+
+- 카테고리: scope-miss (omission) · 근거 재확인 누락
+- 발견 위치: 독립 검증 F-03 — `redfish_gather.py` 전원 Off notice "저장/메모리/전원/온도" · `coverage-132-after.md` dl380_gen12_03 network 칸
+- 증상: notice 가 네트워크를 말하지 않는데 network 칸을 그 notice 로 ISSUE → PASS 올렸다(network 값은 before = after)
+- 원인: 구현 문구를 원 이슈 · 분석 제안 문장과 대조하지 않았고, 칸 근거를 실제 봉투 문구로 다시 읽지 않았다
+- 수정: `ac368a4b`(문구에 '네트워크' — 사용자 결정 Q2) · 칸 근거를 새 Tier 1 봉투 문구로 교체(C7 `3490f210`)
+- 재발 방지: 칸 · 처분 근거로 인용하는 문장은 봉투에서 꺼낸 원문을 그대로 붙인다
+- 관련 rule: rule 70 R3 · rule 25 R7-B
+
+## 2026-10-28 — PROJECT_MAP 지문을 tests/ 파일이 index 에 들어가기 전에 갱신했고, 지문이 core.quotepath · 콘솔 인코딩에 따라 달랐다 (F-10)
+
+- 카테고리: convention-drift (갱신 순서) · tooling-encoding
+- 발견 위치: `f92ebe6a` 의 `--update` ↔ `dfba108a`(5초 간격) · `scripts/ai/check_project_map_drift.py`
+- 증상: 최종 커밋에서 `check_project_map_drift.py` rc 2(tests 지문 불일치). 한글 경로 3개 때문에 기본 quotepath 와 false 의 지문이 달랐고(`df88dc5e2966` ↔ `15a1eba78bfe`), cp949 콘솔 + false 는 rc 1
+- 원인: 지문이 `git ls-files -s`(index) 기준인데 마지막 tests/ 커밋 전에 갱신했다. `text=True` 디코딩이 quotepath · 콘솔 인코딩에 기대고 있었다
+- 수정: `499ed7c5` — `-c core.quotepath=off ls-files -s -z` 를 bytes 로 받아 UTF-8 로 해석, `--update` 때 index 밖 파일 경고 + 시험. 갱신은 브랜치 마지막 커밋(C10)
+- 재발 방지: 지문 갱신은 브랜치의 마지막 커밋에서만 하고, 뒤이어 `--check` rc 0 을 확인한다
+- 관련 rule: rule 70 R2
+
+## 2026-10-28 — adapter 주석의 RedfishVersion 이 어느 미러에도 없는 값이었고, 계획서 수치 일부가 재현되지 않았다 (XCC3 · 계획 문구)
+
+- 카테고리: external-contract-drift · ai-hallucination(검증하지 않은 수치 인용)
+- 발견 위치: `adapters/redfish/lenovo_xcc3.yml` 주석 "RedfishVersion 1.15.0 (실측 2026-06-15)" ↔ 1차 미러 1.17.0 · 2차 4대 1.22.0 / 계획서(2026-10-28)의 RedfishVersion 문장 · fixture `LinkStatus` 분포 · dl380_gen12_03 ports 0 · F-09 종전 component 값
+- 증상: 계획서는 "mock2 미러 1.17.0" 이라 적었으나 1.17.0 은 1차 미러였고 2차는 1.22.0. fixture 분포 "LinkUp 244 …" 는 재현되지 않았다(실제 123 …, 결론은 같음). dl380_gen12_03 ports 는 0 이 아니라 4, F-09 종전 component 는 `BMC-IHX4-10` 이 아니라 `UEFI-IHX4-10`
+- 원인: 조사 단계 수치를 도구 출력이 아니라 요약 문장으로 옮겼다(중복 집계 · 1차/2차 미러 혼동)
+- 수정: 실행 중 원문 · 도구로 다시 확인해 저장소 문서에는 실측값만 넣었다(C5 `0e3bcbb3` drift 주석 · DRIFT-032 · `REVIEW_FIX_HANDOFF.md` 8절 계획 문구 정정 표)
+- 재발 방지: 계획서 · 문서의 수치는 재현 명령(도구 + 입력 경로)과 함께 적고, 집계는 `@odata.id` 기준 중복 제거 도구로만 낸다
+- 관련 rule: rule 25 R7-B · rule 96 R4 · rule 70 R3
+
+## 2026-10-28 — Tier 0 재검증 · 증거 기록 중 실행 실수 5건: 무거운 실행 겹침 · 260자 넘는 clone 경로 · checkout 줄 끝 · 해시 기준 · 확인 없이 실행한 문서 명령 (실행 환경 · 증거 무결성)
+
+- 카테고리: execution-environment · evidence-integrity (실행 계획 · 도구 사용 실수 — 제품 결함 아님)
+- 발견 위치: `tests/evidence/2026-10-28-redfish-mock2-review-fix/`(`tier0/windows-clone-aborted-oom/` · `tier0/repro-windows/*_mixed_checkout.log` · `*_run1.log` · `REVIEW_FIX_HANDOFF.md` 6절)
+- 증상:
+  - (1) Windows 전체 gate 를 WSL gate 와 겹쳐 돌렸고, WSL gate 가 끝나자 WSL 재현을 또 겹쳐 시작했다. 23초 뒤 시스템 메모리가 부족해져 Claude Code 가 두 백그라운드 작업을 멈췄다(여유 약 3.9 GB / 32 GB). 바깥 셸만 멈춰 남은 하위 프로세스는 AI 가 직접 멈췄다
+  - 멈춘 지점까지 Windows gate 는 하위 프로세스(git · bash · PowerShell)를 쓰는 시험 12파일에서 F 20 · E 31 을 냈다. 메모리 압박 탓으로 **추정**한다 — 실패 메시지가 담긴 JUnit 이 쓰이기 전에 멈췄다. 같은 조건으로 그중 4파일을 따로 돌리면 43건 모두 통과했고, 순차 재실행은 실패 0 이었다(중단 실행은 판정 제외)
+  - (2) clone 을 scratchpad 아래에 두어 경로가 260자를 넘었고 checkout 이 실패했다(`Filename too long`)
+  - (3) 수정 전 base clone 이 브랜치 HEAD 를 먼저 풀고 `f92ebe6a` 로 옮겼다. blob 이 같은 파일은 줄 끝이 LF 로 남아 G5 가 재현되지 않았다(10 failed — G4 만)
+  - (4) C7 핸드오프 6절 sha256 표 11행을 Windows Python 이 쓴 작업 트리 파일(CRLF)로 계산하고, 머리말에는 "저장소 blob(LF) 기준" 이라고 적었다. 문서가 적은 방법(`git show HEAD:<경로> | sha256sum`)으로 다시 계산하면 맞지 않았다
+  - (5) (4)를 고치며 문서의 bash 명령을 awk 로 뽑아 바로 실행했는데, 범위를 잘못 잡아 4절 명령 묶음 앞부분이 돌았다. 실행된 `wsl … prep_mirrors.sh` 는 경로 변환 탓에 "No such file" 로 끝났고, Tier 1 명령은 문법 오류로 실행되지 않았다 — 변화 0(WSL `/root` 확인)
+- 원인:
+  - 실행 계획에 동시 실행 메모리 예산이 없었다. 재발이다 — 2026-10-15 에도 전체 pytest 를 WSL gate 와 동시에 돌리다 같은 이유로 중단됐다(TEST_HISTORY "2026-10-15 — Redfish HBA 누락 보완" 절)
+  - Windows 경로 길이 한계를 미리 계산하지 않았다
+  - `checkout` 이 바뀌지 않은 blob 을 다시 쓰지 않는다는 점을 놓쳤다
+  - `core.autocrlf=true` 에서는 작업 트리 파일과 blob 의 줄 끝이 다를 수 있는데 해시 계산에 반영하지 않았고, 적은 방법으로 다시 계산해 보지 않았다
+  - 문서에서 뽑은 명령을 출력해 확인하지 않고 실행했다
+- 수정:
+  - 사용자 결정(순차 재실행)에 따라 한 번에 하나씩 다시 돌렸다. 결과는 독립 검증 수(Windows 15 · WSL 87)와 같게 재현됐다
+  - clone 을 `C:/github/ClovirONE/se-fix-20261028-win/` 로 옮겼다
+  - base clone 을 `--no-checkout` 뒤 기준 커밋 checkout 으로 바꿨다(`tools/tier0_win.sh`)
+  - 6절 표를 C7 blob 기준으로 다시 계산해 고치고, 묶음 해시는 어느 checkout 에서나 같은 명령으로 적었다(C9). `tier0/tier0.md` 의 해시 대상은 LF 파일이라 처음부터 blob 과 같다
+- 재발 방지:
+  - 전체 gate · 전체 pytest 가 도는 동안에는 다른 pytest · gate 실행(WSL 포함)을 시작하지 않는다. 짧은 재현도 마찬가지다 — 이번 중단은 몇 분짜리 재현을 겹친 지 23초 만에 왔다
+  - Windows clone 경로는 (추적 파일 최장 경로 + 루트 길이) < 260 을 먼저 확인한다
+  - 수정 전 · 후 비교용 checkout 은 `--no-checkout` clone 이나 `git worktree add <기준 커밋>` 으로 처음부터 푼다
+  - 재현이 기대와 다르면(G5 미재현) 코드보다 재현 조건부터 의심한다
+  - 증거 해시는 blob(`git show :<경로>` 또는 `HEAD:<경로>`)으로 계산하고, 문서에 적은 방법으로 한 번 다시 계산해 맞는지 확인한 뒤 커밋한다
+  - 문서 · 로그에서 뽑은 명령은 먼저 출력해 범위를 확인한 뒤 실행한다
+- 관련 rule: rule 25 R7-A · rule 24 R1 · rule 70 R3
+
+---
+
+## 2026-10-29 — 원천이 주지 않은 값을 0 으로, 일부만 확인한 합을 전체 합으로 적었다 (Summary 감사 SA-01 · 02 · 03f · 04 · 05 · 07 · 08)
+
+- 카테고리: scope-miss · convention-drift (null 과 0 의 혼동 — rule 95 R1 #5)
+- 발견 위치: 독립 Summary 감사(`se-indep-20261028/SUMMARY_AUDIT_REPORT.md`, 기준 `104bcaf0`) — `_gather_fabric_members` 의 `[]` → `len()` 0 · `_collect_multi_node_topology` 의 `else 0` · normalize `cores_physical` 의 select 합 · `_rf_summary_memory` 의 아는 DIMM 합 · 파티션 사본의 `_safe_int(..., 0)` · storage 합계 0 · NIC 속도 그룹 0
+- 증상: CSUS 7대 `multi_node.fabrics[].endpoint_count` 0(원천 FlexGrid 에 `Endpoints` 키 없음 — 감사 FAIL 관측 7). 나머지는 합성 미러 · 함수 단위에서만 발동(18대 출력 영향 0)
+- 원인: "빈 목록" 과 "읽지 못함" 을 같은 값으로 다뤘고, 기본값 0(`default(0)` · `_safe_int(x, 0)` · `else 0`)이 "모름" 을 "0" 으로 바꿨다. 합을 낼 때 목록이 온전한지(멤버 실패 · 미상 항목)를 보지 않았다. 파티션 사본은 top-level 수정(2026-10-19)을 따라가지 않았다
+- 영향: Redfish summary 개수 · 합계(top-level · 파티션). 호출자 — 값이 null 로 나오는 조건만 넓어짐(키 변화 0)
+- 수정: 커밋 `a1b6713f` · `19e3af89` · `d18f5ca3` · `ca5e5c54` · `92d03169` · `866d28d8`, `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`
+- 재발 방지: 개수는 "원천 컬렉션을 끝까지 읽었는가" 를 함께 돌려주는 형태(확인 여부 반환 · `inventory_out`)로만 정수를 낸다. 합은 목록이 온전하고 미상 항목이 없을 때만 낸다. 시험 `tests/unit/test_multi_node_counts_sa01.py` · `test_redfish_summary_null_rules.py` · `test_partition_summary_rules_sa03.py`(FIX 2 표 drift 포함), 변이 31/31. 파티션 사본을 고칠 때는 top-level 과 같은 입력으로 대조한다
+- 관련 rule: rule 95 R1 #5 · #7, rule 22, rule 96 R1-B
+
+---
+
+## 2026-10-29 — 승인 Plan 에 없던 규칙(용량 미상 디스크 → 합계 null)을 구현에 넣었다가 기존 계약 시험이 깨져 되돌렸다
+
+- 카테고리: scope-miss (승인 범위 이탈)
+- 발견 위치: 커밋 4(`ca5e5c54`) 작업 중 — `tests/unit/test_partition_normalize_grouping.py::test_summarize_zero_and_none_capacity_skipped` 실패
+- 증상: "부분 합 금지" 와 같은 원칙이라 보고 storage 합계에 "용량 미상 디스크가 있으면 null" 을 더했다. 기존 계약(용량 0 · None 디스크는 그룹 · 합에서 뺀다) 시험이 실패했다
+- 원인: 원칙이 같다는 이유로 Plan · 감사에 없는 규칙을 승인 없이 넣었다
+- 영향: 커밋 전에 되돌림 — 출력 영향 0(18대 디스크 52개 중 용량 미상 0)
+- 수정: 되돌림(커밋 4 에 포함되지 않음). 정책 질문으로 handoff 9절 · NEXT_ACTIONS 2026-10-29 에 올림
+- 재발 방지: 원칙에서 파생된 새 규칙은 구현 전에 "Plan 에 있는가" 를 확인하고, 없으면 사용자 결정 목록에 올린다
+- 관련 rule: rule 91 R2, rule 92 R2
+
+---
+
+## 2026-10-29 — 합성 미러 기대값에 실제와 다른 필드 경로(`data.system.power_state`)를 적어 등록 기준 FAIL 2
+
+- 카테고리: ai-hallucination (필드 경로 추정)
+- 발견 위치: `tests/evidence/2026-10-29-redfish-summary-fix/synthetic/expected.json` — `syn_g12_03_on` · `syn_r1csus01_off` 의 허용 차이 목록(`only_diffs_vs_unmodified`)
+- 증상: 등록 기준 7/9 PASS. 두 사례의 값 단정은 PASS 인데 허용 경로가 `data.system.power_state` 라, 실제로 바뀐 `data.hardware.power_state` 가 "허용 밖 차이" 로 잡혔다
+- 원인: 전원 상태 키의 위치를 봉투에서 확인하지 않고 이름으로 추정했다(`data.system` 에는 `power_state` 키가 없다)
+- 영향: 판정 기록만(제품 0). 사전 등록 기대값은 고치지 않고 정오표 + 사후 점검(9/9)으로 남겼다
+- 수정: `synthetic/ERRATUM.md` · `synthetic/expected_posthoc.json`
+- 재발 방지: 기대값을 등록하기 전에 경로마다 기준 봉투(같은 미러의 Tier 1 출력)에 그 키가 있는지 기계로 확인한다 — 없는 경로면 등록하지 않는다
+- 관련 rule: rule 25 R7-B, rule 95 R3
+
+---
+
+## 2026-10-29 — 감사 사례 번호(S1~S22)가 8개만 나온다고 적었는데 실제로는 13개였다
+
+- 카테고리: scope-miss (근거 탐색 범위)
+- 발견 위치: `tests/evidence/2026-10-29-redfish-summary-fix/audit_case_test_map.md` 0절(2026-10-29 작성 → 2026-10-31 보완, 커밋은 보완본만 `578677a2`)
+- 증상: 2026-10-29 판은 보고서에서 S 번호를 8개만 찾았다고 적었다. 2026-10-31 재검색에서 보고서 부록 A 의 S2 · S15, 8.3 절의 S16, 감사 도구 주석의 S10 · S19 가 더 나왔다(합 13). 번호별 정의 목록은 어디에도 없다
+- 원인: 보고서의 부록 · 다른 절과 감사 도구 소스까지 검색하지 않았다
+- 영향: 대응표에서 번호 5개 누락. 빠진 번호의 사례는 모두 이미 시험 · 합성이 있었다(대응표 1절) — 시험 공백은 아니었다
+- 수정: `audit_case_test_map.md` 0 · 1 · 5절 보완
+- 재발 방지: 감사 근거를 셀 때는 보고서 전체(본문 · 표 · 부록)와 감사 도구 소스를 `S[0-9]+` 정규식으로 전수 검색하고, 찾은 번호와 위치를 표에 그대로 남긴다
+- 관련 rule: rule 25 R7-A, rule 24 R2

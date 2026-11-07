@@ -111,6 +111,16 @@ sections:
         type: string
         display_name: "컴포넌트 유형"
 
+      category:
+        type: string
+        display_name: "분류"
+        description: "bios/cpld/tpm/diagnostic/lifecycle/driver_pack/backplane/drive/service_module/bmc/nic/storage_controller/psu/other — 구조 근거(ActiveSoftwareImage · RelatedItem /Bios) → 토큰 → 컨트롤러 조인 (2026-10-27 등재, 사전 firmware[].category)"
+
+      pending:
+        type: boolean
+        display_name: "적용 보류"
+        description: "id 에 Pending 이 있고 Version 이 있는 예정 업데이트만 true. Disabled · Version 없음 자리는 항목 제외 (2026-10-27 등재)"
+
   power:
     fields:
       power_supplies:

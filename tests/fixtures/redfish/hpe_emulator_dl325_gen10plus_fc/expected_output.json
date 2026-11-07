@@ -234,6 +234,13 @@
             "subnet_mask": null
           }
         ],
+        "ipv6": [
+          {
+            "address": "fe80::1602:ecff:fed9:3aa0/64",
+            "address_origin": null,
+            "prefix_length": null
+          }
+        ],
         "link_status": "up",
         "mac": "00:40:a6:24:3f:72",
         "mtu": null,
@@ -259,6 +266,13 @@
             "address_origin": null,
             "gateway": null,
             "subnet_mask": null
+          }
+        ],
+        "ipv6": [
+          {
+            "address": "fe80::1602:ecff:fed9:3aa0/64",
+            "address_origin": null,
+            "prefix_length": null
           }
         ],
         "link_status": "up",
@@ -435,6 +449,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 8192,
+        "l3_cache_kb": 131072,
         "manufacturer": "Advanced Micro Devices, Inc.",
         "max_speed_mhz": 4100,
         "model": "AMD EPYC 7302P 16-Core Processor",
@@ -469,7 +485,8 @@
               "name": "480GB 6G SATA SSD",
               "predicted_life_percent": 99,
               "protocol": "SATA",
-              "serial": "S521NA0T605357"
+              "serial": "S521NA0T605357",
+              "wwn": "naa.31402ec013a3f46f"
             },
             {
               "capacity_bytes": 480103981056,
@@ -483,7 +500,8 @@
               "name": "480GB 6G SATA SSD",
               "predicted_life_percent": 99,
               "protocol": "SATA",
-              "serial": "S521NA0T605338"
+              "serial": "S521NA0T605338",
+              "wwn": "naa.31402ec013a3f46e"
             }
           ],
           "health": "OK",

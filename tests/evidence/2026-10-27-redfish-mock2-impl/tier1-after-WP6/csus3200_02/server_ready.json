@@ -1,0 +1,1 @@
+{"mirror": "/root/se_mirrors/csus3200_02", "keys": 2026, "raw": 14, "hang": ["Managers/RMC/LogServices/RmcConfig/RawConfig"], "realm": "Basic realm=\"redfish\"", "noauth_root": true, "statuses": {"200": 1959, "204": 1, "201": 1, "404": 57, "500": 8}, "load_s": 2.0, "pid": 608}

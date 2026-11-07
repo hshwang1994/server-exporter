@@ -1,0 +1,14 @@
+# 중단된 Windows gate 의 F/E 위치 — main pytest 진행 문자열(수집 순서 6438건 중 앞 2230건)을 같은 clone 의 --collect-only 순서에 대응
+# 합계 F 20 · E 31
+F 1 · E 5  tests/unit/prodgen/test_promotion_cycle.py
+F 1 · E 0  tests/unit/prodgen/test_simple_and_ps.py
+F 2 · E 0  tests/unit/prodgen/test_verdict_evidence.py
+F 1 · E 0  tests/unit/prodgen/test_yamlstrip.py
+F 0 · E 8  tests/unit/test_activate_ansible_venv.py
+F 2 · E 14  tests/unit/test_addon_checkout.py
+F 2 · E 0  tests/unit/test_bootstrap_vault_encrypt.py
+F 0 · E 4  tests/unit/test_check_project_map_drift.py
+F 4 · E 0  tests/unit/test_env_guard.py
+F 5 · E 0  tests/unit/test_finalize_corpus.py
+F 1 · E 0  tests/unit/test_finalize_gather_output.py
+F 1 · E 0  tests/unit/test_gather_state.py

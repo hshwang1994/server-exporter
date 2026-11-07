@@ -1,0 +1,14 @@
+{"label": "csus3200_01", "path": "Chassis/r001u01/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "csus3200_02", "path": "Chassis/r001u01/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "csus3200_03", "path": "Chassis/r001u01/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "dl380_gen12_01", "path": "Chassis/DE00B000", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "dl380_gen12_01", "path": "Chassis/DE00B000/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "dl380_gen12_02", "path": "Chassis/DE00B000", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "dl380_gen12_02", "path": "Chassis/DE00B000/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "dl380_gen12_04", "path": "Chassis/DE00B000", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "dl380_gen12_04", "path": "Chassis/DE00B000/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "r1_DELL_R740_01", "path": "Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "r1_HPE_CSUS3200_03", "path": "Chassis/r001u01/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "r1_HPE_CSUS3200_04", "path": "Chassis/r001u01/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "r1_HPE_DL380_01", "path": "Chassis/DE00B000", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}
+{"label": "r1_HPE_DL380_01", "path": "Chassis/DE00B000/Drives", "status": [200], "note": ["tree"], "class": "MIRROR_REAL", "hits": 1}

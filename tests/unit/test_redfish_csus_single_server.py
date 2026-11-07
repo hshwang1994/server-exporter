@@ -7,7 +7,7 @@
   A-7  System 에 PartNumber/SKU 가 없으면 섀시 값으로 보충
   A-8  StorageControllers 없는 Storage 멤버 — 드라이브 위치 ⊂ PCIe 슬롯 위치인 PCIeDevice 를 컨트롤러로 식별 (1개일 때만)
   A-9  adapter firmware_inventory_scope=complex_only — PCIe 장치 · PSU 펌웨어를 firmware[] 에 보충
-  A-10 Storage 에 드라이브가 0건이면 섀시 Drives 컬렉션 폴백
+  A-10 Storage 에 드라이브가 0건이면 섀시 Drives 컬렉션 폴백 (2026-10-29 SA-12 부터는 드라이브가 있어도 섀시가 광고한 Drives 를 합집합으로 본다)
   A-11 System 이 연결한 섀시가 2개 이상이면 Power/Thermal 합산 (1개면 종전과 같은 호출)
   A-3/A-4/A-6/B-1/B-10/B-11 normalize_standard.yml 템플릿 — power null · adapter_count · 빈 컨트롤러 제거 · 메모리 총량 null/폴백 · cores_per_socket
 """
@@ -113,9 +113,9 @@ def test_a7_system_values_win_when_present(monkeypatch):
 
 # ── A-8 ──────────────────────────────────────────────────────────────────────────
 def test_a8_controller_identity_from_pcie_slot_location(monkeypatch):
-    calls = []
+    calls, inv = [], {}
     _routes(monkeypatch, _csus_storage_routes(), calls)
-    data, errors = rg.gather_storage(IP, SYS, *CREDS, [CH])
+    data, errors = rg.gather_storage(IP, SYS, *CREDS, [CH], inventory_out=inv)
     assert errors == []
     (ctrl,) = data["controllers"]
     assert ctrl["name"] == "HPE SR3258p-16i/e PCIe4 Controller"
@@ -123,7 +123,10 @@ def test_a8_controller_identity_from_pcie_slot_location(monkeypatch):
     assert ctrl["controller_manufacturer"] == "Adaptec" and ctrl["controller_firmware"] == "03.01.44.040-0"
     assert ctrl["controller_health"] == "OK" and len(ctrl["drives"]) == 2
     assert any("PCIe 장치 3" in m for m in _notices("storage"))
-    assert rg._p(CH + "/PCIeDevices") in calls and rg._p(CH + "/Drives") not in calls, "드라이브가 있으면 섀시 Drives 폴백은 돌지 않는다"
+    # 2026-10-29 (SA-12): 드라이브가 있어도 섀시가 광고한 Drives 컬렉션을 합집합으로 확인한다(종전: 드라이브가 있으면 요청 안 함).
+    # 이 가짜 표에서 그 컬렉션은 404 — 선택 링크의 404 는 미제공이라 추가 0 · errors 0 · 드라이브 목록은 확인됨(미완결 아님)
+    assert rg._p(CH + "/PCIeDevices") in calls and rg._p(CH + "/Drives") in calls
+    assert inv == {"enumerated": True, "incomplete": False}
 
 
 def test_a8_ambiguous_or_no_match_leaves_controller_unidentified(monkeypatch):
@@ -315,7 +318,8 @@ def test_a4_adapter_count_excludes_fc_only_cards():
                        {"adapter_id": "PCIeCard10", "port_type": "FibreChannel", "associated_address": "51:40:2e:c0:20:82:c2:2e"},
                        {"adapter_id": "PCIeCard15", "port_type": "FibreChannel", "associated_address": "51:40:2e:c0:20:82:c2:94"},
                        {"adapter_id": "PCIeCard15", "port_type": "FibreChannel", "associated_address": "51:40:2e:c0:20:82:c2:96"}]}
-    s = _render("_rf_summary_network", _rf_d_netad=netad, _rf_norm_interfaces=[])
+    collected = {"collected": ["network", "network_adapters"]}     # 2026-10-29 (SA-01 점검): 개수는 그 섹션을 수집했을 때만 정수
+    s = _render("_rf_summary_network", _rf_d_netad=netad, _rf_norm_interfaces=[], _rf_raw_collect=collected)
     assert s["adapter_count"] == 0 and s["port_count"] == 0 and s["groups"] == []
     # Dell R740 모양: NIC 2 + FC 1 + 포트 정보 없는 카드 1 → 3
     netad = {"adapters": [{"id": "NIC.Integrated.1"}, {"id": "NIC.Slot.2"}, {"id": "FC.Slot.1"}, {"id": "NIC.Mezzanine.3"}],
@@ -323,7 +327,7 @@ def test_a4_adapter_count_excludes_fc_only_cards():
                        {"adapter_id": "NIC.Slot.2", "port_type": "Ethernet", "associated_address": "aa:bb:cc:dd:ee:02"},
                        {"adapter_id": "FC.Slot.1", "port_type": "FibreChannel", "associated_address": "21:00:00:24:ff:8b:1a:01"},
                        {"adapter_id": "NIC.Slot.2", "port_type": "InfiniBand", "associated_address": None}]}
-    s = _render("_rf_summary_network", _rf_d_netad=netad, _rf_norm_interfaces=[])
+    s = _render("_rf_summary_network", _rf_d_netad=netad, _rf_norm_interfaces=[], _rf_raw_collect=collected)
     assert s["adapter_count"] == 3
 
 
@@ -339,18 +343,24 @@ def test_a6_identity_less_empty_storage_container_is_dropped():
     assert [c["id"] for c in _render("_rf_norm_controllers", _rf_d_storage=storage)][0] == "1"
 
 
+def _mem_summary(memory, system):
+    """2026-10-29 (SA-05): _rf_summary_memory 는 같은 입력으로 만든 _rf_mem_basis(총량 근거)를 읽는다 — 근거를 먼저 렌더한다."""
+    ctx = {"_rf_d_memory": memory, "_rf_d_system": system, "_rf_raw_collect": {}}
+    return _render("_rf_summary_memory", _rf_mem_basis=_render("_rf_mem_basis", **ctx), **ctx)
+
+
 def test_b1_b10_memory_summary_total_null_or_fallback_and_small_dimm_guard():
     # DIMM 정보 없음 + total_mib 없음 + MemorySummary 없음 → null (종전 0)
-    s = _render("_rf_summary_memory", _rf_d_memory={"slots": [], "total_mib": None}, _rf_d_system={})
+    s = _mem_summary({"slots": [], "total_mib": None}, {})
     assert s == {"groups": [], "grand_total_gb": None}
     # DIMM 없음 · total_mib 524288 → 512
-    s = _render("_rf_summary_memory", _rf_d_memory={"slots": [], "total_mib": 524288}, _rf_d_system={})
+    s = _mem_summary({"slots": [], "total_mib": 524288}, {})
     assert s["grand_total_gb"] == 512
     # DIMM 없음 · MemorySummary 512 GiB → 512
-    s = _render("_rf_summary_memory", _rf_d_memory={"slots": [], "total_mib": None}, _rf_d_system={"memory_summary": {"total_gib": 512}})
+    s = _mem_summary({"slots": [], "total_mib": None}, {"memory_summary": {"total_gib": 512}})
     assert s["grand_total_gb"] == 512
     # 256 MiB DIMM 은 그룹을 만들지 않는다 (unit_capacity_gb 0 금지)
-    s = _render("_rf_summary_memory", _rf_d_memory={"slots": [{"capacity_mb": 256}, {"capacity_mb": 32768}], "total_mib": 33024}, _rf_d_system={})
+    s = _mem_summary({"slots": [{"capacity_mb": 256}, {"capacity_mb": 32768}], "total_mib": 33024}, {})
     assert [g["unit_capacity_gb"] for g in s["groups"]] == [32] and s["grand_total_gb"] == 32
 
 

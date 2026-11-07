@@ -1,0 +1,5688 @@
+{
+ "rows": [
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu.sockets A↔B",
+   "label": "csus3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "csus3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "csus3200_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "csus3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "csus3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.total_mb A↔B",
+   "label": "csus3200_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.installed_mb B↔B",
+   "label": "csus3200_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "csus3200_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory Σgroups B↔C",
+   "label": "csus3200_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "csus3200_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "csus3200_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage Σdisks B↔C",
+   "label": "csus3200_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "csus3200_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network interface count A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network.port_count B↔C",
+   "label": "csus3200_01",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "csus3200_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "csus3200_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "csus3200_01",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "csus3200_01",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard16Eth0 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard16Eth1 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth0 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth1 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard8Eth0 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard8Eth1 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth0 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth1 link A↔B",
+   "label": "csus3200_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "power.summary.psu_count A↔C",
+   "label": "csus3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "csus3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "csus3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 903,
+   "B": 903,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "csus3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 903,
+   "B": 903,
+   "field": "power consumed B↔C",
+   "label": "csus3200_01",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.partition_count A↔C",
+   "label": "csus3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.manager_count A↔C",
+   "label": "csus3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3,
+   "B": 3,
+   "field": "multi_node.summary.chassis_count A↔C",
+   "label": "csus3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.resource_block_count A↔C",
+   "label": "csus3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.fabric_count A↔C",
+   "label": "csus3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu.sockets A↔B",
+   "label": "csus3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu.cores_physical A↔B",
+   "label": "csus3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "partition Partition0 cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "csus3200_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu Σgroups.sockets B↔C",
+   "label": "csus3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu Σgroups.total_cores B↔C",
+   "label": "csus3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "partition Partition0 memory.total_mb A↔B",
+   "label": "csus3200_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "partition Partition0 memory.installed_mb B↔B",
+   "label": "csus3200_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "partition Partition0 memory.grand_total_gb A↔C",
+   "label": "csus3200_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "partition Partition0 memory Σgroups B↔C",
+   "label": "csus3200_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 storage disk count A↔B",
+   "label": "csus3200_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "partition Partition0 storage.grand_total_gb A↔C",
+   "label": "csus3200_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "partition Partition0 storage Σdisks B↔C",
+   "label": "csus3200_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 storage Σgroups.quantity B↔C",
+   "label": "csus3200_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": {
+    "groups": []
+   },
+   "B": {
+    "groups": []
+   },
+   "field": "partition Partition0 network.summary 미계산",
+   "label": "csus3200_01",
+   "rule": "SA-03: 파티션 network summary 는 계산하지 않음(문서 9)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "fabric FlexGrid.switch_count A↔B",
+   "label": "csus3200_01",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "fabric FlexGrid.endpoint_count A↔B",
+   "label": "csus3200_01",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu.sockets A↔B",
+   "label": "csus3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 112,
+   "B": 112,
+   "field": "cpu.cores_physical A↔B",
+   "label": "csus3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Platinum 8450H Processor manufacturer A↔C",
+   "label": "csus3200_02",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "csus3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 112,
+   "B": 112,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "csus3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.total_mb A↔B",
+   "label": "csus3200_02",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.installed_mb B↔B",
+   "label": "csus3200_02",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "csus3200_02",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory Σgroups B↔C",
+   "label": "csus3200_02",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "csus3200_02",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "csus3200_02",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage Σdisks B↔C",
+   "label": "csus3200_02",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "csus3200_02",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "network interface count A↔B",
+   "label": "csus3200_02",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "network.port_count B↔C",
+   "label": "csus3200_02",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "csus3200_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "csus3200_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "csus3200_02",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "csus3200_02",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth0 link A↔B",
+   "label": "csus3200_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth1 link A↔B",
+   "label": "csus3200_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth0 link A↔B",
+   "label": "csus3200_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth1 link A↔B",
+   "label": "csus3200_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "power.summary.psu_count A↔C",
+   "label": "csus3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "csus3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "csus3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 816,
+   "B": 816,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "csus3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 816,
+   "B": 816,
+   "field": "power consumed B↔C",
+   "label": "csus3200_02",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.partition_count A↔C",
+   "label": "csus3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.manager_count A↔C",
+   "label": "csus3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3,
+   "B": 3,
+   "field": "multi_node.summary.chassis_count A↔C",
+   "label": "csus3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.resource_block_count A↔C",
+   "label": "csus3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.fabric_count A↔C",
+   "label": "csus3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu.sockets A↔B",
+   "label": "csus3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 112,
+   "B": 112,
+   "field": "partition Partition0 cpu.cores_physical A↔B",
+   "label": "csus3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "partition Partition0 cpu group Intel(R) Xeon(R) Platinum 8450H Processor manufacturer A↔C",
+   "label": "csus3200_02",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu Σgroups.sockets B↔C",
+   "label": "csus3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 112,
+   "B": 112,
+   "field": "partition Partition0 cpu Σgroups.total_cores B↔C",
+   "label": "csus3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.total_mb A↔B",
+   "label": "csus3200_02",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.installed_mb B↔B",
+   "label": "csus3200_02",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory.grand_total_gb A↔C",
+   "label": "csus3200_02",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory Σgroups B↔C",
+   "label": "csus3200_02",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 storage disk count A↔B",
+   "label": "csus3200_02",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "partition Partition0 storage.grand_total_gb A↔C",
+   "label": "csus3200_02",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "partition Partition0 storage Σdisks B↔C",
+   "label": "csus3200_02",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 storage Σgroups.quantity B↔C",
+   "label": "csus3200_02",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": {
+    "groups": []
+   },
+   "B": {
+    "groups": []
+   },
+   "field": "partition Partition0 network.summary 미계산",
+   "label": "csus3200_02",
+   "rule": "SA-03: 파티션 network summary 는 계산하지 않음(문서 9)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "fabric FlexGrid.switch_count A↔B",
+   "label": "csus3200_02",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "fabric FlexGrid.endpoint_count A↔B",
+   "label": "csus3200_02",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu.sockets A↔B",
+   "label": "csus3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "csus3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "csus3200_03",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "csus3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "csus3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.total_mb A↔B",
+   "label": "csus3200_03",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.installed_mb B↔B",
+   "label": "csus3200_03",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "csus3200_03",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory Σgroups B↔C",
+   "label": "csus3200_03",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "csus3200_03",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "csus3200_03",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage Σdisks B↔C",
+   "label": "csus3200_03",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "csus3200_03",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network interface count A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network.port_count B↔C",
+   "label": "csus3200_03",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "csus3200_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "csus3200_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "csus3200_03",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "csus3200_03",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard16Eth0 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard16Eth1 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth0 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth1 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard8Eth0 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard8Eth1 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth0 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth1 link A↔B",
+   "label": "csus3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "power.summary.psu_count A↔C",
+   "label": "csus3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "csus3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "csus3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 867,
+   "B": 867,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "csus3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 867,
+   "B": 867,
+   "field": "power consumed B↔C",
+   "label": "csus3200_03",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.partition_count A↔C",
+   "label": "csus3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.manager_count A↔C",
+   "label": "csus3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3,
+   "B": 3,
+   "field": "multi_node.summary.chassis_count A↔C",
+   "label": "csus3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.resource_block_count A↔C",
+   "label": "csus3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.fabric_count A↔C",
+   "label": "csus3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu.sockets A↔B",
+   "label": "csus3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu.cores_physical A↔B",
+   "label": "csus3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "partition Partition0 cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "csus3200_03",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu Σgroups.sockets B↔C",
+   "label": "csus3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu Σgroups.total_cores B↔C",
+   "label": "csus3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.total_mb A↔B",
+   "label": "csus3200_03",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.installed_mb B↔B",
+   "label": "csus3200_03",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory.grand_total_gb A↔C",
+   "label": "csus3200_03",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory Σgroups B↔C",
+   "label": "csus3200_03",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 storage disk count A↔B",
+   "label": "csus3200_03",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "partition Partition0 storage.grand_total_gb A↔C",
+   "label": "csus3200_03",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "partition Partition0 storage Σdisks B↔C",
+   "label": "csus3200_03",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 storage Σgroups.quantity B↔C",
+   "label": "csus3200_03",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": {
+    "groups": []
+   },
+   "B": {
+    "groups": []
+   },
+   "field": "partition Partition0 network.summary 미계산",
+   "label": "csus3200_03",
+   "rule": "SA-03: 파티션 network summary 는 계산하지 않음(문서 9)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "fabric FlexGrid.switch_count A↔B",
+   "label": "csus3200_03",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "fabric FlexGrid.endpoint_count A↔B",
+   "label": "csus3200_03",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "dl380_gen12_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1572864,
+   "B": 1572864,
+   "field": "memory.total_mb A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1572864,
+   "B": 1572864,
+   "field": "memory.installed_mb B↔B",
+   "label": "dl380_gen12_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1536,
+   "B": 1536,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1536,
+   "B": 1536,
+   "field": "memory Σgroups B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage disk count A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage Σdisks B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 10,
+   "B": 10,
+   "field": "network interface count A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 10,
+   "B": 10,
+   "field": "network.port_count B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 10,
+   "B": 10,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "network Σlink_up_count B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 141 link A↔B",
+   "label": "dl380_gen12_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 142 link A↔B",
+   "label": "dl380_gen12_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 269 link A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 270 link A↔B",
+   "label": "dl380_gen12_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 333 link A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 334 link A↔B",
+   "label": "dl380_gen12_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 461 link A↔B",
+   "label": "dl380_gen12_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 462 link A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 77 link A↔B",
+   "label": "dl380_gen12_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 78 link A↔B",
+   "label": "dl380_gen12_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3200,
+   "B": 3200,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Critical",
+   "B": "Critical",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 516,
+   "B": 516,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 516,
+   "B": 516,
+   "field": "power consumed B↔C",
+   "label": "dl380_gen12_01",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "dl380_gen12_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "dl380_gen12_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "dl380_gen12_02",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.total_mb A↔B",
+   "label": "dl380_gen12_02",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.installed_mb B↔B",
+   "label": "dl380_gen12_02",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory Σgroups B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "dl380_gen12_02",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage Σdisks B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network interface count A↔B",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network.port_count B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "network Σlink_up_count B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 13 link A↔B",
+   "label": "dl380_gen12_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 14 link A↔B",
+   "label": "dl380_gen12_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 141 link A↔B",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 142 link A↔B",
+   "label": "dl380_gen12_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 205 link A↔B",
+   "label": "dl380_gen12_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 206 link A↔B",
+   "label": "dl380_gen12_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 333 link A↔B",
+   "label": "dl380_gen12_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 334 link A↔B",
+   "label": "dl380_gen12_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3200,
+   "B": 3200,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Critical",
+   "B": "Critical",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 446,
+   "B": 446,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 446,
+   "B": 446,
+   "field": "power consumed B↔C",
+   "label": "dl380_gen12_02",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "dl380_gen12_03",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.total_mb A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.installed_mb B↔B",
+   "label": "dl380_gen12_03",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory Σgroups B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage disk count A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "storage Σdisks B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "network interface count A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "network.port_count B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC 269 link A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC 270 link A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC 77 link A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC 78 link A↔B",
+   "label": "dl380_gen12_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "power.summary.psu_count A↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.health_rollup A↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "power consumed B↔C",
+   "label": "dl380_gen12_03",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "dl380_gen12_04",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.total_mb A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.installed_mb B↔B",
+   "label": "dl380_gen12_04",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory Σgroups B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5960,
+   "B": 5960,
+   "field": "storage Σdisks B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network interface count A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network.port_count B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network Σlink_up_count B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 141 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 142 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 269 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 270 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 333 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 334 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 77 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 78 link A↔B",
+   "label": "dl380_gen12_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3200,
+   "B": 3200,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Critical",
+   "B": "Critical",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 482,
+   "B": 482,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 482,
+   "B": 482,
+   "field": "power consumed B↔C",
+   "label": "dl380_gen12_04",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 48,
+   "B": 48,
+   "field": "cpu.cores_physical A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Platinum 8260 CPU @ 2.40GHz manufacturer A↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 48,
+   "B": 48,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.total_mb A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.installed_mb B↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory Σgroups B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4468,
+   "B": 4468,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4468,
+   "B": 4468,
+   "field": "storage Σdisks B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 12,
+   "B": 12,
+   "field": "network interface count A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 12,
+   "B": 12,
+   "field": "network.port_count B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 12,
+   "B": 12,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "network Σlink_up_count B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 10000,
+   "B": 10000,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Integrated.1-1-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Integrated.1-2-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Integrated.1-3-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Integrated.1-4-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC NIC.Slot.2-1-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Slot.2-2-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC NIC.Slot.3-1-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Slot.3-2-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Slot.5-1-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Slot.5-2-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Slot.8-1-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC.Slot.8-2-1 link A↔B",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1500,
+   "B": 1500,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 314,
+   "B": 314,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 314,
+   "B": 314,
+   "field": "power consumed B↔C",
+   "label": "r1_DELL_R740_01",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Gold 6434H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network interface count A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network.port_count B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "power.summary.psu_count A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 592,
+   "B": 592,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 592,
+   "B": 592,
+   "field": "power consumed B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.partition_count A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.manager_count A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3,
+   "B": 3,
+   "field": "multi_node.summary.chassis_count A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.resource_block_count A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.fabric_count A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "partition Partition0 cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "partition Partition0 cpu group Intel(R) Xeon(R) Gold 6434H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "partition Partition0 cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": {
+    "groups": []
+   },
+   "B": {
+    "groups": []
+   },
+   "field": "partition Partition0 network.summary 미계산",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "SA-03: 파티션 network summary 는 계산하지 않음(문서 9)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "fabric FlexGrid.switch_count A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "fabric FlexGrid.endpoint_count A↔B",
+   "label": "r1_HPE_CSUS3200_01",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Gold 6434H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network interface count A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network.port_count B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "power.summary.psu_count A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 600,
+   "B": 600,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 600,
+   "B": 600,
+   "field": "power consumed B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.partition_count A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.manager_count A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3,
+   "B": 3,
+   "field": "multi_node.summary.chassis_count A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.resource_block_count A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.fabric_count A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "partition Partition0 cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "partition Partition0 cpu group Intel(R) Xeon(R) Gold 6434H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "partition Partition0 cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 524288,
+   "B": 524288,
+   "field": "partition Partition0 memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 512,
+   "B": 512,
+   "field": "partition Partition0 memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "partition Partition0 storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": {
+    "groups": []
+   },
+   "B": {
+    "groups": []
+   },
+   "field": "partition Partition0 network.summary 미계산",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "SA-03: 파티션 network summary 는 계산하지 않음(문서 9)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "fabric FlexGrid.switch_count A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "fabric FlexGrid.endpoint_count A↔B",
+   "label": "r1_HPE_CSUS3200_02",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network interface count A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network.port_count B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard13Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard13Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard5Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard5Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "power.summary.psu_count A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1000,
+   "B": 1000,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1000,
+   "B": 1000,
+   "field": "power consumed B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.partition_count A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.manager_count A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3,
+   "B": 3,
+   "field": "multi_node.summary.chassis_count A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.resource_block_count A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.fabric_count A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "partition Partition0 cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "partition Partition0 memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "partition Partition0 memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "partition Partition0 memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "partition Partition0 memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "partition Partition0 storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "partition Partition0 storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "partition Partition0 storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "partition Partition0 storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": {
+    "groups": []
+   },
+   "B": {
+    "groups": []
+   },
+   "field": "partition Partition0 network.summary 미계산",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "SA-03: 파티션 network summary 는 계산하지 않음(문서 9)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "fabric FlexGrid.switch_count A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "fabric FlexGrid.endpoint_count A↔B",
+   "label": "r1_HPE_CSUS3200_03",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network interface count A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network.port_count B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 8,
+   "B": 8,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network Σlink_up_count B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard13Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard13Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard1Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard5Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard5Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth0 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC PCIeCard9Eth1 link A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "power.summary.psu_count A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 946,
+   "B": 946,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 946,
+   "B": 946,
+   "field": "power consumed B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.partition_count A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.manager_count A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3,
+   "B": 3,
+   "field": "multi_node.summary.chassis_count A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.resource_block_count A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "multi_node.summary.fabric_count A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MN (9 SA-01 · SA-02)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu.sockets A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu.cores_physical A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "partition Partition0 cpu group Intel(R) Xeon(R) Platinum 8444H Processor manufacturer A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "partition Partition0 cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "partition Partition0 cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "partition Partition0 memory.total_mb A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "partition Partition0 memory.installed_mb B↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "partition Partition0 memory.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "partition Partition0 memory Σgroups B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "partition Partition0 storage disk count A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "partition Partition0 storage.grand_total_gb A↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "partition Partition0 storage Σdisks B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "partition Partition0 storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": {
+    "groups": []
+   },
+   "B": {
+    "groups": []
+   },
+   "field": "partition Partition0 network.summary 미계산",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "SA-03: 파티션 network summary 는 계산하지 않음(문서 9)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "fabric FlexGrid.switch_count A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "fabric FlexGrid.endpoint_count A↔B",
+   "label": "r1_HPE_CSUS3200_04",
+   "rule": "R-MN (SA-01)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 48,
+   "B": 48,
+   "field": "cpu.cores_physical A↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6527P manufacturer A↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 48,
+   "B": 48,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.total_mb A↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.installed_mb B↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory Σgroups B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage disk count A↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2980,
+   "B": 2980,
+   "field": "storage Σdisks B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 6,
+   "B": 6,
+   "field": "network interface count A↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 6,
+   "B": 6,
+   "field": "network.port_count B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 6,
+   "B": 6,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "network Σlink_up_count B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": null,
+   "B": null,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 13 link A↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 14 link A↔B",
+   "label": "r1_HPE_DL380_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 141 link A↔B",
+   "label": "r1_HPE_DL380_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 142 link A↔B",
+   "label": "r1_HPE_DL380_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC 205 link A↔B",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC 206 link A↔B",
+   "label": "r1_HPE_DL380_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 3200,
+   "B": 3200,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 417,
+   "B": 417,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 417,
+   "B": 417,
+   "field": "power consumed B↔C",
+   "label": "r1_HPE_DL380_01",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "cpu.cores_physical A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6724P manufacturer A↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 32,
+   "B": 32,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.total_mb A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.installed_mb B↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory Σgroups B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4466,
+   "B": 4466,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4466,
+   "B": 4466,
+   "field": "storage Σdisks B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 13,
+   "B": 13,
+   "field": "network interface count A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 13,
+   "B": 13,
+   "field": "network.port_count B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 13,
+   "B": 13,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "network Σlink_up_count B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 25600,
+   "B": 25600,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC1 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC10 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC11 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC12 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC2 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC3 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC4 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC NIC5 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC6 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC7 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "down",
+   "B": "down",
+   "field": "NIC NIC8 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "up",
+   "B": "up",
+   "field": "NIC NIC9 link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC ToManager link A↔B",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4000,
+   "B": 4000,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "OK",
+   "B": "OK",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 386,
+   "B": 386,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 386,
+   "B": 386,
+   "field": "power consumed B↔C",
+   "label": "r1_Lenovo_SR650_01",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "sr650_v4_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "sr650_v4_01",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "sr650_v4_01",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 131072,
+   "B": 131072,
+   "field": "memory.total_mb A↔B",
+   "label": "sr650_v4_01",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 131072,
+   "B": 131072,
+   "field": "memory.installed_mb B↔B",
+   "label": "sr650_v4_01",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 128,
+   "B": 128,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 128,
+   "B": 128,
+   "field": "memory Σgroups B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "sr650_v4_01",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5956,
+   "B": 5956,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5956,
+   "B": 5956,
+   "field": "storage Σdisks B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network interface count A↔B",
+   "label": "sr650_v4_01",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network.port_count B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "network Σlink_up_count B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 25600,
+   "B": 25600,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "sr650_v4_01",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC NIC1 link A↔B",
+   "label": "sr650_v4_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC2 link A↔B",
+   "label": "sr650_v4_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC NIC3 link A↔B",
+   "label": "sr650_v4_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC4 link A↔B",
+   "label": "sr650_v4_01",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC ToManager link A↔B",
+   "label": "sr650_v4_01",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2600,
+   "B": 2600,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Critical",
+   "B": "Critical",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 376,
+   "B": 376,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 376,
+   "B": 376,
+   "field": "power consumed B↔C",
+   "label": "sr650_v4_01",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "sr650_v4_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "sr650_v4_02",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "sr650_v4_02",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 131072,
+   "B": 131072,
+   "field": "memory.total_mb A↔B",
+   "label": "sr650_v4_02",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 131072,
+   "B": 131072,
+   "field": "memory.installed_mb B↔B",
+   "label": "sr650_v4_02",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 128,
+   "B": 128,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 128,
+   "B": 128,
+   "field": "memory Σgroups B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage disk count A↔B",
+   "label": "sr650_v4_02",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5956,
+   "B": 5956,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5956,
+   "B": 5956,
+   "field": "storage Σdisks B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 4,
+   "B": 4,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network interface count A↔B",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network.port_count B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "network Σlink_up_count B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 25600,
+   "B": 25600,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC NIC1 link A↔B",
+   "label": "sr650_v4_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC2 link A↔B",
+   "label": "sr650_v4_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC NIC5 link A↔B",
+   "label": "sr650_v4_02",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC NIC6 link A↔B",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC ToManager link A↔B",
+   "label": "sr650_v4_02",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2600,
+   "B": 2600,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Critical",
+   "B": "Critical",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 403,
+   "B": 403,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 403,
+   "B": 403,
+   "field": "power consumed B↔C",
+   "label": "sr650_v4_02",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "sr650_v4_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "sr650_v4_03",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "sr650_v4_03",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.total_mb A↔B",
+   "label": "sr650_v4_03",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1048576,
+   "B": 1048576,
+   "field": "memory.installed_mb B↔B",
+   "label": "sr650_v4_03",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1024,
+   "B": 1024,
+   "field": "memory Σgroups B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage disk count A↔B",
+   "label": "sr650_v4_03",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2978,
+   "B": 2978,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2978,
+   "B": 2978,
+   "field": "storage Σdisks B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 11,
+   "B": 11,
+   "field": "network interface count A↔B",
+   "label": "sr650_v4_03",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 11,
+   "B": 11,
+   "field": "network.port_count B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 11,
+   "B": 11,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 10,
+   "B": 10,
+   "field": "network Σlink_up_count B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 25600,
+   "B": 25600,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "sr650_v4_03",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC1 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC10 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC11 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC12 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC13 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC14 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC2 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC3 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC4 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC9 link A↔B",
+   "label": "sr650_v4_03",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC ToManager link A↔B",
+   "label": "sr650_v4_03",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2600,
+   "B": 2600,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Critical",
+   "B": "Critical",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 525,
+   "B": 525,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 525,
+   "B": 525,
+   "field": "power consumed B↔C",
+   "label": "sr650_v4_03",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu.sockets A↔B",
+   "label": "sr650_v4_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu.cores_physical A↔B",
+   "label": "sr650_v4_04",
+   "rule": "R-CPU sockets/cores (6.1 SA-04)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Intel",
+   "B": "Intel",
+   "field": "cpu group Intel(R) Xeon(R) 6737P manufacturer A↔C",
+   "label": "sr650_v4_04",
+   "rule": "FIX 2 표 (6.1 · 파티션 SA-03)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "cpu Σgroups.sockets B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 64,
+   "B": 64,
+   "field": "cpu Σgroups.total_cores B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-CPU-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.total_mb A↔B",
+   "label": "sr650_v4_04",
+   "rule": "R-MEM-1 (6.2 SA-05)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 262144,
+   "B": 262144,
+   "field": "memory.installed_mb B↔B",
+   "label": "sr650_v4_04",
+   "rule": "total_basis physical_installed",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory.grand_total_gb A↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-MEM-2 half-even",
+   "verdict": "PASS"
+  },
+  {
+   "A": 256,
+   "B": 256,
+   "field": "memory Σgroups B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-MEM-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 6,
+   "B": 6,
+   "field": "storage disk count A↔B",
+   "label": "sr650_v4_04",
+   "rule": "R-STO-1 (6.3 SA-12)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 14898,
+   "B": 14898,
+   "field": "storage.grand_total_gb A↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-STO-2 (6.3 SA-07, floor)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 14898,
+   "B": 14898,
+   "field": "storage Σdisks B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-STO-3 floor(total_mb/1024)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 6,
+   "B": 6,
+   "field": "storage Σgroups.quantity B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-STO-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network interface count A↔B",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-1 (6.4 C4)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network.port_count B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-2",
+   "verdict": "PASS"
+  },
+  {
+   "A": 5,
+   "B": 5,
+   "field": "network Σgroups.quantity B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 1,
+   "B": 1,
+   "field": "network Σlink_up_count B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-3",
+   "verdict": "PASS"
+  },
+  {
+   "A": 25600,
+   "B": 25600,
+   "field": "network.primary_speed_mbps B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-4 (SA-10)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 0,
+   "B": 0,
+   "field": "network group speed 0 없음 C",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-5 (SA-08)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC NIC1 link A↔B",
+   "label": "sr650_v4_04",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "up",
+   "field": "NIC NIC2 link A↔B",
+   "label": "sr650_v4_04",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "down",
+   "field": "NIC NIC3 link A↔B",
+   "label": "sr650_v4_04",
+   "note": "F-01: NIC 원문 없음 → 같은 MAC 포트 값 보충",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "CM"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC NIC4 link A↔B",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "unknown",
+   "B": "unknown",
+   "field": "NIC ToManager link A↔B",
+   "label": "sr650_v4_04",
+   "rule": "R-NET-6 (SA-09)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2,
+   "B": 2,
+   "field": "power.summary.psu_count A↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 2600,
+   "B": 2600,
+   "field": "power.summary.total_capacity_w A↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": "Critical",
+   "B": "Critical",
+   "field": "power.summary.health_rollup A↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 409,
+   "B": 409,
+   "field": "power.summary.consumed_watts A↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-PWR (6.5 SA-06 · SA-17)",
+   "verdict": "PASS"
+  },
+  {
+   "A": 409,
+   "B": 409,
+   "field": "power consumed B↔C",
+   "label": "sr650_v4_04",
+   "rule": "R-PWR-5",
+   "verdict": "PASS"
+  }
+ ],
+ "tally": {
+  "CM": 36,
+  "PASS": 666
+ }
+}

@@ -1,0 +1,4889 @@
+{
+ "csus3200_01|cpu": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=4 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 4,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 4,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "PASS",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "csus3200_01|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname='yicdspdb01' (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": "yicdspdb01",
+   "hostname_source": "system"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": "yicdspdb01",
+   "hostname_source": "system"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "csus3200_01|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8",
+  "mine_before": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_01|storage": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "MOCK_LIMITATION",
+  "impl_evidence": "hbas 4 link_status down True · 카드 조건 notice 2건(A안, 값 불변) — 포트 단위 링크는 RMC 가 주지 않아 재생으로 확정 불가",
+  "mine_before": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 2,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 2,
+   "link_missing_notices": 2,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "NOT_APPLICABLE",
+   "hbas": "ISSUE",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_01|memory": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "slots 32 rank_count=[1] (02-memory-004) · speed_mhz 원값 보존(FIX 3 문서) · total_basis 관찰",
+  "mine_before": {
+   "slots": 32,
+   "rank": [
+    "None"
+   ],
+   "locator_ex": [
+    "rack1/chassis_u1/cpu0/dimmA0",
+    "rack1/chassis_u1/cpu2/dimmA0"
+   ],
+   "speed": [
+    "3200"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 1048576
+  },
+  "mine_after": {
+   "slots": 32,
+   "rank": [
+    "1"
+   ],
+   "locator_ex": [
+    "rack1/chassis_u1/cpu0/dimmA0",
+    "rack1/chassis_u1/cpu2/dimmA0"
+   ],
+   "speed": [
+    "3200"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 1048576
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "ISSUE"
+  }
+ },
+ "csus3200_01|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "Partition0_FW/ComplexFW category=['other', 'other'] (구조 근거 없음 → other 유지, VALIDATED) · updateable null 허용(사전 boolean|null)",
+  "mine_before": {
+   "count": 13,
+   "categories": {
+    "other": 4,
+    "nic": 4,
+    "storage_controller": 1,
+    "psu": 4
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": []
+  },
+  "mine_after": {
+   "count": 13,
+   "categories": {
+    "other": 4,
+    "nic": 4,
+    "storage_controller": 1,
+    "psu": 4
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": []
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "ISSUE",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "PASS",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "PASS"
+  }
+ },
+ "csus3200_01|bios": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_version=1.77.30-20260911_061319 == bmc.firmware_version=1.77.30-20260911_061319 (complex 번들, 04-firmware-011 문서) · UEFI 항목 category other(VALIDATED)",
+  "mine_before": {
+   "attrs": 76,
+   "bios_version": "1.77.30-20260911_061319",
+   "bios_date": null
+  },
+  "mine_after": {
+   "attrs": 76,
+   "bios_version": "1.77.30-20260911_061319",
+   "bios_date": null
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "NOT_APPLICABLE",
+   "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE",
+   "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+  }
+ },
+ "csus3200_01|thermal": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) temps 63 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0",
+  "mine_before": {
+   "temps": 63,
+   "fans": 10,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 4
+  },
+  "mine_after": {
+   "temps": 63,
+   "fans": 10,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 4
+  },
+  "analysis_fields": {
+   "temperatures[]": "PASS",
+   "temperatures[].reading_celsius": "PASS",
+   "temperatures[].health/state": "NOT_APPLICABLE",
+   "temperatures[].upper_critical": "NOT_APPLICABLE",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "csus3200_01|hardware": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) health='OK' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)",
+  "mine_before": {
+   "health": "OK",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "OK",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "NOT_APPLICABLE",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "PASS",
+   "oem": "PASS"
+  }
+ },
+ "csus3200_01|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "name='RMC' (06-bmc-006; layout 없는 재생도 RMC) · uuid=None 문서 정정(06-bmc-009)",
+  "mine_before": {
+   "name": "RMC",
+   "timezone": "Asia/Seoul",
+   "datetime": "2026-10-22T14:51:29+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.24",
+   "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "RMC",
+   "timezone": "Asia/Seoul",
+   "datetime": "2026-10-22T14:51:29+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.24",
+   "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "ISSUE",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "NOT_APPLICABLE",
+   "uuid": "NOT_APPLICABLE",
+   "serial": "PASS",
+   "part_number": "PASS",
+   "manufacturer": "PASS",
+   "last_reset_time": "NOT_APPLICABLE",
+   "timezone": "PASS",
+   "datetime": "PASS",
+   "datetime_offset": "PASS",
+   "oem": "NOT_APPLICABLE",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "PASS",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_01|power": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) PSU 4 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 0건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 4,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 4,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "PASS",
+   "power_supplies[].power_capacity_w": "NOT_APPLICABLE",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "PASS",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "NOT_APPLICABLE",
+   "power_control.min/avg/max/interval": "NOT_APPLICABLE",
+   "summary": "PASS",
+   "sections.power": "PASS",
+   "multi_node.chassis[].power/thermal": "PASS"
+  }
+ },
+ "csus3200_01|multi_node": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "composition count null True (FIX 6) · 링크 없는 섀시 경로 요청 0 (01-multi_node-006) · layout=rmc_primary · baseline 실측 교체(FIX 5, 01-multi_node-003)",
+  "mine_before": {
+   "enabled": true,
+   "rb_counts": [
+    [
+     0,
+     0
+    ]
+   ],
+   "partitions": 1
+  },
+  "mine_after": {
+   "enabled": true,
+   "rb_counts": [
+    [
+     null,
+     null
+    ]
+   ],
+   "partitions": 1
+  },
+  "analysis_fields": {
+   "enabled_layout": "PASS",
+   "summary": "PASS",
+   "partitions": "PASS",
+   "managers": "PASS",
+   "chassis": "ISSUE",
+   "composition": "ISSUE",
+   "fabrics": "PASS"
+  }
+ },
+ "csus3200_02|cpu": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=4 cores=112",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 4,
+   "cores": 112
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 4,
+   "cores": 112
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "ISSUE",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "csus3200_02|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname='yicgsfabap01' (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": "yicgsfabap01",
+   "hostname_source": "system"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": "yicgsfabap01",
+   "hostname_source": "system"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "csus3200_02|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 4 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=4",
+  "mine_before": {
+   "interfaces": 4,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 4,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_02|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) FC HBA 없음(hbas 0 · 노출 0, 개수 정합) · disks=4",
+  "mine_before": {
+   "disks": 4,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 4,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "NOT_APPLICABLE",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_02|memory": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "slots 16 rank_count=[1] (02-memory-004) · speed_mhz 원값 보존(FIX 3 문서) · total_basis 관찰",
+  "mine_before": {
+   "slots": 16,
+   "rank": [
+    "None"
+   ],
+   "locator_ex": [
+    "rack1/chassis_u1/cpu0/dimmA0",
+    "rack1/chassis_u1/cpu2/dimmA0"
+   ],
+   "speed": [
+    "3200"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 524288
+  },
+  "mine_after": {
+   "slots": 16,
+   "rank": [
+    "1"
+   ],
+   "locator_ex": [
+    "rack1/chassis_u1/cpu0/dimmA0",
+    "rack1/chassis_u1/cpu2/dimmA0"
+   ],
+   "speed": [
+    "3200"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 524288
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "ISSUE"
+  }
+ },
+ "csus3200_02|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "Partition0_FW/ComplexFW category=['other', 'other'] (구조 근거 없음 → other 유지, VALIDATED) · updateable null 허용(사전 boolean|null)",
+  "mine_before": {
+   "count": 9,
+   "categories": {
+    "other": 2,
+    "nic": 2,
+    "storage_controller": 1,
+    "psu": 4
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": []
+  },
+  "mine_after": {
+   "count": 9,
+   "categories": {
+    "other": 2,
+    "nic": 2,
+    "storage_controller": 1,
+    "psu": 4
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": []
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "ISSUE",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "PASS",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "PASS"
+  }
+ },
+ "csus3200_02|bios": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_version=1.77.30-20260911_061319 == bmc.firmware_version=1.77.30-20260911_061319 (complex 번들, 04-firmware-011 문서) · UEFI 항목 category other(VALIDATED)",
+  "mine_before": {
+   "attrs": 76,
+   "bios_version": "1.77.30-20260911_061319",
+   "bios_date": null
+  },
+  "mine_after": {
+   "attrs": 76,
+   "bios_version": "1.77.30-20260911_061319",
+   "bios_date": null
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "NOT_APPLICABLE",
+   "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE",
+   "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+  }
+ },
+ "csus3200_02|thermal": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) temps 47 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0",
+  "mine_before": {
+   "temps": 47,
+   "fans": 10,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 4
+  },
+  "mine_after": {
+   "temps": 47,
+   "fans": 10,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 4
+  },
+  "analysis_fields": {
+   "temperatures[]": "PASS",
+   "temperatures[].reading_celsius": "PASS",
+   "temperatures[].health/state": "NOT_APPLICABLE",
+   "temperatures[].upper_critical": "NOT_APPLICABLE",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "csus3200_02|hardware": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) health='OK' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)",
+  "mine_before": {
+   "health": "OK",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "OK",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "NOT_APPLICABLE",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "PASS",
+   "oem": "PASS"
+  }
+ },
+ "csus3200_02|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "name='RMC' (06-bmc-006; layout 없는 재생도 RMC) · uuid=None 문서 정정(06-bmc-009)",
+  "mine_before": {
+   "name": "RMC",
+   "timezone": "Asia/Seoul",
+   "datetime": "2026-10-22T14:51:28+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.31",
+   "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "RMC",
+   "timezone": "Asia/Seoul",
+   "datetime": "2026-10-22T14:51:28+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.31",
+   "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "ISSUE",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "NOT_APPLICABLE",
+   "uuid": "NOT_APPLICABLE",
+   "serial": "PASS",
+   "part_number": "PASS",
+   "manufacturer": "PASS",
+   "last_reset_time": "NOT_APPLICABLE",
+   "timezone": "PASS",
+   "datetime": "PASS",
+   "datetime_offset": "PASS",
+   "oem": "NOT_APPLICABLE",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "PASS",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_02|power": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) PSU 4 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 0건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 4,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 4,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "PASS",
+   "power_supplies[].power_capacity_w": "NOT_APPLICABLE",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "PASS",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "NOT_APPLICABLE",
+   "power_control.min/avg/max/interval": "NOT_APPLICABLE",
+   "summary": "PASS",
+   "sections.power": "PASS",
+   "multi_node.chassis[].power/thermal": "PASS"
+  }
+ },
+ "csus3200_02|multi_node": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "composition count null True (FIX 6) · 링크 없는 섀시 경로 요청 0 (01-multi_node-006) · layout=rmc_primary · baseline 실측 교체(FIX 5, 01-multi_node-003)",
+  "mine_before": {
+   "enabled": true,
+   "rb_counts": [
+    [
+     0,
+     0
+    ]
+   ],
+   "partitions": 1
+  },
+  "mine_after": {
+   "enabled": true,
+   "rb_counts": [
+    [
+     null,
+     null
+    ]
+   ],
+   "partitions": 1
+  },
+  "analysis_fields": {
+   "enabled_layout": "PASS",
+   "summary": "PASS",
+   "partitions": "PASS",
+   "managers": "PASS",
+   "chassis": "ISSUE",
+   "composition": "ISSUE",
+   "fabrics": "PASS"
+  }
+ },
+ "csus3200_03|cpu": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=4 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 4,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 4,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "PASS",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "csus3200_03|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname='yicgsfabdb01' (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": "yicgsfabdb01",
+   "hostname_source": "system"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": "yicgsfabdb01",
+   "hostname_source": "system"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "csus3200_03|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8",
+  "mine_before": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_03|storage": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "MOCK_LIMITATION",
+  "impl_evidence": "hbas 4 link_status down True · 카드 조건 notice 2건(A안, 값 불변) — 포트 단위 링크는 RMC 가 주지 않아 재생으로 확정 불가",
+  "mine_before": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 2,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 2,
+   "link_missing_notices": 2,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "NOT_APPLICABLE",
+   "hbas": "ISSUE",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_03|memory": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "slots 16 rank_count=[1] (02-memory-004) · speed_mhz 원값 보존(FIX 3 문서) · total_basis 관찰",
+  "mine_before": {
+   "slots": 16,
+   "rank": [
+    "None"
+   ],
+   "locator_ex": [
+    "rack1/chassis_u1/cpu0/dimmA0",
+    "rack1/chassis_u1/cpu2/dimmA0"
+   ],
+   "speed": [
+    "3200"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 524288
+  },
+  "mine_after": {
+   "slots": 16,
+   "rank": [
+    "1"
+   ],
+   "locator_ex": [
+    "rack1/chassis_u1/cpu0/dimmA0",
+    "rack1/chassis_u1/cpu2/dimmA0"
+   ],
+   "speed": [
+    "3200"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 524288
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "ISSUE"
+  }
+ },
+ "csus3200_03|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "Partition0_FW/ComplexFW category=['other', 'other'] (구조 근거 없음 → other 유지, VALIDATED) · updateable null 허용(사전 boolean|null)",
+  "mine_before": {
+   "count": 13,
+   "categories": {
+    "other": 4,
+    "nic": 4,
+    "storage_controller": 1,
+    "psu": 4
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": []
+  },
+  "mine_after": {
+   "count": 13,
+   "categories": {
+    "other": 4,
+    "nic": 4,
+    "storage_controller": 1,
+    "psu": 4
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": []
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "ISSUE",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "PASS",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "PASS"
+  }
+ },
+ "csus3200_03|bios": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_version=1.77.30-20260911_061319 == bmc.firmware_version=1.77.30-20260911_061319 (complex 번들, 04-firmware-011 문서) · UEFI 항목 category other(VALIDATED)",
+  "mine_before": {
+   "attrs": 76,
+   "bios_version": "1.77.30-20260911_061319",
+   "bios_date": null
+  },
+  "mine_after": {
+   "attrs": 76,
+   "bios_version": "1.77.30-20260911_061319",
+   "bios_date": null
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "NOT_APPLICABLE",
+   "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE",
+   "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+  }
+ },
+ "csus3200_03|thermal": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) temps 47 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0",
+  "mine_before": {
+   "temps": 47,
+   "fans": 10,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 4
+  },
+  "mine_after": {
+   "temps": 47,
+   "fans": 10,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 4
+  },
+  "analysis_fields": {
+   "temperatures[]": "PASS",
+   "temperatures[].reading_celsius": "PASS",
+   "temperatures[].health/state": "NOT_APPLICABLE",
+   "temperatures[].upper_critical": "NOT_APPLICABLE",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "csus3200_03|hardware": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) health='OK' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)",
+  "mine_before": {
+   "health": "OK",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "OK",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "NOT_APPLICABLE",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "PASS",
+   "oem": "PASS"
+  }
+ },
+ "csus3200_03|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "name='RMC' (06-bmc-006; layout 없는 재생도 RMC) · uuid=None 문서 정정(06-bmc-009)",
+  "mine_before": {
+   "name": "RMC",
+   "timezone": "Asia/Seoul",
+   "datetime": "2026-10-22T15:13:28+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.28",
+   "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "RMC",
+   "timezone": "Asia/Seoul",
+   "datetime": "2026-10-22T15:13:28+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.28",
+   "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "ISSUE",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "NOT_APPLICABLE",
+   "uuid": "NOT_APPLICABLE",
+   "serial": "PASS",
+   "part_number": "PASS",
+   "manufacturer": "PASS",
+   "last_reset_time": "NOT_APPLICABLE",
+   "timezone": "PASS",
+   "datetime": "PASS",
+   "datetime_offset": "PASS",
+   "oem": "NOT_APPLICABLE",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "PASS",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "csus3200_03|power": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) PSU 4 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 0건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 4,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 4,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "PASS",
+   "power_supplies[].power_capacity_w": "NOT_APPLICABLE",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "PASS",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "NOT_APPLICABLE",
+   "power_control.min/avg/max/interval": "NOT_APPLICABLE",
+   "summary": "PASS",
+   "sections.power": "PASS",
+   "multi_node.chassis[].power/thermal": "PASS"
+  }
+ },
+ "csus3200_03|multi_node": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "composition count null True (FIX 6) · 링크 없는 섀시 경로 요청 0 (01-multi_node-006) · layout=rmc_primary · baseline 실측 교체(FIX 5, 01-multi_node-003)",
+  "mine_before": {
+   "enabled": true,
+   "rb_counts": [
+    [
+     0,
+     0
+    ]
+   ],
+   "partitions": 1
+  },
+  "mine_after": {
+   "enabled": true,
+   "rb_counts": [
+    [
+     null,
+     null
+    ]
+   ],
+   "partitions": 1
+  },
+  "analysis_fields": {
+   "enabled_layout": "PASS",
+   "summary": "PASS",
+   "partitions": "PASS",
+   "managers": "PASS",
+   "chassis": "ISSUE",
+   "composition": "ISSUE",
+   "fabrics": "PASS"
+  }
+ },
+ "dl380_gen12_01|cpu": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "PASS",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "dl380_gen12_01|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname='yicesxmgmt05' (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": "yicesxmgmt05",
+   "hostname_source": "system"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": "yicesxmgmt05",
+   "hostname_source": "system"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "dl380_gen12_01|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 10 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=10",
+  "mine_before": {
+   "interfaces": 10,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown",
+    "up"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 7,
+   "ports": 14,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 10,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "1500"
+   ],
+   "if_link": [
+    "down",
+    "up"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 7,
+   "ports": 14,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_01|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) disks=2 hbas=4",
+  "mine_before": {
+   "disks": 2,
+   "hbas": 4,
+   "hba_link": [
+    "down",
+    "up"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 2,
+   "hbas": 4,
+   "hba_link": [
+    "down",
+    "up"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 2,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "PASS",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_01|memory": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) slots 16",
+  "mine_before": {
+   "slots": 16,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 1",
+    "PROC 1 DIMM 3"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 1572864
+  },
+  "mine_after": {
+   "slots": 16,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 1",
+    "PROC 1 DIMM 3"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 1572864
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "PASS",
+   "summary": "PASS"
+  }
+ },
+ "dl380_gen12_01|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "MR4xxi category=['storage_controller'] · Embedded Video Controller category=['other'] (04-firmware-002)",
+  "mine_before": {
+   "count": 25,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 10,
+    "psu": 2,
+    "tpm": 1,
+    "nic": 5,
+    "storage_controller": 1,
+    "drive": 2,
+    "backplane": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=other"
+   ]
+  },
+  "mine_after": {
+   "count": 25,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 6,
+    "cpld": 4,
+    "psu": 2,
+    "tpm": 1,
+    "storage_controller": 1,
+    "nic": 5,
+    "drive": 2,
+    "backplane": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=storage_controller"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "PASS",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_01|bios": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) bios_version=U68 v1.82 (06/26/2026)",
+  "mine_before": {
+   "attrs": 311,
+   "bios_version": "U68 v1.82 (06/26/2026)",
+   "bios_date": "2026-06-26"
+  },
+  "mine_after": {
+   "attrs": 311,
+   "bios_version": "U68 v1.82 (06/26/2026)",
+   "bios_date": "2026-06-26"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "PASS",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "PASS"
+  }
+ },
+ "dl380_gen12_01|thermal": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "temps 49 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 1",
+  "mine_before": {
+   "temps": 56,
+   "fans": 6,
+   "absent": 7,
+   "non_enabled_with_reading": 7,
+   "negative": 0
+  },
+  "mine_after": {
+   "temps": 49,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 0
+  },
+  "analysis_fields": {
+   "temperatures[]": "ISSUE",
+   "temperatures[].reading_celsius": "ISSUE",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "PASS",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "dl380_gen12_01|hardware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)",
+  "mine_before": {
+   "health": "Warning",
+   "bios_date": "2026-06-26",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Warning",
+   "bios_date": "2026-06-26",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "PASS",
+   "power_state": "PASS",
+   "health": "ISSUE",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "PASS",
+   "oem": "PASS"
+  }
+ },
+ "dl380_gen12_01|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:15:43Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.95 (06-bmc-005 값 불변)",
+  "mine_before": {
+   "name": "iLO",
+   "timezone": null,
+   "datetime": "2026-10-22T06:15:43Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.95",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "iLO",
+   "timezone": "JST-9:00",
+   "datetime": "2026-10-22T06:15:43Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.95",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "NOT_APPLICABLE",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "NOT_APPLICABLE",
+   "timezone": "ISSUE",
+   "datetime": "ISSUE",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "PASS",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_01|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 1
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "PASS",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "PASS",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "dl380_gen12_01|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ },
+ "dl380_gen12_02|cpu": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "PASS",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "dl380_gen12_02|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "dl380_gen12_02|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8",
+  "mine_before": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown",
+    "up"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "down",
+    "up"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_02|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) disks=4 hbas=4",
+  "mine_before": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 4,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "PASS",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_02|memory": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) slots 8",
+  "mine_before": {
+   "slots": 8,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 3",
+    "PROC 1 DIMM 7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 262144
+  },
+  "mine_after": {
+   "slots": 8,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 3",
+    "PROC 1 DIMM 7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 262144
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "PASS",
+   "summary": "PASS"
+  }
+ },
+ "dl380_gen12_02|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "MR4xxi category=['storage_controller'] · Embedded Video Controller category=['other'] (04-firmware-002)",
+  "mine_before": {
+   "count": 25,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 9,
+    "psu": 2,
+    "tpm": 1,
+    "nic": 4,
+    "storage_controller": 1,
+    "drive": 4,
+    "backplane": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=other"
+   ]
+  },
+  "mine_after": {
+   "count": 25,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 6,
+    "cpld": 3,
+    "psu": 2,
+    "tpm": 1,
+    "storage_controller": 1,
+    "nic": 4,
+    "drive": 4,
+    "backplane": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=storage_controller"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "PASS",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_02|bios": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) bios_version=U68 v1.90 (08/20/2026)",
+  "mine_before": {
+   "attrs": 301,
+   "bios_version": "U68 v1.90 (08/20/2026)",
+   "bios_date": "2026-08-20"
+  },
+  "mine_after": {
+   "attrs": 301,
+   "bios_version": "U68 v1.90 (08/20/2026)",
+   "bios_date": "2026-08-20"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "PASS",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "PASS"
+  }
+ },
+ "dl380_gen12_02|thermal": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "temps 36 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 1",
+  "mine_before": {
+   "temps": 44,
+   "fans": 6,
+   "absent": 8,
+   "non_enabled_with_reading": 8,
+   "negative": 0
+  },
+  "mine_after": {
+   "temps": 36,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 0
+  },
+  "analysis_fields": {
+   "temperatures[]": "ISSUE",
+   "temperatures[].reading_celsius": "ISSUE",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "PASS",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "dl380_gen12_02|hardware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)",
+  "mine_before": {
+   "health": "Warning",
+   "bios_date": "2026-08-20",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Warning",
+   "bios_date": "2026-08-20",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "PASS",
+   "power_state": "PASS",
+   "health": "ISSUE",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "PASS",
+   "oem": "PASS"
+  }
+ },
+ "dl380_gen12_02|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:27:39Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.201 (06-bmc-005 값 불변)",
+  "mine_before": {
+   "name": "iLO",
+   "timezone": null,
+   "datetime": "2026-10-22T06:27:39Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.201",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "iLO",
+   "timezone": "JST-9:00",
+   "datetime": "2026-10-22T06:27:39Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.201",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "NOT_APPLICABLE",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "NOT_APPLICABLE",
+   "timezone": "ISSUE",
+   "datetime": "ISSUE",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "PASS",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_02|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 1
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "PASS",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "PASS",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "dl380_gen12_02|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ },
+ "dl380_gen12_03|cpu": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "ISSUE",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "dl380_gen12_03|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "dl380_gen12_03|network": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "전원 Off notice 에 '네트워크' 포함(2026-10-28 R3 `ac368a4b` — 새 Tier 1 봉투) · interfaces 4(link unknown) · adapters 2 · ports 4 — network 값은 before = after, 칸 근거는 notice 문구 (03-storage-001 (a); 2026-10-28 근거 교체)",
+  "mine_before": {
+   "interfaces": 4,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 4,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 1
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_03|storage": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "ISSUE",
+  "impl_evidence": "03-storage-001 (b) controllers 보강 HOLD(사용자 결정) — (a) 전원 Off notice 있음, storage 컬렉션 0건은 placeholder 없이 0 유지(disks=0)",
+  "mine_before": {
+   "disks": 0,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 0
+  },
+  "mine_after": {
+   "disks": 0,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 0
+  },
+  "analysis_fields": {
+   "controllers": "ISSUE",
+   "physical_disks": "ISSUE",
+   "logical_volumes": "ISSUE",
+   "hbas": "PASS",
+   "summary": "ISSUE",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_03|memory": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "slots 16 (빈 슬롯 제외, 종전 32) · 빈 placeholder 0 (02-memory-001)",
+  "mine_before": {
+   "slots": 32,
+   "rank": [
+    "2",
+    "None"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 1",
+    "PROC 1 DIMM 2"
+   ],
+   "speed": [
+    "6400",
+    "None"
+   ],
+   "zero_cap_slots": 16,
+   "total_mb": 524288
+  },
+  "mine_after": {
+   "slots": 16,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 1",
+    "PROC 1 DIMM 3"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 524288
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "PASS"
+  }
+ },
+ "dl380_gen12_03|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "ISSUE",
+  "impl_evidence": "MR4xxi category=['other'] · Embedded Video Controller category=['other'] (04-firmware-002) — 전원 Off 호스트는 Storage 0건이라 controller 조인 근거가 없어 other(controllers=0; 03-storage-001 (b) HOLD 와 같은 원인)",
+  "mine_before": {
+   "count": 13,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 7,
+    "tpm": 1,
+    "nic": 2,
+    "storage_controller": 1
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=other"
+   ]
+  },
+  "mine_after": {
+   "count": 13,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 5,
+    "cpld": 3,
+    "tpm": 1,
+    "nic": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=other"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "PASS",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_03|bios": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) bios_version=U68 v1.82 (06/26/2026)",
+  "mine_before": {
+   "attrs": 275,
+   "bios_version": "U68 v1.82 (06/26/2026)",
+   "bios_date": "2026-06-26"
+  },
+  "mine_after": {
+   "attrs": 275,
+   "bios_version": "U68 v1.82 (06/26/2026)",
+   "bios_date": "2026-06-26"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "PASS",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "PASS"
+  }
+ },
+ "dl380_gen12_03|thermal": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "temps 42 비-Enabled reading null True · Absent 0 (05-thermal-002)",
+  "mine_before": {
+   "temps": 42,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 48,
+   "negative": 0
+  },
+  "mine_after": {
+   "temps": 42,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 0
+  },
+  "analysis_fields": {
+   "temperatures[]": "ISSUE",
+   "temperatures[].reading_celsius": "ISSUE",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "ISSUE",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "ISSUE",
+   "fans[].reading/reading_units": "ISSUE",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "dl380_gen12_03|hardware": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)",
+  "mine_before": {
+   "health": "Warning",
+   "bios_date": "2026-06-26",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Warning",
+   "bios_date": "2026-06-26",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "PASS",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "PASS",
+   "oem": "PASS"
+  }
+ },
+ "dl380_gen12_03|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:41:28Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.55 (06-bmc-005 값 불변)",
+  "mine_before": {
+   "name": "iLO",
+   "timezone": null,
+   "datetime": "2026-10-22T06:41:28Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.55",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "iLO",
+   "timezone": "JST-9:00",
+   "datetime": "2026-10-22T06:41:28Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.55",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "NOT_APPLICABLE",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "NOT_APPLICABLE",
+   "timezone": "ISSUE",
+   "datetime": "ISSUE",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "PASS",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_03|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 (Absent 2) · Absent 의 capacity/firmware null True (05-power-001)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 2,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "analysis_fields": {
+   "power_supplies[]": "ISSUE",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "ISSUE",
+   "power_supplies[].firmware_version": "ISSUE",
+   "power_supplies[].model": "ISSUE",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "dl380_gen12_03|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ },
+ "dl380_gen12_04|cpu": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "PASS",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "dl380_gen12_04|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "dl380_gen12_04|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8",
+  "mine_before": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "up"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 8,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "up"
+   ],
+   "if_speed": [
+    "None"
+   ],
+   "adapters": 6,
+   "ports": 12,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_04|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) disks=4 hbas=4",
+  "mine_before": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down",
+    "up"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down",
+    "up"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 4,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "PASS",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_04|memory": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) slots 8",
+  "mine_before": {
+   "slots": 8,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 3",
+    "PROC 1 DIMM 7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 262144
+  },
+  "mine_after": {
+   "slots": 8,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "PROC 1 DIMM 3",
+    "PROC 1 DIMM 7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 262144
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "PASS",
+   "summary": "PASS"
+  }
+ },
+ "dl380_gen12_04|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "MR4xxi category=['storage_controller'] · Embedded Video Controller category=['other'] (04-firmware-002)",
+  "mine_before": {
+   "count": 25,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 9,
+    "psu": 2,
+    "tpm": 1,
+    "nic": 4,
+    "storage_controller": 1,
+    "drive": 4,
+    "backplane": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=other"
+   ]
+  },
+  "mine_after": {
+   "count": 25,
+   "categories": {
+    "bmc": 1,
+    "bios": 1,
+    "other": 6,
+    "cpld": 3,
+    "psu": 2,
+    "tpm": 1,
+    "storage_controller": 1,
+    "nic": 4,
+    "drive": 4,
+    "backplane": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [],
+   "raid_like": [
+    "HPE MR416i-o Gen11=storage_controller"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "PASS",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_04|bios": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) bios_version=U68 v1.82 (06/26/2026)",
+  "mine_before": {
+   "attrs": 297,
+   "bios_version": "U68 v1.82 (06/26/2026)",
+   "bios_date": "2026-06-26"
+  },
+  "mine_after": {
+   "attrs": 297,
+   "bios_version": "U68 v1.82 (06/26/2026)",
+   "bios_date": "2026-06-26"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "PASS",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "PASS"
+  }
+ },
+ "dl380_gen12_04|thermal": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "temps 46 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 1",
+  "mine_before": {
+   "temps": 54,
+   "fans": 6,
+   "absent": 8,
+   "non_enabled_with_reading": 8,
+   "negative": 0
+  },
+  "mine_after": {
+   "temps": 46,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 0
+  },
+  "analysis_fields": {
+   "temperatures[]": "ISSUE",
+   "temperatures[].reading_celsius": "ISSUE",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "PASS",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "dl380_gen12_04|hardware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)",
+  "mine_before": {
+   "health": "Warning",
+   "bios_date": "2026-06-26",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Warning",
+   "bios_date": "2026-06-26",
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "PASS",
+   "power_state": "PASS",
+   "health": "ISSUE",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "PASS",
+   "oem": "PASS"
+  }
+ },
+ "dl380_gen12_04|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:38:01Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.52 (06-bmc-005 값 불변)",
+  "mine_before": {
+   "name": "iLO",
+   "timezone": null,
+   "datetime": "2026-10-22T06:38:01Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.52",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "iLO",
+   "timezone": "JST-9:00",
+   "datetime": "2026-10-22T06:38:01Z",
+   "offset": "+09:00",
+   "ip": "11.65.23.52",
+   "model": "iLO 7",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "NOT_APPLICABLE",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "NOT_APPLICABLE",
+   "timezone": "ISSUE",
+   "datetime": "ISSUE",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "PASS",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "dl380_gen12_04|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 1
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "PASS",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "PASS",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "dl380_gen12_04|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ },
+ "sr650_v4_01|cpu": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "ISSUE",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "sr650_v4_01|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "sr650_v4_01|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 4건(03-network-002, 2026-10-28 — 칸 판정 기준 밖)",
+  "mine_before": {
+   "interfaces": 5,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "0",
+    "25600",
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 5,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "1500",
+    "None"
+   ],
+   "if_link": [
+    "down",
+    "unknown",
+    "up"
+   ],
+   "if_speed": [
+    "0",
+    "25600",
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_01|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) disks=4 hbas=0",
+  "mine_before": {
+   "disks": 4,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 4,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "PASS",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_01|memory": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) slots 2",
+  "mine_before": {
+   "slots": 2,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "23",
+    "7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 131072
+  },
+  "mine_after": {
+   "slots": 2,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "DIMM 23",
+    "DIMM 7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 131072
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "PASS"
+  }
+ },
+ "sr650_v4_01|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 24",
+  "mine_before": {
+   "count": 28,
+   "categories": {
+    "bmc": 3,
+    "other": 6,
+    "driver_pack": 2,
+    "drive": 6,
+    "nic": 8,
+    "storage_controller": 1,
+    "psu": 2
+   },
+   "pending_null_version": 4,
+   "uefi_cat": [
+    "other"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "mine_after": {
+   "count": 24,
+   "categories": {
+    "bmc": 2,
+    "cpld": 1,
+    "bios": 1,
+    "other": 2,
+    "driver_pack": 2,
+    "drive": 4,
+    "nic": 8,
+    "storage_controller": 1,
+    "backplane": 1,
+    "psu": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [
+    "bios"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "ISSUE",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_01|bios": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-05-11 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)",
+  "mine_before": {
+   "attrs": 778,
+   "bios_version": "IHE120L",
+   "bios_date": null
+  },
+  "mine_after": {
+   "attrs": 778,
+   "bios_version": "IHE120L",
+   "bios_date": "2026-05-11"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "ISSUE",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+  }
+ },
+ "sr650_v4_01|thermal": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) temps 8 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0",
+  "mine_before": {
+   "temps": 8,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "mine_after": {
+   "temps": 8,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "analysis_fields": {
+   "temperatures[]": "PASS",
+   "temperatures[].reading_celsius": "PASS",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "PASS",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "sr650_v4_01|hardware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-05-11 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3",
+  "mine_before": {
+   "health": "Critical",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Critical",
+   "bios_date": "2026-05-11",
+   "oem_machine_type": "7DGD",
+   "oem_led": "Off"
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "ISSUE",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "NOT_APPLICABLE",
+   "oem": "ISSUE"
+  }
+ },
+ "sr650_v4_01|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC",
+  "mine_before": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T15:48:28+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.87",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T15:48:28+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.87",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "PASS",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "PASS",
+   "timezone": "NOT_APPLICABLE",
+   "datetime": "PASS",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "ISSUE",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_01|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 2,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 1
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "PASS",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "ISSUE",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "sr650_v4_01|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ },
+ "sr650_v4_02|cpu": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "ISSUE",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "sr650_v4_02|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "sr650_v4_02|network": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 3건(03-network-002, 2026-10-28 — 칸 판정 기준 밖) · 링크 미확정 1 NIC 잔여(NIC6 — 03-network-002 HOLD)",
+  "mine_before": {
+   "interfaces": 9,
+   "eight_octet_in_if": 4,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "0",
+    "25600",
+    "None"
+   ],
+   "adapters": 4,
+   "ports": 8,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 5,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "1500",
+    "None"
+   ],
+   "if_link": [
+    "down",
+    "unknown",
+    "up"
+   ],
+   "if_speed": [
+    "0",
+    "25600",
+    "None"
+   ],
+   "adapters": 4,
+   "ports": 8,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "ISSUE",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "ISSUE",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_02|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) disks=4 hbas=4",
+  "mine_before": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 4,
+   "hbas": 4,
+   "hba_link": [
+    "down"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "PASS",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_02|memory": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) slots 2",
+  "mine_before": {
+   "slots": 2,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "23",
+    "7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 131072
+  },
+  "mine_after": {
+   "slots": 2,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "DIMM 23",
+    "DIMM 7"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 131072
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "PASS"
+  }
+ },
+ "sr650_v4_02|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 26",
+  "mine_before": {
+   "count": 30,
+   "categories": {
+    "bmc": 3,
+    "other": 8,
+    "driver_pack": 2,
+    "drive": 6,
+    "nic": 8,
+    "storage_controller": 1,
+    "psu": 2
+   },
+   "pending_null_version": 4,
+   "uefi_cat": [
+    "other"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "mine_after": {
+   "count": 26,
+   "categories": {
+    "bmc": 2,
+    "cpld": 1,
+    "bios": 1,
+    "other": 4,
+    "driver_pack": 2,
+    "drive": 4,
+    "nic": 8,
+    "storage_controller": 1,
+    "backplane": 1,
+    "psu": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [
+    "bios"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "ISSUE",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_02|bios": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-05-11 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)",
+  "mine_before": {
+   "attrs": 1116,
+   "bios_version": "IHE120L",
+   "bios_date": null
+  },
+  "mine_after": {
+   "attrs": 1116,
+   "bios_version": "IHE120L",
+   "bios_date": "2026-05-11"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "ISSUE",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+  }
+ },
+ "sr650_v4_02|thermal": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) temps 8 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0",
+  "mine_before": {
+   "temps": 8,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "mine_after": {
+   "temps": 8,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "analysis_fields": {
+   "temperatures[]": "PASS",
+   "temperatures[].reading_celsius": "PASS",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "PASS",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "sr650_v4_02|hardware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-05-11 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3",
+  "mine_before": {
+   "health": "Critical",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Critical",
+   "bios_date": "2026-05-11",
+   "oem_machine_type": "7DGD",
+   "oem_led": "Off"
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "ISSUE",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "NOT_APPLICABLE",
+   "oem": "ISSUE"
+  }
+ },
+ "sr650_v4_02|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC",
+  "mine_before": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T16:05:07+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.88",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T16:05:07+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.88",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "PASS",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "PASS",
+   "timezone": "NOT_APPLICABLE",
+   "datetime": "PASS",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "ISSUE",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_02|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 2,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 1
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "PASS",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "ISSUE",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "sr650_v4_02|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ },
+ "sr650_v4_03|cpu": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "PASS",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "sr650_v4_03|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "sr650_v4_03|network": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "interfaces 11 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=11 · link 보충 10건(03-network-002, 2026-10-28 — 칸 판정 기준 밖)",
+  "mine_before": {
+   "interfaces": 15,
+   "eight_octet_in_if": 4,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "0",
+    "25600",
+    "32768",
+    "None"
+   ],
+   "adapters": 7,
+   "ports": 14,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 11,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "1500",
+    "None"
+   ],
+   "if_link": [
+    "unknown",
+    "up"
+   ],
+   "if_speed": [
+    "25600",
+    "None"
+   ],
+   "adapters": 7,
+   "ports": 14,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "ISSUE",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "ISSUE",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_03|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) disks=2 hbas=4",
+  "mine_before": {
+   "disks": 2,
+   "hbas": 4,
+   "hba_link": [
+    "down",
+    "up"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 2,
+   "hbas": 4,
+   "hba_link": [
+    "down",
+    "up"
+   ],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "PASS",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_03|memory": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) slots 16",
+  "mine_before": {
+   "slots": 16,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "32",
+    "30"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 1048576
+  },
+  "mine_after": {
+   "slots": 16,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "DIMM 32",
+    "DIMM 30"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 1048576
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "PASS"
+  }
+ },
+ "sr650_v4_03|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 36",
+  "mine_before": {
+   "count": 40,
+   "categories": {
+    "bmc": 3,
+    "other": 8,
+    "driver_pack": 2,
+    "drive": 4,
+    "nic": 20,
+    "storage_controller": 1,
+    "psu": 2
+   },
+   "pending_null_version": 4,
+   "uefi_cat": [
+    "other"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "mine_after": {
+   "count": 36,
+   "categories": {
+    "bmc": 2,
+    "cpld": 1,
+    "bios": 1,
+    "other": 4,
+    "driver_pack": 2,
+    "drive": 2,
+    "nic": 20,
+    "storage_controller": 1,
+    "backplane": 1,
+    "psu": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [
+    "bios"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "ISSUE",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_03|bios": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-06-22 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)",
+  "mine_before": {
+   "attrs": 1299,
+   "bios_version": "IHE120P",
+   "bios_date": null
+  },
+  "mine_after": {
+   "attrs": 1299,
+   "bios_version": "IHE120P",
+   "bios_date": "2026-06-22"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "ISSUE",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+  }
+ },
+ "sr650_v4_03|thermal": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) temps 22 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0",
+  "mine_before": {
+   "temps": 22,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "mine_after": {
+   "temps": 22,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "analysis_fields": {
+   "temperatures[]": "PASS",
+   "temperatures[].reading_celsius": "PASS",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "PASS",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "sr650_v4_03|hardware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-06-22 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3",
+  "mine_before": {
+   "health": "Critical",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Critical",
+   "bios_date": "2026-06-22",
+   "oem_machine_type": "7DGD",
+   "oem_led": "Off"
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "ISSUE",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "NOT_APPLICABLE",
+   "oem": "ISSUE"
+  }
+ },
+ "sr650_v4_03|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC",
+  "mine_before": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T16:10:20+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.76",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T16:10:20+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.76",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "PASS",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "PASS",
+   "timezone": "NOT_APPLICABLE",
+   "datetime": "PASS",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "ISSUE",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_03|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 2,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 1
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "PASS",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "ISSUE",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "sr650_v4_03|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ },
+ "sr650_v4_04|cpu": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64",
+  "mine_before": {
+   "logical_threads_any": true,
+   "manufacturer": null,
+   "sockets": 2,
+   "cores": 64
+  },
+  "mine_after": {
+   "logical_threads_any": false,
+   "manufacturer": "Intel",
+   "sockets": 2,
+   "cores": 64
+  },
+  "analysis_fields": {
+   "architecture": "PASS",
+   "cores_physical": "PASS",
+   "logical_threads": "ISSUE",
+   "max_speed_mhz": "PASS",
+   "model": "PASS",
+   "sockets": "PASS",
+   "summary": "PASS",
+   "turbo_max_mhz": "PASS",
+   "manufacturer(사전 선언·미발행)": "ISSUE"
+  }
+ },
+ "sr650_v4_04|system": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)",
+  "mine_before": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "mine_after": {
+   "sections.system": "not_supported",
+   "hostname": null,
+   "hostname_source": "bmc"
+  },
+  "analysis_fields": {
+   "hostname": "PASS",
+   "fqdn": "PASS"
+  }
+ },
+ "sr650_v4_04|network": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 3건(03-network-002, 2026-10-28 — 칸 판정 기준 밖) · 링크 미확정 1 NIC 잔여(NIC4 — 03-network-002 HOLD)",
+  "mine_before": {
+   "interfaces": 5,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "None"
+   ],
+   "if_link": [
+    "unknown"
+   ],
+   "if_speed": [
+    "0",
+    "25600",
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "mine_after": {
+   "interfaces": 5,
+   "eight_octet_in_if": 0,
+   "mtu": [
+    "1500",
+    "None"
+   ],
+   "if_link": [
+    "down",
+    "unknown",
+    "up"
+   ],
+   "if_speed": [
+    "0",
+    "25600",
+    "None"
+   ],
+   "adapters": 2,
+   "ports": 4,
+   "port_speed0": 0,
+   "ipv6_addr": 0,
+   "power_off_notice": 0
+  },
+  "analysis_fields": {
+   "interfaces": "PASS",
+   "adapters": "PASS",
+   "ports": "PASS",
+   "dns_servers": "PASS",
+   "default_gateways": "PASS",
+   "summary": "PASS",
+   "driver_map": "NOT_APPLICABLE",
+   "portgroups": "NOT_APPLICABLE",
+   "virtual_switches": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_04|storage": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) disks=6 hbas=0",
+  "mine_before": {
+   "disks": 6,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "mine_after": {
+   "disks": 6,
+   "hbas": 0,
+   "hba_link": [],
+   "card_cond_notices": 0,
+   "link_missing_notices": 0,
+   "wwn": 0,
+   "controllers": 1
+  },
+  "analysis_fields": {
+   "controllers": "PASS",
+   "physical_disks": "PASS",
+   "logical_volumes": "PASS",
+   "hbas": "PASS",
+   "summary": "PASS",
+   "datastores": "NOT_APPLICABLE",
+   "filesystems": "NOT_APPLICABLE",
+   "infiniband": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_04|memory": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) slots 8",
+  "mine_before": {
+   "slots": 8,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "30",
+    "26"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 262144
+  },
+  "mine_after": {
+   "slots": 8,
+   "rank": [
+    "2"
+   ],
+   "locator_ex": [
+    "DIMM 30",
+    "DIMM 26"
+   ],
+   "speed": [
+    "6400"
+   ],
+   "zero_cap_slots": 0,
+   "total_mb": 262144
+  },
+  "analysis_fields": {
+   "free_mb": "NOT_APPLICABLE",
+   "visible_mb": "NOT_APPLICABLE",
+   "total_mb": "PASS",
+   "installed_mb": "PASS",
+   "total_basis": "PASS",
+   "slots[]": "ISSUE",
+   "summary": "PASS"
+  }
+ },
+ "sr650_v4_04|firmware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 26",
+  "mine_before": {
+   "count": 30,
+   "categories": {
+    "bmc": 3,
+    "other": 6,
+    "driver_pack": 2,
+    "drive": 8,
+    "nic": 8,
+    "storage_controller": 1,
+    "psu": 2
+   },
+   "pending_null_version": 4,
+   "uefi_cat": [
+    "other"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "mine_after": {
+   "count": 26,
+   "categories": {
+    "bmc": 2,
+    "cpld": 1,
+    "bios": 1,
+    "other": 2,
+    "driver_pack": 2,
+    "drive": 6,
+    "nic": 8,
+    "storage_controller": 1,
+    "backplane": 1,
+    "psu": 2
+   },
+   "pending_null_version": 0,
+   "uefi_cat": [
+    "bios"
+   ],
+   "raid_like": [
+    "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"
+   ]
+  },
+  "analysis_fields": {
+   "sections.firmware": "PASS",
+   "firmware[] (개수·누락·중복)": "PASS",
+   "firmware[].id": "PASS",
+   "firmware[].name": "PASS",
+   "firmware[].version": "PASS",
+   "firmware[].updateable": "PASS",
+   "firmware[].component": "PASS",
+   "firmware[].pending": "ISSUE",
+   "firmware[].category": "ISSUE",
+   "complex_only 보충 (A-9)": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_04|bios": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-05-11 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)",
+  "mine_before": {
+   "attrs": 778,
+   "bios_version": "IHE120L",
+   "bios_date": null
+  },
+  "mine_after": {
+   "attrs": 778,
+   "bios_version": "IHE120L",
+   "bios_date": "2026-05-11"
+  },
+  "analysis_fields": {
+   "bios.current.attributes (내용)": "PASS",
+   "bios.current.attributes (키 정렬)": "PASS",
+   "bios.current (키 구조)": "PASS",
+   "Bios 링크 처리 (1회 요청·하위 미요청)": "PASS",
+   "HT 속성 (02-cpu-001 전제)": "PASS",
+   "hardware.bios_version": "PASS",
+   "hardware.bios_date": "ISSUE",
+   "bmc.firmware_version ↔ firmware[] bmc": "PASS",
+   "hardware.bios_version ↔ firmware[] bios": "ISSUE"
+  }
+ },
+ "sr650_v4_04|thermal": {
+  "analysis_state": "PASS",
+  "impl_before": "PASS",
+  "impl_after": "PASS",
+  "impl_evidence": "(종전 PASS 유지) temps 14 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0",
+  "mine_before": {
+   "temps": 14,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "mine_after": {
+   "temps": 14,
+   "fans": 6,
+   "absent": 0,
+   "non_enabled_with_reading": 0,
+   "negative": 2
+  },
+  "analysis_fields": {
+   "temperatures[]": "PASS",
+   "temperatures[].reading_celsius": "PASS",
+   "temperatures[].health/state": "PASS",
+   "temperatures[].upper_critical": "PASS",
+   "temperatures[].physical_context": "PASS",
+   "fans[]": "PASS",
+   "fans[].reading/reading_units": "PASS",
+   "fans[].health/state": "PASS",
+   "sections.thermal": "PASS"
+  }
+ },
+ "sr650_v4_04|hardware": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "bios_date=2026-05-11 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3",
+  "mine_before": {
+   "health": "Critical",
+   "bios_date": null,
+   "oem_machine_type": null,
+   "oem_led": null
+  },
+  "mine_after": {
+   "health": "Critical",
+   "bios_date": "2026-05-11",
+   "oem_machine_type": "7DGD",
+   "oem_led": "Off"
+  },
+  "analysis_fields": {
+   "vendor": "PASS",
+   "model": "PASS",
+   "serial": "PASS",
+   "uuid": "PASS",
+   "uuid_byte_order_vs_os": "MOCK_LIMITATION",
+   "sku": "PASS",
+   "bios_version": "PASS",
+   "bios_date": "ISSUE",
+   "power_state": "PASS",
+   "health": "PASS",
+   "asset_tag": "PASS",
+   "system_type": "PASS",
+   "part_number": "PASS",
+   "last_reset_time": "PASS",
+   "boot_progress": "PASS",
+   "tpm": "NOT_APPLICABLE",
+   "oem": "ISSUE"
+  }
+ },
+ "sr650_v4_04|bmc": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC",
+  "mine_before": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T15:56:52+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.37",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "mine_after": {
+   "name": "XCC",
+   "timezone": null,
+   "datetime": "2026-10-22T15:56:52+09:00",
+   "offset": "+09:00",
+   "ip": "11.65.23.37",
+   "model": "Lenovo XClarity Controller 3",
+   "auth_success": true
+  },
+  "analysis_fields": {
+   "name": "PASS",
+   "firmware_version": "PASS",
+   "model": "PASS",
+   "manager_type": "PASS",
+   "health": "PASS",
+   "state": "PASS",
+   "power_state": "PASS",
+   "uuid": "PASS",
+   "serial": "NOT_APPLICABLE",
+   "part_number": "NOT_APPLICABLE",
+   "manufacturer": "NOT_APPLICABLE",
+   "last_reset_time": "PASS",
+   "timezone": "NOT_APPLICABLE",
+   "datetime": "PASS",
+   "datetime_offset": "PASS",
+   "oem": "PASS",
+   "ip": "PASS",
+   "mac_address": "PASS",
+   "dns_name": "PASS",
+   "network_hostname": "PASS",
+   "network.dns_servers": "PASS",
+   "network.default_gateways": "PASS",
+   "correlation.bmc_ip": "PASS",
+   "sections.bmc": "PASS",
+   "diagnosis.details.auth": "PASS",
+   "diagnosis.details.account_service": "PASS",
+   "diagnosis.details.credential_scope": "PASS",
+   "diagnosis.details.precheck": "PASS",
+   "diagnosis.details.notices": "PASS",
+   "meta.adapter_id": "ISSUE",
+   "users": "NOT_APPLICABLE"
+  }
+ },
+ "sr650_v4_04|power": {
+  "analysis_state": "ISSUE",
+  "impl_before": "ISSUE",
+  "impl_after": "PASS",
+  "impl_evidence": "PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)",
+  "mine_before": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 2,
+   "input0_notices": 0
+  },
+  "mine_after": {
+   "psu": 2,
+   "absent_with_values": 0,
+   "model_padded": 0,
+   "input0_notices": 1
+  },
+  "analysis_fields": {
+   "power_supplies[]": "PASS",
+   "power_supplies[].state/health": "ISSUE",
+   "power_supplies[].power_capacity_w": "PASS",
+   "power_supplies[].firmware_version": "PASS",
+   "power_supplies[].model": "ISSUE",
+   "power_control.power_consumed_watts": "PASS",
+   "power_control.power_capacity_watts": "PASS",
+   "power_control.min/avg/max/interval": "PASS",
+   "summary": "ISSUE",
+   "sections.power": "PASS"
+  }
+ },
+ "sr650_v4_04|multi_node": {
+  "analysis_state": "NOT_APPLICABLE",
+  "impl_before": "NOT_APPLICABLE",
+  "impl_after": "NOT_APPLICABLE",
+  "impl_evidence": "adapter 가 layout 을 주지 않음(변경 없음)",
+  "mine_before": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "mine_after": {
+   "enabled": null,
+   "rb_counts": [],
+   "partitions": 0
+  },
+  "analysis_fields": {}
+ }
+}

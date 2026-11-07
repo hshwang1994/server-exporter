@@ -1,0 +1,47 @@
+{
+ "exposure": {
+  "disks_present": 4,
+  "disks_present_raw": 4,
+  "disks_absent_empty_bay": 0,
+  "disk_paths_present": [
+   "Chassis/r001u01/Drives/DriveSlot1InPCIeSlot3Box1",
+   "Chassis/r001u01/Drives/DriveSlot2InPCIeSlot3Box1",
+   "Chassis/r001u01/Drives/DriveSlot3InPCIeSlot3Box1",
+   "Chassis/r001u01/Drives/DriveSlot4InPCIeSlot3Box1"
+  ],
+  "simple_storage_used": false,
+  "fc_ports": 4,
+  "fc_port_paths": [
+   "Chassis/r001u01/NetworkAdapters/PCIeCard11/Ports/PCIeCard11Port1",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard11/Ports/PCIeCard11Port2",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard14/Ports/PCIeCard14Port1",
+   "Chassis/r001u01/NetworkAdapters/PCIeCard14/Ports/PCIeCard14Port2"
+  ],
+  "ethernet_ports": 12,
+  "orphan_fc_ndf": [],
+  "host_fc_in_ethernet": [],
+  "power_state": {
+   "Systems/Capabilities": null,
+   "Systems/Partition0": "On"
+  },
+  "storage_collection_members": {
+   "Systems/Partition0/Storage": 1
+  }
+ },
+ "collected": {
+  "disks": 4,
+  "disks_unique": 4,
+  "fc_hbas": 4,
+  "fc_ports": 4,
+  "layer": "envelope"
+ },
+ "verdict": {
+  "pass": true,
+  "notes": [
+   "DISKS_MATCH",
+   "FC_MATCH"
+  ],
+  "unexplained": []
+ },
+ "label": "csus3200_01"
+}

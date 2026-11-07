@@ -1,6 +1,7 @@
 # HPE Compute Scale-up Server 3200 (CSUS 3200) Mock Fixture
 
-> Lab 부재 — Web Sources 합성. 사이트 실측 후 정정 의무.
+> Lab 부재 — Web Sources 합성. **2026-10-27: 합성 설명 모델로만 남긴다.** 실측 fixture 는 `real_hpe_csus3200`(1차) · `real_hpe_csus3200_{01,02,03}`(2차, RMC 1.77.30) 이고
+> 회귀 baseline `schema/baseline_v1/hpe_csus_3200_baseline.json` 은 2차 `csus3200_01` 실측 봉투다(사용자 FIX 5). 이 디렉터리의 3 파티션 · 4 Manager · Base/Expansion 시나리오는 실 장비 모양(1 파티션 · 1 RMC · RackGroup/Rack1/r001u01)과 다르며 새 기대값의 근거로 쓰지 않는다.
 
 ## 메타
 

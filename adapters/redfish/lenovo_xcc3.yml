@@ -19,7 +19,12 @@
 #   - redfish_full_mirror.py 캡처 + replay 재생 → 라이브러리 2건 fix
 #     (FIX1 firmware pending version="" 유실 / FIX2 network MAC 대소문자). evidence: tests/evidence/2026-06-15-lenovo-sr650-v4-audit.md
 #   - adapter 선택 실측(tests/redfish-probe/verify_adapter_selection.py): Lenovo 는 ServiceRoot.Product=None →
-#     facts 빈값 → priority 로 선택 (redfish_lenovo_xcc3 score=120520; model/firmware_patterns 는 휴면) [정상].
+#     facts 빈값 → priority 로 선택 (redfish_lenovo_xcc3 score=120520; model/firmware_patterns 는 휴면) — **1차 선택만** 검증한 것이다.
+#   - 2026-10-27 (01-adapter-001 HIGH, 용인 2차 Mock 4대 + 1차 1대 Tier 1): 인증 후 재선택은 firmware_patterns ["XCC\s*3\b"] 가 실
+#     FirmwareVersion("IHX414J 1.22 20250402" / "IHX438R 2.97 20260910")에 없는 토큰이라 xcc3 를 실격시켜 redfish_lenovo_bmc 로 강등됐다.
+#     Lenovo 가 세대를 적는 자리는 Manager.Model("Lenovo XClarity Controller 3", 1차 표기 "Lenovo Xclarity Controller 3") 이므로
+#     bmc_model_patterns(opt-in, module_utils/adapter_common.py)로 바꿨다 → 재선택 score 120570. 1세대 참조(tests/fixtures/redfish/lenovo:
+#     "Lenovo XClarity Controller", AFBT58B)는 숫자가 없어 맞지 않는다. evidence: tests/evidence/2026-10-27-redfish-mock2-impl/02-adapter-reselect.md
 #   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
 # Compatibility (web sources F55/F56 cycle 2026-05-01 + 2026-06-15 실측 확인/정정):
 #   - manufacturer: "Lenovo" (실측 확인)
@@ -27,6 +32,8 @@
 #   - System URI: /redfish/v1/Systems/1 (실측 확인)
 #   - OEM namespace: Oem.Lenovo (실측 확인 — system.oem 은 V4 가 일부 키 미노출, FruPartNumber 등 보유)
 #   - RedfishVersion 1.15.0 (실측 2026-06-15 — 구 추정 "1.17.0 / schema bundle 2024.3" 정정)
+#     # DRIFT 발견 2026-10-28: 같은 장비(SN J902E57T · IHX414J 1.22)의 1차 미러 ServiceRoot 는 RedfishVersion 1.17.0 이다(1.15.0 은 어느 미러에도 없음).
+#     2차 Mock 4대(IHX438R 2.97)는 1.22.0. 선택 · 점수에 쓰지 않는 값이라 동작 영향 0 — metadata 정리는 캡처 근거 확인 뒤.
 #   - OpenBMC 기반 → Oem.Lenovo 영역이 표준 Redfish 우선 → OEM 의존 감소
 #   - FPGA firmware separate item — UpdateService/FirmwareInventory/FPGA (gather 자동 cover)
 #   - ExtendedError.1.2.2.json OEM registry 신규 (server-exporter 미사용)
@@ -41,9 +48,9 @@ priority: 120
 
 match:
   vendor: ["Lenovo", "LENOVO"]
-  # XCC3 펌웨어 — XCC1/XCC2 의 "AFBT" / "TAOT" 등과 다른 prefix 가능.
-  # 안전하게 "XCC3" 시그니처 + ThinkSystem V4 model_patterns 로 분리.
-  firmware_patterns: ["XCC\\s*3\\b"]
+  # 세대 식별은 Manager.Model 로 한다 (2026-10-27 — 위 origin 주석). 종전 firmware_patterns ["XCC\\s*3\\b"] 는 실 펌웨어에 없는 토큰이라 제거.
+  # XCC1/XCC2(lenovo_xcc.yml)는 FirmwareVersion 접두(AFBT/TAOT/USX)로 갈린다 — 그 adapter 는 바꾸지 않았다.
+  bmc_model_patterns: ["XClarity Controller 3\\b"]
   model_patterns:
     - "ThinkSystem SR630 V4"
     - "ThinkSystem SR650 V4"

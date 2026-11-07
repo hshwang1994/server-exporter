@@ -78,8 +78,8 @@
     "cpu": {
       "sockets": 2,                                     // 물리 socket 수
       "cores_physical": 44,                             // 물리 코어 수
-      "logical_threads": 44,                               // HT 비활성 (44=44)
       "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",  // 모델명
+      "manufacturer": "Intel",                           // Processor.Manufacturer 정규화 (2026-10-27 FIX 2 — Intel(R) Corporation → Intel)
       "max_speed_mhz": 4000,                            // 최대 속도 (MHz)
       "architecture": "x86",                            // CPU 아키텍처 (Linux="x86_64" / Redfish="x86")
       "summary": {                                      // 그룹 합계 (같은 사양 묶음)

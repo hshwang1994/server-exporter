@@ -61,7 +61,7 @@ GET https://<BMC_IP>/redfish/v1/Systems/{첫 멤버}
 
 | 대상 | 모듈 내부 수집 여부 | envelope 도달 | 근거 |
 |---|---|---|---|
-| **CPU 시리얼** (`Processor.SerialNumber`) | 수집함 → `data.processors[].serial_number` (`redfish_gather.py:2019`) | **[NG] 도달 안 함** | Ansible `_data_fragment` 의 `cpu` 블록(`normalize_standard.yml:503-528`)이 per-processor 리스트를 만들지 않는다. 멀티노드 경로 `_normalize_cpu_raw`(`:3926-3963`)도 동일. 실측: `dell_baseline.json` 의 `data.cpu` 키 = `sockets/cores_physical/logical_threads/model/max_speed_mhz/architecture/summary` (serial 없음) |
+| **CPU 시리얼** (`Processor.SerialNumber`) | 수집함 → `data.processors[].serial_number` (`redfish_gather.py:2019`) | **[NG] 도달 안 함** | Ansible `_data_fragment` 의 `cpu` 블록(`normalize_standard.yml:503-528`)이 per-processor 리스트를 만들지 않는다. 멀티노드 경로 `_normalize_cpu_raw`(`:3926-3963`)도 동일. 실측: `dell_baseline.json` 의 `data.cpu` 키 = `sockets/cores_physical/model/manufacturer/max_speed_mhz/turbo_max_mhz/architecture/summary` (serial 없음 — 2026-10-27 FIX 1/2: logical_threads 제거 · manufacturer 추가) |
 | **컨트롤러 하위 drive 시리얼** | 수집함 (`:2216`) | **[NG] 도달 안 함** | `normalize_standard.yml:163-172` 의 `controllers[].drives[]` 재구성이 `serial` 키를 뺀다. 같은 원본이 `physical_disks[]`(`:198`)로는 나간다 |
 | **Chassis 시리얼 (단일 노드)** | `gather_system` 이 Chassis 를 **fetch 는 함** (`:1660-1663`) | **[NG] 도달 안 함** | 그 응답은 OEM 추출과 manufacturer/model 폴백에만 쓰인다(`:1742-1779`). Chassis `SerialNumber` 를 읽는 코드 자체가 단일노드 경로에 없다. 멀티노드에서만 `:4132` 으로 노출 |
 
@@ -381,7 +381,7 @@ if isinstance(chassis_data, dict):
 
 - endpoint: `Chassis/{eff_chassis_uri}/NetworkAdapters/{id}` (`:2835-2839`), 실패 시 Systems 경로 fallback(`:4446-4450` 주석)
 - 여기만 `_strip_or_none` 이 아니라 `or None` 을 쓴다 → 빈 문자열은 `None` 이 되지만 **trailing space 는 남는다** (다른 필드와 미세하게 다른 정규화)
-- 실측: `hpe_csus_3200_baseline.json` → `'MT2210CSUS01'`
+- 실측: 2차 Mock csus3200_01(`hpe_csus_3200_baseline.json`, 2026-10-27 교체) → `network.adapters[].serial_number` 6장 전부 값 있음 — `'1I061900DT'`(MLX MCX631102) · `'3Y21301735'`(SN1100Q FC HBA) 등, trailing space 없음 (종전 합성본의 `'MT2210CSUS01'` 은 지어낸 값이었다)
 
 ### 6-5. PSU 시리얼 — `data.power.power_supplies[].serial`
 
@@ -1346,8 +1346,8 @@ System Serial 이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다.
 파생되므로(9절) OS · Redfish 채널 모두 자동으로 정규화된 값을 받는다.
 
 > [INFO] 2026-10-17 부터 같은 장비를 OS 로 봐도 Redfish 로 봐도 `SGHD3TLNDD` 다. 종전 Redfish 결과(`SGHD3TLNDD-000`)를
-> 저장한 호출자는 값이 바뀐다는 점을 알아야 한다. mock baseline(`hpe_csus_3200_baseline.json`)·예시의 `hardware.serial` /
-> `correlation.serial_number` 는 `MOCK-CSUS-P0-001` → `MOCK-CSUS-P0` 로 같이 갱신했다(mock-derived — 실측 아님).
+> 저장한 호출자는 값이 바뀐다는 점을 알아야 한다. 종전 mock baseline 의 `hardware.serial` / `correlation.serial_number` 는 `MOCK-CSUS-P0-001` → `MOCK-CSUS-P0` 로 같이 갱신했었고,
+> 2026-10-27 실측 교체 뒤 baseline 은 `hardware.serial = SGHD4MGNLH` · `multi_node.partitions[0].system.serial = SGHD4MGNLH-000`(원문, `-000` 유지) 이다 — 같은 규칙의 실측 사례.
 
 ### 30-3. 발동 조건 (셋을 모두 만족할 때만)
 

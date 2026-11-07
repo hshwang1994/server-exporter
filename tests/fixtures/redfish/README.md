@@ -43,10 +43,21 @@ Redfish 채널 fixture. BMC 가 실제로 돌려준 JSON 응답을 그대로 저
 | `lenovo_imm2/` | 2 | 있음 |
 | `lenovo_xcc/` | 2 | 있음 |
 | `quanta_qct/` | 11 | 있음 |
-| `real_dell_r740/` | 3 | 있음 |
-| `real_hpe_csus3200/` | 3 | 있음 |
-| `real_hpe_dl380/` | 3 | 있음 |
-| `real_lenovo_sr650/` | 3 | 있음 |
+| `real_dell_r740/` | 4 | 있음 |
+| `real_hpe_csus3200/` | 4 | 있음 |
+| `real_hpe_dl380/` | 4 | 있음 |
+| `real_lenovo_sr650/` | 4 | 있음 |
+| `real_hpe_csus3200_01/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_hpe_csus3200_02/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_hpe_csus3200_03/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_hpe_dl380_gen12_01/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_hpe_dl380_gen12_02/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_hpe_dl380_gen12_03/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_hpe_dl380_gen12_04/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_lenovo_sr650_v4_01/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_lenovo_sr650_v4_02/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_lenovo_sr650_v4_03/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
+| `real_lenovo_sr650_v4_04/` | 4 | 있음 — 2차 전수 미러(`tests/reference/redfish/mock2/`) 축약, 2026-10-27 |
 | `supermicro_x10/` | 12 | 있음 |
 | `supermicro_x12/` | 12 | 있음 |
 | `supermicro_x14/` | 12 | 있음 |

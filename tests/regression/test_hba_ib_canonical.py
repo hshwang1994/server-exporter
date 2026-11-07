@@ -9,7 +9,7 @@ cycle 2026-05-29 (hba-ib-csus): storage.hbas[] / storage.infiniband[] 가 전 �
 그대로 적용한다 (시나리오 28 — 4채널 공통 계약). baseline 은 registry 밖 파일(windows_2022 등)까지 전수로 본다.
 
 빈 baseline (FC/IB 미보유 lab 호스트) 은 빈 list → trivially pass.
-populated: esxi_baseline (FC 2), hpe_csus_3200_baseline (FC 2) 가 실제 검증. IB 가 채워진 실측 baseline 은 없다 —
+populated: esxi_baseline (FC 2), hpe_csus_3200_baseline (FC 4 — 2026-10-27 2차 Mock 실측 교체) 가 실제 검증. IB 가 채워진 실측 baseline 은 없다 —
 합성 fixture(tests/fixtures/redfish/synthetic_ib_mode) 의 손 작성 기대값이 Redfish 모양을 대표한다.
 """
 from __future__ import annotations

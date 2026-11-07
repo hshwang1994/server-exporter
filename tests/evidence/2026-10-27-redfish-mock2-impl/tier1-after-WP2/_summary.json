@@ -1,0 +1,1051 @@
+[
+ {
+  "label": "csus3200_01",
+  "mirror": "/root/se_mirrors/csus3200_01",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/csus3200_01",
+   "keys": 2067,
+   "raw": 16,
+   "hang": [
+    "Managers/RMC/LogServices/RmcConfig/RawConfig"
+   ],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 2003,
+    "201": 1,
+    "204": 1,
+    "404": 57,
+    "500": 5
+   },
+   "load_s": 1.9,
+   "pid": 380
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=20s\n",
+  "elapsed_s": 46.1,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "yicdspdb01",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 200,
+  "requests_distinct": 193,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 181,
+   "basic/404/unknown": 14
+  }
+ },
+ {
+  "label": "csus3200_02",
+  "mirror": "/root/se_mirrors/csus3200_02",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/csus3200_02",
+   "keys": 2026,
+   "raw": 14,
+   "hang": [
+    "Managers/RMC/LogServices/RmcConfig/RawConfig"
+   ],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 1959,
+    "204": 1,
+    "201": 1,
+    "404": 57,
+    "500": 8
+   },
+   "load_s": 2.0,
+   "pid": 602
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=22s\n",
+  "elapsed_s": 45.1,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "yicgsfabap01",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 148,
+  "requests_distinct": 141,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 129,
+   "basic/404/unknown": 14
+  }
+ },
+ {
+  "label": "csus3200_03",
+  "mirror": "/root/se_mirrors/csus3200_03",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/csus3200_03",
+   "keys": 2032,
+   "raw": 16,
+   "hang": [
+    "Managers/RMC/LogServices/RmcConfig/RawConfig"
+   ],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 1968,
+    "204": 1,
+    "201": 1,
+    "404": 57,
+    "500": 5
+   },
+   "load_s": 1.9,
+   "pid": 759
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=22s\n",
+  "elapsed_s": 46.0,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "yicgsfabdb01",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 184,
+  "requests_distinct": 177,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 165,
+   "basic/404/unknown": 14
+  }
+ },
+ {
+  "label": "dl380_gen12_01",
+  "mirror": "/root/se_mirrors/dl380_gen12_01",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/dl380_gen12_01",
+   "keys": 2311,
+   "raw": 1,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1770,
+    "404": 262,
+    "405": 1,
+    "406": 276,
+    "400": 2
+   },
+   "load_s": 1.8,
+   "pid": 953
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=19s\n",
+  "elapsed_s": 44.7,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "yicesxmgmt05",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 156,
+  "requests_distinct": 152,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 151
+  }
+ },
+ {
+  "label": "dl380_gen12_02",
+  "mirror": "/root/se_mirrors/dl380_gen12_02",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/dl380_gen12_02",
+   "keys": 1902,
+   "raw": 1,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1499,
+    "404": 126,
+    "405": 1,
+    "406": 276
+   },
+   "load_s": 1.4,
+   "pid": 1123
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=20s\n",
+  "elapsed_s": 43.3,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "yicad04",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 147,
+  "requests_distinct": 143,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 142
+  }
+ },
+ {
+  "label": "dl380_gen12_03",
+  "mirror": "/root/se_mirrors/dl380_gen12_03",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/dl380_gen12_03",
+   "keys": 1573,
+   "raw": 1,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1201,
+    "404": 90,
+    "405": 1,
+    "400": 5,
+    "406": 276
+   },
+   "load_s": 1.3,
+   "pid": 1280
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=21s\n",
+  "elapsed_s": 43.6,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "yicossemul03",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 84,
+  "requests_distinct": 80,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 79
+  }
+ },
+ {
+  "label": "dl380_gen12_04",
+  "mirror": "/root/se_mirrors/dl380_gen12_04",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/dl380_gen12_04",
+   "keys": 2203,
+   "raw": 1,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1782,
+    "404": 143,
+    "405": 1,
+    "406": 276,
+    "400": 1
+   },
+   "load_s": 2.1,
+   "pid": 1378
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=19s\n",
+  "elapsed_s": 44.3,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "yicinposdb02",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 147,
+  "requests_distinct": 143,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 142
+  }
+ },
+ {
+  "label": "sr650_v4_01",
+  "mirror": "/root/se_mirrors/sr650_v4_01",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/sr650_v4_01",
+   "keys": 2890,
+   "raw": 234,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1898,
+    "404": 894,
+    "405": 97,
+    "500": 1
+   },
+   "load_s": 2.3,
+   "pid": 1536
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=20s\n",
+  "elapsed_s": 44.0,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "lenovo",
+  "hostname": "yicad01",
+  "adapter_id": "redfish_lenovo_xcc3",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 112,
+  "requests_distinct": 108,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 107
+  }
+ },
+ {
+  "label": "sr650_v4_02",
+  "mirror": "/root/se_mirrors/sr650_v4_02",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/sr650_v4_02",
+   "keys": 3003,
+   "raw": 234,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 2010,
+    "404": 894,
+    "405": 98,
+    "500": 1
+   },
+   "load_s": 2.7,
+   "pid": 1676
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=19s\n",
+  "elapsed_s": 45.8,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "lenovo",
+  "hostname": "yicbringup01",
+  "adapter_id": "redfish_lenovo_xcc3",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 129,
+  "requests_distinct": 125,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 124
+  }
+ },
+ {
+  "label": "sr650_v4_03",
+  "mirror": "/root/se_mirrors/sr650_v4_03",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/sr650_v4_03",
+   "keys": 3478,
+   "raw": 234,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 2487,
+    "404": 894,
+    "405": 96,
+    "500": 1
+   },
+   "load_s": 2.9,
+   "pid": 1814
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=21s\n",
+  "elapsed_s": 45.4,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "lenovo",
+  "hostname": "yicinfesx001",
+  "adapter_id": "redfish_lenovo_xcc3",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 163,
+  "requests_distinct": 159,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 158
+  }
+ },
+ {
+  "label": "sr650_v4_04",
+  "mirror": "/root/se_mirrors/sr650_v4_04",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/sr650_v4_04",
+   "keys": 2851,
+   "raw": 234,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1858,
+    "404": 894,
+    "405": 98,
+    "500": 1
+   },
+   "load_s": 2.3,
+   "pid": 1986
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=23s\n",
+  "elapsed_s": 44.2,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "lenovo",
+  "hostname": "yichtwinap09",
+  "adapter_id": "redfish_lenovo_xcc3",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 117,
+  "requests_distinct": 113,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 112
+  }
+ },
+ {
+  "label": "r1_DELL_R740_01",
+  "mirror": "/root/se_mirrors/mock1/DELL_R740/01",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/mock1/DELL_R740/01",
+   "keys": 6075,
+   "raw": 0,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 6073,
+    "403": 2
+   },
+   "load_s": 6.3,
+   "pid": 2116
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=23s\n",
+  "elapsed_s": 49.3,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "dell",
+  "hostname": "DELL01",
+  "adapter_id": "redfish_dell_idrac9",
+  "adapter_first_pass": "redfish_dell_idrac10",
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 141,
+  "requests_distinct": 137,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 136
+  }
+ },
+ {
+  "label": "r1_HPE_CSUS3200_01",
+  "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/01",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/01",
+   "keys": 490,
+   "raw": 0,
+   "hang": [],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 490
+   },
+   "load_s": 0.5,
+   "pid": 2286
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=20s\n",
+  "elapsed_s": 41.9,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "RMC7CA62A413692",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 145,
+  "requests_distinct": 138,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 126,
+   "basic/404/unknown": 14
+  }
+ },
+ {
+  "label": "r1_HPE_CSUS3200_02",
+  "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/02",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/02",
+   "keys": 493,
+   "raw": 0,
+   "hang": [],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 493
+   },
+   "load_s": 0.5,
+   "pid": 2456
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=18s\n",
+  "elapsed_s": 41.4,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "RMC7CA62A418172",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 145,
+  "requests_distinct": 138,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 126,
+   "basic/404/unknown": 14
+  }
+ },
+ {
+  "label": "r1_HPE_CSUS3200_03",
+  "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/03",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/03",
+   "keys": 637,
+   "raw": 0,
+   "hang": [],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 637
+   },
+   "load_s": 0.6,
+   "pid": 2626
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=21s\n",
+  "elapsed_s": 42.7,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "M10MESDB11-RMC",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 214,
+  "requests_distinct": 207,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 195,
+   "basic/404/unknown": 14
+  }
+ },
+ {
+  "label": "r1_HPE_CSUS3200_04",
+  "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/04",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/04",
+   "keys": 636,
+   "raw": 0,
+   "hang": [],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 636
+   },
+   "load_s": 0.6,
+   "pid": 2866
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=22s\n",
+  "elapsed_s": 44.1,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "M10APCDB11-RMC",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 214,
+  "requests_distinct": 207,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 195,
+   "basic/404/unknown": 14
+  }
+ },
+ {
+  "label": "r1_HPE_DL380_01",
+  "mirror": "/root/se_mirrors/mock1/HPE_DL380/01",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/mock1/HPE_DL380/01",
+   "keys": 2054,
+   "raw": 0,
+   "hang": [
+    "ComponentIntegrity/TPM-1"
+   ],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 2022,
+    "404": 30,
+    "405": 1,
+    "400": 1
+   },
+   "load_s": 2.2,
+   "pid": 3105
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=18s\n",
+  "elapsed_s": 43.9,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "ILOSGHD3KHHRP",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 135,
+  "requests_distinct": 131,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 130
+  }
+ },
+ {
+  "label": "r1_Lenovo_SR650_01",
+  "mirror": "/root/se_mirrors/mock1/Lenovo_SR650/01",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_mirrors/mock1/Lenovo_SR650/01",
+   "keys": 2906,
+   "raw": 0,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 2898,
+    "404": 8
+   },
+   "load_s": 3.2,
+   "pid": 3268
+  },
+  "build_id": "mirror-replay-wp2-after",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=22s\n",
+  "elapsed_s": 45.8,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "lenovo",
+  "hostname": "XCC-7DGD-J902E57T",
+  "adapter_id": "redfish_lenovo_xcc3",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 127,
+  "requests_distinct": 123,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 122
+  }
+ }
+]

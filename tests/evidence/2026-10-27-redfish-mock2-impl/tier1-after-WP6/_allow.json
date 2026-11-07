@@ -1,0 +1,25 @@
+[
+ {
+  "labels": [
+   "dl380_gen12_01",
+   "dl380_gen12_02",
+   "dl380_gen12_04",
+   "r1_HPE_DL380_01"
+  ],
+  "path_prefix": "data.thermal.temperatures",
+  "issue": "05-thermal-001",
+  "note": "Absent 센서 항목 제외(7·8·8·9) — 인덱스 이동"
+ },
+ {
+  "labels": "*",
+  "path_prefix": "diagnosis.details.notices",
+  "issue": "05-thermal-001 / 05-power-002",
+  "note": "notice 추가: Absent 센서 건수(DL380 4) · PSU 입력 0 W/0 V 관측(gen12_01/02/04 PSU#2, sr650_v4 PSU1 등) — label 별 건수는 evidence 06"
+ },
+ {
+  "labels": "*",
+  "path_prefix": "data.power.power_control.power_consumed_watts",
+  "issue": "05-power-007",
+  "note": "폴백 순서 Telemetry → PSU 출력 합 → 입력 합 — 18 label 에서 바뀌지 않아야 한다(바뀌면 evidence 에 원인 기록)"
+ }
+]

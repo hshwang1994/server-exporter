@@ -34,7 +34,7 @@
 | adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match`. 세대 토큰은 단어 경계, 버전 숫자 패턴은 보조. `capabilities.sections_supported` 는 채널 섹션과 일치 | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 · 2026-10-12 |
 | 멀티-노드(RMC) | `data.multi_node` 컨테이너로 CSUS 3200 / Superdome Flex 전 Partition · Manager · Chassis 수집 | 2026-05-12 · 2026-06-09 |
 | HBA (4채널) | `storage.hbas[]` — Redfish 기능당 1건 · Linux NPIV 제외 · **ESXi 는 vmhba 그대로 전부(중복 제거 없음, 2026-10-19)**. `link_status` 는 **항상 `up`/`down`(null · unknown 없음 — 미제공 · 미확정도 down, Redfish 는 notice 로 구분, 2026-10-19)**. Redfish wwpn 은 NDF WWPN → 없으면 포트 FC 주소에서 WWNN 을 뺀 유일값(구 NetworkPort 주소는 쓰지 않음). System 이 연결한 섀시만, 빈 목록 · 미제공은 notices, 실패는 errors[] — status 불변. CSUS 3200 은 Redfish 로 FC 링크 상태 수집 불가 → down + notice | 2026-10-15 · 2026-10-18 · 2026-10-19 |
-| 채널 간 값 | 같은 뜻인데 다른 값은 버그, 뜻이 달라 다른 값은 기록만. 고친 것: Cisco CIMC UUID 바이트 순서(adapter `uuid_byte_order`), Redfish `cpu.max_speed_mhz` 정격(종전 MaxSpeedMHz 터보 → `turbo_max_mhz`), `cpu.logical_threads` 는 ProcessorSummary.LogicalProcessorCount 우선, NetworkAdapter Model 은 FirmwareInventory 이름 폴백. 교차 회귀 `test_cross_channel_same_server.py` | 2026-10-18 |
+| 채널 간 값 | 같은 뜻인데 다른 값은 버그, 뜻이 달라 다른 값은 기록만. 고친 것: Cisco CIMC UUID 바이트 순서(adapter `uuid_byte_order`), Redfish `cpu.max_speed_mhz` 정격(종전 MaxSpeedMHz 터보 → `turbo_max_mhz`), NetworkAdapter Model 은 FirmwareInventory 이름 폴백. **Redfish 는 `cpu.logical_threads` 를 내지 않는다**(2026-10-27 FIX 1 — 종전 "LogicalProcessorCount 우선" 폐기, BMC 스레드 수는 HT 상태를 확정하지 못함) · `cpu.manufacturer` 는 Redfish 도 낸다(FIX 2). 교차 회귀 `test_cross_channel_same_server.py` | 2026-10-18 · 2026-10-27 |
 | 논리 볼륨 | OS/ESXi 도 RAID 컨트롤러 뒤 디스크를 `storage.logical_volumes[]` 에 싣는다(physical_disks 는 그대로, member/raid_level 비움). ESXi RAID 뒤 LUN 의 `media_type` 은 null | 2026-10-18 |
 | InfiniBand | `storage.infiniband[]` 항목 1개 = **현재 IB 모드로 확인된 포트** 1개. 근거는 현재 모드 속성뿐(Linux `link_layer` · Windows NdisPhysicalMedium 11/RdmaTechnology · Redfish 링크 기술·PortProtocol + NetDevFuncType), 충돌은 미확정 + notice. ESXi 는 수집하지 않음(항상 `[]`). `rate_gbps` 는 up 일 때만, GUID 는 소문자 4×4, 추정값 금지 | 2026-10-17 |
 | 실패 문장 | `failure_code` + 대상 종류 + 세부 사유로 고르는 중앙 카탈로그, 사용자 문장에 기술값 금지 | 2026-08-12 · 2026-09-21 |
@@ -42,12 +42,15 @@
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
 | 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤. 설치 문서의 환경 표기는 확인한 조합 / 필수 요구 / 선택 · 미확인 세 구분 | 2026-08-13 · 2026-10-11 D-19 · 2026-10-12 |
 | 운영망 Redfish 원본 캡처 | 링크로 닿는 모든 GET 을 저장. 404·405·400류·401/403 은 오류가 아니라 정보(`absent`/`not_gettable`/`rejected`/`outside_account`)이고, 받지 못한 것(`unresolved` · 재시도 뒤에도 계속 5xx/무응답인 `device_error` · 크기 상한 `oversize` · 저장 실패)은 `INCOMPLETE`. 실패 항목마다 `origin`(device/storage/tool 등)으로 장비 문제와 도구 문제를 구별. 기본 크기 상한 256 MiB(0=무제한). 인증은 세션 우선 + Basic 교차 확인(자격 요청 ≤2회, 401/403 재시도 없음). 재생 도구는 요청 경로 기반 키 + 페이지 사슬 + HTTP 상태 보존 | 2026-10-22 |
+| Redfish 2차 Mock 분석 | 분석만(코드 변경 0). Mock 은 zip 으로 main 보관, 구현은 사용자 결정 11건 뒤 별도 세션(Fable 5.1 / max). HIGH 2 · MED 19 · LOW 51(2026-10-27 추가 검증 03-storage-004 포함) | 2026-10-26 |
 
 ## 날짜별 결정 색인
 
 | 날짜 · 제목 |
 |---|
 | 2026-11-02 — 사내 GitLab 을 고객사 형태로(`main` 하나 = GitHub production) · jenkins-prod 는 GitHub · dual push 폐기 |
+| 2026-10-28 — Redfish 2차 Mock 구현 독립 검증 결함 정정: XCC 3 NIC 링크 같은 MAC 포트 보충 · HBA up 값 표준 링크 값 한정 · 전원 Off notice 네트워크 · 사전/계약 원천 정정 |
+| 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2): FIX 1~11 · 결정 11 A안 · Lenovo XCC3 재선택 · 전원 Off · firmware category · XCC3 모양 · 전원/온도 의미 · CSUS 섀시 gating · 계약/사전 정정 |
 | 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합(uuid · 정격 클럭 · 스레드 · NIC 모델) · RAID 논리 볼륨 OS/ESXi |
 | 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 |
 | 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격 |
@@ -147,6 +150,64 @@
 - GitLab 작업 브랜치 5개 삭제(사용자, 작업이 끝난 뒤).
 - 다른 작업 사본에 남은 dual push 설정 제거. GitLab `main` 에는 배포본만 있으므로 `Jenkinsfile_portal_Byid` 를 GitLab 에서 읽던 외부 Job 이 있으면 GitHub 로 옮겨야 한다.
 - jenkins-prod 실제 Job 설정(저장소 주소 · 브랜치)의 화면 확인.
+
+## 2026-10-28 — Redfish 2차 Mock 구현 독립 검증 결함 정정 (F-01~F-10 · HBA up 값 한정)
+
+- **사용자 지시**: 구현 브랜치(`fix/redfish-mock2-20261027` @ `f92ebe6a`) 독립 검증의 FAIL 10건(전부 LOW)과 CI gate 실패를 새 브랜치 `fix/redfish-mock2-review-20261028` 에서 고친다.
+  검증받은 SHA · 검증 증거는 보존하고 golden · baseline 은 결과에 맞춰 덮지 않는다. main 병합 · production 승격은 보류. HBA `link_status` 는 `up`/`down` 둘뿐이고 불확실하면 `down`
+  (`unknown` 복구 · 새 값 금지), CSUS A안(카드 단위 조건은 notice 참고만)은 유지.
+- **결정(사용자, Q1)**: HBA 가 `up` 인 값은 포트 단위 표준 링크 값(`LinkUp` · 구 NetworkPort `Up` · 종전부터 적혀 있던 `Connected`)뿐이다. `Enabled` · `Active` 는 표준 `Port.LinkStatus` 에서
+  링크 의미가 불명이라 `down` + notice `링크 상태 값 미확정`(원문 포함)이다. 벤더 OEM 의 **포트별** 필드가 실제 Link Up 을 뜻한다는 근거(벤더 문서, 또는 실장비 캡처 + 같은 포트의 OS 측 상태 대조)가
+  확인되면 그때 별도로 정규화한다 — 카드 단위 값은 대상이 아니다. 네트워크 정규화(`network.*.link_status`)는 바꾸지 않는다: 같은 FC 포트가 `network.ports[]` 에서는 `up`, `storage.hbas[]` 에서는
+  `down` 일 수 있다(의도된 차이 — Mock 18대 · 저장소 fixture 의 `LinkStatus` 값에 `Enabled`/`Active`/`Connected` 출현 0; `Connected` 는 Lenovo BIOS 속성 값으로만 나온다).
+- **결정(사용자, Q2)**: 전원 Off notice 문구에 '네트워크' 를 넣는다 — `호스트 전원 Off 관측 — 저장/네트워크/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음`(조건 · section · 건수 불변).
+- **결정(코드 규칙, F-01)**: Redfish `network.interfaces[]` 의 NIC 자체 `link_status` 가 없으면(unknown) 같은 MAC 을 가진 `network.ports[]` 들의 `link_status` 가 **하나의 값(up 또는 down)으로 일치할
+  때만** 그 값으로 채운다. NIC 자체 값은 덮지 않고, 포트끼리 다르거나 짝 포트가 없으면 unknown 그대로다(HBA 의 down 정책을 쓰지 않는다). `speed_mbps` 는 같은 경우(NIC 링크 unknown)에 NIC 값이
+  null 이고 짝 포트 속도가 하나로 일치할 때만 채운다 — 종전과 같은 범위다(링크가 있는 NIC 의 속도는 채우지 않는다). 종전 조건(링크 unknown 이고 속도 null 일 때만, MAC 당 포트 1개)은 `SpeedMbps` 가 있는
+  XCC 3 NIC 을 놓쳤고 본딩으로 같은 MAC 이 포트 둘에 걸리면 앞 포트를 덮었다.
+- **미해결(HOLD)**: sr650_v4_02 `NIC6` · sr650_v4_04 `NIC4` 는 본딩 영구 주소 NIC 이라 포트 쪽 출력(`associated_address` = `AssociatedMACAddresses[0]`)에 그 MAC 이 없어 unknown 으로 남는다. 원문에는
+  `PermanentMACAddress` → `PhysicalNetworkPortAssignment` → 포트 `LinkUp` 연결이 있지만, 쓰려면 모듈 출력(포트 주소 목록 또는 기능 영구 주소)을 바꿔야 해서 별도 승인 대상이다. NIC 의 `SpeedMbps` 로
+  링크를 추측하지 않는다.
+- **문서 정정(F-02~F-09)**: `correlation.bmc_ip` = `data.bmc.ip`(① 대상 주소 NIC → ② HostInterface 아님 · Enabled → ③ IPv4 를 가진 첫 NIC), `correlation.host_ip` = 요청 대상 주소(Manager NIC 에
+  없으면 bmc_ip 와 다름), `power_capacity_watts` 원천 = legacy `PowerControl[0].PowerCapacityWatts` → PSU 용량 합(PowerSubsystem 경로도 PSU 합, `CapacityWatts` 미사용; iLO 7 인과 문구 삭제),
+  온도 · 팬 이름 폴백(코드에 없는 MemberId 삭제), XCC 3 속도 단위 예시 · firmware 예시(sr650_v4_02 실제 2항목) · CSUS DIMM 정격(PC5-6400B → 3200, PC5-4800B → 2400) · 음수 센서 범위 재계산.
+  05-thermal-003 (b)(DataSourceUri → Sensor 보충)는 구현하지 않았다는 사실을 처분에 HOLD 로 적는다(요청 +377 · CSUS Sensor 값 null).
+- **영향**: envelope 13 필드 · 키 · enum · `schema_version` 불변, golden · baseline 변경 0, 새 HTTP 요청 0, OS/ESXi 0. 호출자가 볼 값 변화: SR650 V4(Lenovo XCC 3) 4대의 `interfaces[].link_status`
+  unknown → up/down 20건(up 14 · down 6), `is_primary` 4건 false → true, `summary.groups[].link_up_count` · `primary_speed_mbps` (실측 fixture 렌더 시험). HPE DL380 Gen12 전원 Off 호스트 notice 문구 1건.
+  HBA 는 Mock 18대 값 변화 0 — `Enabled`/`Active` 를 보내는 BMC(실측 없음)에서만 `up` → `down` 으로 바뀐다.
+- **CI 시험**: 독립 검증의 CI gate 실패는 제품 결함 0, 실행 환경 요인이었다(pytester HOME · cp949 출력, `core.fileMode=true` 의 `commit -a` 가 실행 비트를 되돌림, 전역 `MSYS_NO_PATHCONV`,
+  eol 속성 없는 파일의 CRLF checkout). 시험은 단언을 강화하는 쪽으로만 고쳤고 skip 추가 · 시험 삭제 0. WSL interop 의 Windows PowerShell 탐침(81건)은 skip 동작 변경이라 별도 승인 후속이다.
+- **회귀**: Mock 18대 Tier 1 재생(실제 playbook + HTTPS 미러) 2회가 서로 같고(차이 0), 구현 브랜치 최종 재생과의 차이는 위 SR650 V4 링크 값 · 파생값과 전원 Off notice 1건뿐이다(설명되지 않은 차이 0,
+  요청 수 · status · sections 불변, HBA 값 · 링크 notice 16건 불변). Tier 2 모듈 재생 18/18 성공 · golden 15대 차이 0, 디스크 · FC 포트 개수 정합 18/18. 실장비 검증은 아니다(실장비 캡처본 재생과 합성 시험).
+
+## 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2 — FIX 1~11 · 결정 11 A안)
+
+- **사용자 의심 / 지시**: 2026-10-26 분석 Round 의 73건을 단일 브랜치 `fix/redfish-mock2-20261027` 에서 WP0~WP12 로 반영하라. 결정 11건을 **FIX** 로 고정: (1) Redfish `data.cpu.logical_threads` 키 제거
+  (유일한 스키마 예외 — HT 추정 금지, OS/ESXi 불변), (2) `cpu.manufacturer` 발행(`Intel(R) Corporation → Intel`), (3) CSUS DIMM `OperatingSpeedMhz` 3200 원값 보존(벤더 의미 문서화), (4) `sections.system = not_supported` 유지,
+  (5) CSUS 합성 baseline 을 실측 봉투로 교체(WP11 뒤), (6) `multi_node.composition` count 는 null(0 날조 금지), (7) firmware category enum 확장 금지(FC HBA 는 `other`), (8) HTTPS 미러 재생 도구를 `tests/` 에 편입,
+  (9) 근거 있는 golden 만 정정(before/after/원천/원인 표), (10) `data.users` 불변, (11) main 병합 · production 승격은 독립 검증 뒤 별도 승인. 2차 검토: 03-storage-004 는 **A안**(Port `LinkStatus` 있으면 사용 ·
+  없으면 `down` 유지 · 카드 단위 조건은 notice 참고만 · 요청/필드 추가 0 · Iel 미사용), WP2 는 가장 좁은 공통 규칙, WP4 는 구조 근거 1순위. 3차 검토: FC HBA 카드 조건은 3중 판별(FC 전용 카드 ∧ 자기 PCIe 링크 1건 ∧
+  선언 등록부) + RAID LinkUp 음성 테스트, 디스크/FC 포트 개수 정합 회귀(노출 수 == 수집 수, 침묵 누락 금지).
+- **분석(AI 실측)**: 각 WP 는 Tier 0(pytest) → Tier 1(실제 `ansible-playbook` + HTTPS 미러 18 label, 허용목록 diff) 로 닫았다. Lenovo XCC3 강등은 `Manager.Model` 기반 opt-in `bmc_model_patterns`(선언 adapter 만 평가) 로 고쳤고
+  31 adapter × 기존 facts 점수가 바이트 동일함을 증명했다(WP2). 전원 Off 호스트의 placeholder(빈 DIMM · Absent PSU · 0 °C) 는 null/제외 + notice(WP3/WP6). category 는 `ActiveSoftwareImage`/`RelatedItem` 구조 근거 →
+  토큰 → 컨트롤러 조인(WP4). XCC3 FC-in-EthernetInterfaces 는 normalize 층 제외 + INV-5(WP5). CSUS 섀시 본문 링크 gating 으로 고정 경로 404 -14, composition null, FC HBA 카드 조건 notice(WP7).
+  계약 · 사전 drift(C6) 묶음과 FIX 1/2/4 는 WP8/WP9: `hardware.health` 는 `Status.Health` 원값(없을 때만 Rollup), Redfish `logical_threads` 제거 · `manufacturer` 발행, 사전 +53 · 정정 10.
+- **결정**: 위 FIX 그대로(변경 없음). 주요 처분: 03-storage-004 FIXED(notice, A안)+MOCK_LIMITATION(포트 단위 판별), 02-cpu-001/002 FIX 1 로 정책 제외, 01-hardware-002 코드(폴백)+문서, 02-cpu-004 는 어휘 차이만 문서화(통일은 결정 항목),
+  03-network-005 · 02-cpu-005/006 · 04-bios-002/003 · 04-firmware-008/009/010 · 02-memory-005/006 · 05-thermal-004 OBSERVATION_ONLY, 03-storage-001(b) HOLD.
+- **영향**: envelope 13 필드 · `sections` · `status` 판정 불변. 호출자가 볼 변화: Redfish `data.cpu.logical_threads` **키 소멸**(유일한 비-Additive — Portal 은 OS/ESXi 값 사용), `cpu.manufacturer` 추가,
+  Lenovo XCC3 `meta.adapter_id = redfish_lenovo_xcc3`, 전원 Off/Absent 값 null · 항목 제외, firmware category 재분류(Lenovo UEFI → bios 등), CSUS 요청 -14 · composition count null, notice 문구 추가.
+- **회귀**: WP 마다 unit(5118) · integration(497) · e2e+regression(1094) · WSL 엔진 23 · syntax 3채널 · Tier 1 18/18(허용목록 밖 0) · 개수 정합 18 PASS · INV-5 0. 독립 검증은 새 Fable 세션이 같은 SHA 로 Tier 0/1/2 를 재실행한다.
+- **FIX 5 이행(WP11 뒤)**: `schema/baseline_v1/hpe_csus_3200_baseline.json` 을 2차 Mock csus3200_01 의 Tier 1 실 봉투로 교체(재생 주소 127.0.0.1 → BMC IP 2곳만 수정, `baseline_origin` 실측 표기). 실 구조 1 파티션 · 1 RMC · 3 섀시 — 합성본(3 파티션 · 4 Manager)과 달라
+  registry 라벨 `hpe_csus_3200_redfish`, 가드 테스트(`test_csus_mock_consistency.py`) 를 실측 구조·개수 정합으로 재작성, 03-fields §9 예시를 실측으로 교체. 2026-10-27 현재 합성 baseline 은 0 개다.
+
+## 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round (분석 단계 — 코드 변경 0)
+
+- **무엇**: 용인 2차 전수 미러 11대(CSUS 3200 ×3 · DL380 Gen12 ×4 · SR650 V4 ×4)와 1차 7대로 기존 Gathering 코드·테스트·ADR 을 교차 검증했다. 제품 소스·ADR·기존 테스트·Mock 원본 변경 0. 산출물 `tests/evidence/2026-10-26-redfish-mock2-audit/`(브랜치 `docs/redfish-mock2-audit-20261026`), 구현 계획 `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md`.
+- **결정(사용자)**: (1) 2차 Mock 은 치환·제외 없이 서버당 zip 으로 `tests/reference/redfish/mock2/` 에 보관하고 origin(GitHub 공개 + GitLab)에 Push 한다 — 반출 전 더미화된 자료(main `7c22ca4a`); (2) 1차 전체 미러는 저장소에 두지 않는다(외부 읽기 전용); (3) 검증 기준은 Mock 실측이며 코드·테스트·ADR 은 검증 대상, JSON 스키마는 고정; (4) 분석·구현·회귀·최종 독립 검증 모두 Fable 5.1 / effort=max.
+- **결정(절차)**: 실제 Gathering 경로 검증은 `ansible-playbook`(WSL) + 미러 재생 HTTPS 서버(분석 단계 도구, 저장소 편입은 결정 항목)로 하고 설정 주입 0 — adapter 가 고른 값이 틀리면 이슈로 기록. 재생 한계(익명 허용 범위·비밀번호 검증·timeout·미기록 경로·v1 비-2xx)는 '검증 불가' 로 표기한다.
+- **핵심 발견**: 01-adapter-001(HIGH 확정) Lenovo XCC3 로그인 후 adapter 재선택이 범용 `redfish_lenovo_bmc` 로 강등(공통 실격 규칙 + 재선택 facts); 02-cpu-001(HIGH 추정) HT 비활성 5대의 `cpu.logical_threads` 가 코어의 2배, ADR-2026-10-18 X3·ADR-2026-10-19 A-2 전제(RMC LPC = 코어 수)가 RMC 1.77.30 에서 불성립; 전원 Off 호스트 placeholder(C2); firmware category 오분류(C9); XCC3 모양(C4); iLO Absent 센서 0 °C·AC 입력 없는 PSU(C10); 계약·사전 drift(C6); `replay_full_mirror.install_fakes` 미복원으로 `tests/unit` 전체 19 failed(04-test-001).
+- **ADR 정정 제안(원문 미수정)**: ISSUES.md §5 — ADR-2026-10-18 X3, ADR-2026-10-19 결정 3·A-2·대안 비교·A-9, ADR-2026-05-12 결정 6(미이행), ADR-2026-06-09(섀시 Power/Thermal 가정), ADR-2026-10-15(문서 보강). 유지 확인: ADR-2026-05-29·2026-10-17·2026-10-18/19(hba link)·2026-06-04 ×2.
+- **추가 검증 2026-10-27**: 사용자 질문("FC Port 밖 어디에도 유추할 값이 없나")으로 CSUS FC HBA 링크 상태의 원천을 7대 미러 전 파일에서 재조사했다. Port 리소스에는 없지만 같은 카드 `PCIeDevices/{N}.Status.Conditions` 의 HPE 등록부 `H3Alert.1.8.LinkUp/LinkDown`("external Ethernet or FC HBA port link", 카드 단위)이 1차 4대·2차 3대 전부에 있고, 2차 OEM Iel `DCD_FCHBA_LINK_UP/DOWN` 이벤트 시각이 그 Timestamp 와 초 단위로 일치했다. 그 응답은 수집기가 이미 요청하고 있다(펌웨어 보강). 이슈 `03-storage-004`(MED)·사용자 결정 11 추가, ADR-2026-10-18 전제("Redfish 로 수집 불가") 정정 제안, 분석 누락은 FAILURE_PATTERNS 2026-10-27 에 기록. 코드·ADR 변경 0 — `tests/evidence/2026-10-26-redfish-mock2-audit/analysis/07-main-addendum-csus-hba-link.md`.
 
 ## 2026-10-22 (4) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
 
@@ -338,7 +399,7 @@ envelope 13 필드 · `status` 판정 · Redfish power/thermal 코드 · FC HBA 
 | 사실 (실 4노드 미러 RMC 1.75.108 · 실제 Templar 렌더) | 처리 |
 |---|---|
 | 디스크(node03/04 SAS SSD 2)와 HBA(8)는 함께 나온다 — 상호배제 재현 안 됨 | A-5 `Systems/{id}/NetworkInterfaces → Links.NetworkAdapter`(섀시 경로가 비거나 실패할 때만) · notice · 체크리스트(6.3.2) |
-| RMC `ProcessorSummary.LogicalProcessorCount` = 코어 수(HThread Enabled, TotalThreads 2×) → 2026-10-18 X3 가 과소집계(32/64, 실제 64/128) | adapter `vendor_notes.processor_summary_logical_count: cores` → per-processor 합 우선(값으로 가른다, 벤더 이름 아님) |
+| RMC `ProcessorSummary.LogicalProcessorCount` = 코어 수(HThread Enabled, TotalThreads 2×) → 2026-10-18 X3 가 과소집계(32/64, 실제 64/128) — **2026-10-27 FIX 1 로 대체: Redfish 는 `cpu.logical_threads` 를 내지 않고 플래그는 삭제** | (종전) adapter `vendor_notes.processor_summary_logical_count: cores` → per-processor 합 우선(값으로 가른다, 벤더 이름 아님) |
 | PSU 4개 전부 용량 미제공인데 `total_capacity_w 0 · consumed_capacity_pct 0` | 용량을 아는 PSU 0개 → null(전 벤더) |
 | FC HBA 카드가 `network.summary.adapter_count` 에 들어감(NIC 0장인데 2) | 포트가 전부 FC/FCoE/IB 인 카드 제외(hbas/infiniband 로 요약) |
 | "Npar 0 Storage" 빈 컨테이너 · `part_number` 는 섀시에만 · RAID 컨트롤러 정체는 `Chassis/PCIeDevices/3` 에만 · NIC/HBA/RAID/PSU 펌웨어는 PCIe 장치 · PSU 에만 · 섀시 `Drives` · 2번째 섀시 Power/Thermal 미요청 | A-6 빈 컨테이너 제거 · A-7 섀시 폴백 · A-8 드라이브 위치 ⊂ 슬롯 위치(후보 1개) · A-9 adapter `firmware_inventory_scope: complex_only` 보충 · A-10 드라이브 0건이면 섀시 Drives · A-11 다중 섀시 합산 — 전부 "정보가 없을 때만", 정보를 주는 벤더는 요청 · 골든 불변 |

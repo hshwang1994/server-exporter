@@ -1,0 +1,1 @@
+READY {"mirror": "/root/se_mirrors_fix_20261028/sr650_v4_03", "keys": 3478, "raw": 234, "hang": [], "realm": null, "noauth_root": true, "statuses": {"200": 2487, "404": 894, "405": 96, "500": 1}, "load_s": 2.6, "pid": 1936}

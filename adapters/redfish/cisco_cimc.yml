@@ -52,8 +52,8 @@
 #       (slot-1, slot-2 등 PCIe 미장착). → gather_firmware 가 N/A/""/NA skip.
 #   Q6. Processor: TotalCores = TotalEnabledCores = TotalThreads (HT 미보고).
 #       E5-2699 v4 실 사양은 22C/44T 이지만 Cisco CIMC 4.x 펌웨어가 thread 수를
-#       cores 와 동일하게 응답. 호출자 capacity planning 시 logical_threads 가
-#       cores 와 같다는 점 인지 필요 (코드 fix 불가 — RAW 응답 반영).
+#       cores 와 동일하게 응답. 2026-10-27 (FIX 1): Redfish 채널은 cpu.logical_threads 를
+#       내지 않으므로(스레드 수는 OS/ESXi 값) 이 차이는 결과에 나타나지 않는다.
 #   Q7. Manager NIC NameServers + IPv4Addresses[*].Gateway 응답함 — gather_bmc
 #       의 _network_meta 임시 키로 추출 후 normalize_standard.yml 의 dns_servers
 #       / default_gateways 에 union (이전: dns_servers 하드코딩 [], 손실).

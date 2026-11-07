@@ -1,0 +1,90 @@
+{
+ "csus3200_01": {
+  "src_files": 4068,
+  "ext_files": 4068,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "csus3200_02": {
+  "src_files": 3974,
+  "ext_files": 3974,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "csus3200_03": {
+  "src_files": 3998,
+  "ext_files": 3998,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "dl380_gen12_01": {
+  "src_files": 3551,
+  "ext_files": 3551,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "dl380_gen12_02": {
+  "src_files": 3009,
+  "ext_files": 3009,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "dl380_gen12_03": {
+  "src_files": 2413,
+  "ext_files": 2413,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "dl380_gen12_04": {
+  "src_files": 3575,
+  "ext_files": 3575,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "sr650_v4_01": {
+  "src_files": 4506,
+  "ext_files": 4506,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "sr650_v4_02": {
+  "src_files": 4730,
+  "ext_files": 4730,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "sr650_v4_03": {
+  "src_files": 5684,
+  "ext_files": 5684,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ },
+ "sr650_v4_04": {
+  "src_files": 4426,
+  "ext_files": 4426,
+  "missing": [],
+  "extra": [],
+  "sha_diff": [],
+  "ok": true
+ }
+}

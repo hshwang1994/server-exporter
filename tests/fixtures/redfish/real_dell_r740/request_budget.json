@@ -2,7 +2,7 @@
   "generated": "2026-10-03",
   "baseline_sha": "a45ba808",
   "baseline_http_calls": 168,
-  "http_calls_budget": 137,
+  "http_calls_budget": 138,
   "note": "Phase 3 (Plan §8-1·§10-1): expected_http_calls 는 현재 코드의 HTTP 요청 다중집합(캐시 hit 제외, noauth 포함). 바뀌면 사유와 함께 이 파일을 갱신한다 — 암묵적 감소·증가 모두 FAIL. path_set_delta 는 a45ba808 대비 명시적 변경 목록.",
   "path_set_delta": {
     "removed": [
@@ -38,10 +38,13 @@
       "UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-3-1 x1",
       "UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-4-1 x1"
     ],
-    "added": []
+    "added": [
+      "Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1 x1"
+    ]
   },
   "expected_http_calls": [
     "Chassis x1",
+    "Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1 x1",
     "Chassis/System.Embedded.1 x1",
     "Chassis/System.Embedded.1/NetworkAdapters x1",
     "Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1 x1",
@@ -178,5 +181,6 @@
     "UpdateService/FirmwareInventory/Installed-27763-1.1.4__CPLD.Embedded.1 x1",
     "UpdateService/FirmwareInventory/Installed-28897-7.00.00.184__USC.Embedded.1:LC.Embedded.1 x1",
     "noauth:: x1"
-  ]
+  ],
+  "added_reason": "SA-12 2026-10-29 (섀시 드라이브 합집합): Storage 의 Links.Enclosures 섀시 본문 · 섀시가 광고한 Drives 컬렉션 GET — recording 미포함 경로(replay-miss 404). 실장비 응답은 미검증이며 Tier 1 미러 실응답으로만 확인 (tests/evidence/2026-10-29-redfish-summary-fix/replay_miss_ledger.json)"
 }

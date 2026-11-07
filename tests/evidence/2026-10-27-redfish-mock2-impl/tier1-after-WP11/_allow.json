@@ -1,0 +1,14 @@
+[
+ {
+  "labels": ["dl380_gen12_01", "dl380_gen12_02", "dl380_gen12_03", "dl380_gen12_04", "r1_HPE_DL380_01"],
+  "path_prefix": "data.bmc.timezone",
+  "issue": "06-bmc-003",
+  "note": "iLO 7 Manager 본문에 TimeZoneName 없음 → Oem.Hpe.Links.DateTimeService(Managers/1/DateTime) TimeZone.Value: null → JST-9:00 ×4(2차) · GMT-0(1차)"
+ },
+ {
+  "labels": ["dl380_gen12_01", "dl380_gen12_02", "dl380_gen12_03", "dl380_gen12_04", "r1_HPE_DL380_01"],
+  "request_re": "^Managers/1/DateTime$",
+  "issue": "06-bmc-003",
+  "note": "TimeZoneName 이 없을 때만 +1 GET (iLO 7 5 label). 그 밖 13 label 요청 집합 불변이어야 함"
+ }
+]

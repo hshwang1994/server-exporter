@@ -287,6 +287,9 @@ MIRROR_CASES = [
     {"power_supplies": [PSU(state="UnavailableOffline", health=None, cap="800")], "power_control": None},
     {"power_supplies": [], "power_control": None},
     {"power_supplies": [PSU(cap=750)], "power_control": {"power_consumed_watts": 123.0}},
+    # 2026-10-29 (SA-06): 설치 PSU 0(전부 Absent) → rollup None / 설치됐으나 상태 미보고 → 'Unknown' 유지
+    {"power_supplies": [PSU(state="Absent", health="Warning"), PSU(state="Absent", health="Warning")], "power_control": None},
+    {"power_supplies": [PSU(health=None), PSU(health=None)], "power_control": {"power_consumed_watts": 300}},
 ]
 
 
@@ -294,6 +297,28 @@ MIRROR_CASES = [
 def test_power_summary_filter_matches_redfish_jinja(power):
     rendered = NativeEnvironment().from_string(_rf_power_summary_template()).render(_rf_d_power=power)
     assert power_summary(power) == rendered
+
+
+@pytest.mark.parametrize("power, rollup, count", [
+    ({"power_supplies": [], "power_control": None}, None, 0),
+    ({"power_supplies": [PSU(state="Absent", health="Warning")] * 2, "power_control": None}, None, 0),
+    ({"power_supplies": [PSU(health=None), PSU(health=None)], "power_control": None}, "Unknown", 2),
+    ({"power_supplies": [PSU(), PSU(state="Absent", health="Warning")], "power_control": None}, "OK", 1),
+])
+def test_power_summary_rollup_is_null_without_installed_psu(power, rollup, count):
+    """2026-10-29 (SA-06, 사용자 결정 — ESXi 도 Redfish 와 함께): 집계할 설치 PSU 가 없으면 health_rollup 은 None (종전 'Unknown')."""
+    s = power_summary(power)
+    assert (s["health_rollup"], s["psu_count"]) == (rollup, count)
+
+
+def test_render_esxi_host_without_psu_sensor_gives_null_rollup():
+    """PSU 센서가 없는 ESXi 호스트 — power 섹션은 수집되고 summary.psu_count 0 · health_rollup None (SA-06, 종전 'Unknown')."""
+    sensors = build([SYNTH[0], SYNTH[5]])
+    assert sensors["power_supplies"] == []
+    ctx = run_pt({"_e_disks_failed_parts": [], "_e_raw_sensors": sensors, "_e_disks_err": None})
+    summary = ctx["_data_fragment"]["power"]["summary"]
+    assert (summary["psu_count"], summary["health_rollup"], summary["redundant"]) == (0, None, False)
+    assert ctx["_sections_collected_fragment"] == ["power", "thermal"] and ctx["_errors_fragment"] == []
 
 
 # ─────────────────────────────────────────────────────────────────────────────

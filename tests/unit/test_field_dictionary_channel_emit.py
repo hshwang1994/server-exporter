@@ -134,3 +134,24 @@ def test_hba_link_status_is_declared_with_the_canonical_values():
     assert "PortType=FibreChannel" not in FD["storage.hbas[]"]["help_ko"], "Redfish 분류는 PortType 을 쓰지 않는다"
     assert set(FD["cpu.turbo_max_mhz"]["channel"]) == {"redfish", "os", "esxi"}, "2026-10-18: Redfish 도 MaxSpeedMHz 를 turbo_max_mhz 로 낸다"
     assert set(FD["storage.logical_volumes[]"]["channel"]) == {"redfish", "os", "esxi"}, "2026-10-18: OS/ESXi 도 RAID 뒤 디스크를 볼륨으로 싣는다"
+
+
+def test_cpu_manufacturer_emitted_by_redfish_and_logical_threads_is_os_esxi_only():
+    """2026-10-27 — FIX 2: 사전이 redfish 로 선언한 cpu.manufacturer 를 normalize_standard 가 낸다(02-cpu-003).
+    FIX 1: cpu.logical_threads 는 Redfish 가 내지 않고 사전 channel 도 [os, esxi] 다(02-cpu-001/007). OS/ESXi 는 그대로 낸다."""
+    red_cpu = _fragment_section(REDFISH_NORM, "cpu")
+    assert set(FD["cpu.manufacturer"]["channel"]) == {"redfish", "os", "esxi"}
+    assert "manufacturer" in red_cpu and "logical_threads" not in red_cpu
+    assert FD["cpu.logical_threads"]["channel"] == ["os", "esxi"] and FD["cpu.logical_threads"]["priority"] == "must"
+    for key in ("cpu.sockets", "cpu.model", "cpu.cores_physical"):
+        assert set(FD[key]["channel"]) == {"redfish", "os", "esxi"} and key.split(".")[1] in red_cpu, key
+    for path in (REPO / "os-gather" / "tasks" / "linux" / "gather_cpu.yml", REPO / "os-gather" / "tasks" / "windows" / "gather_cpu.yml", ESXI_SYS):
+        assert "logical_threads" in _fragment_section(path, "cpu"), path.name
+    # 사전에 redfish 로 선언된 cpu.<key>(1단계 키)는 전부 Redfish cpu 블록에 있다 — "선언만 있고 안 내는" drift 재발 방지
+    declared = {k.split(".", 1)[1] for k, e in FD.items() if k.startswith("cpu.") and "redfish" in e["channel"] and "[" not in k and k.count(".") == 1}
+    assert declared <= set(red_cpu), declared - set(red_cpu)
+
+
+def test_redfish_only_dictionary_keys_are_not_claimed_for_other_channels_storage_driver():
+    """2026-10-27 (03-storage-002): storage.controllers[].driver 는 Redfish 가 내지 않는다 — 사전 channel 에서 redfish 를 뺐다."""
+    assert FD["storage.controllers[].driver"]["channel"] == ["os", "esxi"]

@@ -260,3 +260,16 @@ Rollback trigger:
 | 일시 | 승인자 | 대상 | 비고 |
 |---|---|---|---|
 | 2026-05-12 | hshwang1994 | 본 ADR / 8 결정 / 4 사용자 답변 / ExitPlanMode 승인 | plan 파일 + AskUserQuestion 4 답변 + ExitPlanMode 한 번에 승인 |
+
+## 2026-10-27 정정 기록 (2차 Mock 실측 · 지시서 2 FIX 5/6)
+
+- **결정 6(baseline) 이행 상태**: `schema/baseline_v1/hpe_csus_3200_baseline.json` 은 2026-10-27 현재도 mock-derived 합성본이다(ADR 의 "lab 도입 시 실측 교체 의무" 미이행 — 2차 분석 01-multi_node-003).
+  사용자 FIX 5(2026-10-27): 2차 Mock csus3200_01 의 Tier 1 실 봉투로 in-place 교체하고 소비 테스트를 같은 커밋에서 재작성한다 — 구현 Round WP11(bmc/diagnosis) 뒤 실행 예정(이 기록 시점에는 미실행).
+  2026-10-27 FIX 1 로 그 합성본의 `cpu.logical_threads`(4곳)만 먼저 제거했다.
+- **결정 6 이행 (2026-10-27, WP11 뒤)**: `hpe_csus_3200_baseline.json` 을 2차 Mock csus3200_01(RMC 1.77.30) 의 Tier 1 실 봉투(`tier1-after-WP11/csus3200_01/gather_output.json`, 재생 주소 2곳만 BMC IP 로 치환)로 교체했다.
+  실 구조는 1 nPartition · 1 Manager(RMC) · 3 Chassis(RackGroup/Rack1/r001u01) 로 이 ADR 의 합성 모델(3 파티션 · 4 Manager · Base/Expansion)과 다르다 — 결정 1(layout `rmc_primary`)·결정 2(representative Partition0) 는 실측에서도 유효.
+  registry 라벨 `hpe_csus_3200_redfish_MOCK` → `hpe_csus_3200_redfish`, 가드 테스트는 실측 구조·origin 실측 표기·개수 정합으로 재작성. 합성 fixture `tests/fixtures/redfish/hpe_csus_3200/` 는 설명 모델로만 남는다.
+- **외부 계약 추정 정정**: ResourceBlock `Processors[]/Memory[]` 는 실 RMC 에 없다(composition count 는 null — FIX 6). RMC `OperatingSpeedMhz` 는 I/O 클럭(3200, PC5-6400B) 이다(FIX 3 — 원값 보존, 계약 6.2).
+  `ProcessorSummary.LogicalProcessorCount` 의 뜻은 펌웨어 버전(1.75 코어 수 · 1.77 스레드 수)에 따라 달라 Redfish 는 `cpu.logical_threads` 를 내지 않는다(FIX 1).
+- **결정 1 보강(bmc.name, 2026-10-27 06-bmc-006)**: `manager_layout` 이 없어도 `ManagerType RackManager`/`EnclosureManager` 면 Manager `Id`(`RMC`) 또는 ManagerType 라벨을 쓴다 —
+  결함표 3행("RMC primary 가 `bmc.name='iLO'`")이 adapter 선택 결과에만 묶여 있던 것을 장비 값으로도 막는다(plain 재생 `RMC`). RMC 계정 `@Redfish.WriteableProperties`(06-bmc-002) 는 EXTERNAL_CONTRACTS 2026-10-27.

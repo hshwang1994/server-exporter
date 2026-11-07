@@ -134,6 +134,10 @@
             #   펌웨어를 firmware[] 에 보충한다. 값이 없는 adapter 는 '' → 모듈이 None 처리(종전과 같다). vendor 이름으로 가르지 않는다(rule 12).
             _rf_adapter_firmware_scope: >-
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).firmware_inventory_scope | default('') }}
+            # 2026-10-27 (03-storage-004 결정 11 A안): adapter vendor_notes.pcie_port_link_condition_registries → 모듈 pcie_port_link_condition_registries.
+            #   선언이 없는 adapter 는 [] → 모듈이 None 처리(카드 조건 문구 없음). vendor 이름으로 가르지 않는다(rule 12).
+            _rf_adapter_pcie_link_registries: >-
+              {{ ((_selected_adapter | default({})).vendor_notes | default({})).pcie_port_link_condition_registries | default([]) }}
 
         # ── Phase 1: 표준 수집 계정으로 수집 ─────────────────────────────
         # 표준 계정은 전역 1개다 (vault/common/redfish/standard.yml).
@@ -339,9 +343,11 @@
             # 주의: 아래 `>-` 는 YAML folded block scalar 다. 그 안에서 `#` 는 주석이 아니라
             #   **Jinja 표현식 본문**이 되어 템플릿 컴파일이 통째로 깨진다. 설명은 반드시
             #   이 자리(표현식 밖)에 쓴다.
+            # 2026-10-27 (06-bmc-010): auth_success 는 실제 자격으로 인증했을 때만 true 다(CLAUDE.md §9). vendor 미식별 장비의
+            #   익명(빈 자격) 수집이 성공하면 _rf_used_account.role 이 anonymous 라 인증 성공을 관측한 것이 아니므로 null 로 둔다.
             _diagnosis: >-
               {{ _diagnosis | combine({
-                   'auth_success': true,
+                   'auth_success': (none if (((_rf_used_account | default({})).role | default('primary')) == 'anonymous') else true),
                    'details': ((_diagnosis | default({}, true)).details | default({})
                                 if (((_diagnosis | default({}, true)).details | default({}))
                                     is mapping) else {}) | combine({
@@ -355,7 +361,7 @@
                      'auth': _rf_attempts_meta | default({}),
                      'account_service': _rf_account_service_meta | default({}),
                      'multi_node_layout': (_rf_adapter_manager_layout | default('')) or none,
-                     'notices': ((_rf_raw_collect | default({})).notices | default([])),
+                     'notices': (((_rf_raw_collect | default({})).notices | default([])) + (_rf_norm_notices | default([]))),
                      'rmc_activation_check':
                        (true if ((_rf_adapter_manager_layout | default('')) in ['rmc_primary', 'rmc_primary_ilo_secondary']
                                  and (_rf_collect_ok | default(false) | bool))
@@ -658,7 +664,8 @@
                                                   'account_service':
                                                     _rf_account_service_meta | default({}),
                                                   'notices':
-                                           ((_rf_raw_collect | default({})).notices | default([]))})}) }}
+                                           (((_rf_raw_collect | default({})).notices | default([]))
+                                            + (_rf_norm_notices | default([])))})}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "redfish | rescue | set failed vars"

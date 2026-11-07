@@ -1,0 +1,525 @@
+[
+ {
+  "label": "syn_csus_nocomp",
+  "mirror": "/root/se_syn_20261029/syn_csus_nocomp",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_csus_nocomp",
+   "keys": 2067,
+   "raw": 16,
+   "hang": [
+    "Managers/RMC/LogServices/RmcConfig/RawConfig"
+   ],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 2003,
+    "201": 1,
+    "204": 1,
+    "404": 57,
+    "500": 5
+   },
+   "load_s": 1.0,
+   "pid": 968
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=22s\n",
+  "elapsed_s": 46.6,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "yicdspdb01",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 184,
+  "requests_distinct": 180,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 179
+  }
+ },
+ {
+  "label": "syn_csus_nofab",
+  "mirror": "/root/se_syn_20261029/syn_csus_nofab",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_csus_nofab",
+   "keys": 2067,
+   "raw": 16,
+   "hang": [
+    "Managers/RMC/LogServices/RmcConfig/RawConfig"
+   ],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 2003,
+    "201": 1,
+    "204": 1,
+    "404": 57,
+    "500": 5
+   },
+   "load_s": 0.9,
+   "pid": 1246
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=21s\n",
+  "elapsed_s": 45.3,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "yicdspdb01",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 182,
+  "requests_distinct": 178,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 177
+  }
+ },
+ {
+  "label": "syn_dell_links",
+  "mirror": "/root/se_syn_20261029/syn_dell_links",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_dell_links",
+   "keys": 6075,
+   "raw": 0,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 6073,
+    "403": 2
+   },
+   "load_s": 3.0,
+   "pid": 1532
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=22s\n",
+  "elapsed_s": 48.6,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "dell",
+  "hostname": "DELL01",
+  "adapter_id": "redfish_dell_idrac9",
+  "adapter_first_pass": "redfish_dell_idrac10",
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 142,
+  "requests_distinct": 138,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 137
+  }
+ },
+ {
+  "label": "syn_dell_primary",
+  "mirror": "/root/se_syn_20261029/syn_dell_primary",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_dell_primary",
+   "keys": 6075,
+   "raw": 0,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 6073,
+    "403": 2
+   },
+   "load_s": 3.7,
+   "pid": 1814
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=25s\n",
+  "elapsed_s": 50.8,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "dell",
+  "hostname": "DELL01",
+  "adapter_id": "redfish_dell_idrac9",
+  "adapter_first_pass": "redfish_dell_idrac10",
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 142,
+  "requests_distinct": 138,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 137
+  }
+ },
+ {
+  "label": "syn_dl380_partial_link",
+  "mirror": "/root/se_syn_20261029/syn_dl380_partial_link",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_dl380_partial_link",
+   "keys": 1902,
+   "raw": 1,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1499,
+    "404": 126,
+    "405": 1,
+    "406": 276
+   },
+   "load_s": 1.1,
+   "pid": 2068
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=23s\n",
+  "elapsed_s": 47.4,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "yicad04",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 150,
+  "requests_distinct": 146,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 145
+  }
+ },
+ {
+  "label": "syn_g12_03_on",
+  "mirror": "/root/se_syn_20261029/syn_g12_03_on",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_g12_03_on",
+   "keys": 1573,
+   "raw": 1,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1201,
+    "404": 90,
+    "405": 1,
+    "400": 5,
+    "406": 276
+   },
+   "load_s": 0.7,
+   "pid": 2317
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=23s\n",
+  "elapsed_s": 47.7,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "yicossemul03",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 85,
+  "requests_distinct": 81,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 80
+  }
+ },
+ {
+  "label": "syn_g12_psub_range",
+  "mirror": "/root/se_syn_20261029/syn_g12_psub_range",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_g12_psub_range",
+   "keys": 2311,
+   "raw": 1,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1770,
+    "404": 262,
+    "405": 1,
+    "406": 276,
+    "400": 2
+   },
+   "load_s": 1.0,
+   "pid": 2507
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=23s\n",
+  "elapsed_s": 47.3,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hp",
+  "hostname": "yicesxmgmt05",
+  "adapter_id": "redfish_hpe_ilo7",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 165,
+  "requests_distinct": 161,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 160
+  }
+ },
+ {
+  "label": "syn_r1csus01_off",
+  "mirror": "/root/se_syn_20261029/syn_r1csus01_off",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_r1csus01_off",
+   "keys": 490,
+   "raw": 0,
+   "hang": [],
+   "realm": "Basic realm=\"redfish\"",
+   "noauth_root": true,
+   "statuses": {
+    "200": 490
+   },
+   "load_s": 0.2,
+   "pid": 2774
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=23s\n",
+  "elapsed_s": 46.0,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "hpCsus",
+  "hostname": "RMC7CA62A413692",
+  "adapter_id": "redfish_hpe_csus_3200",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 131,
+  "requests_distinct": 127,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 126
+  }
+ },
+ {
+  "label": "syn_v4_partial",
+  "mirror": "/root/se_syn_20261029/syn_v4_partial",
+  "loc": "yi",
+  "server": {
+   "mirror": "/root/se_syn_20261029/syn_v4_partial",
+   "keys": 2890,
+   "raw": 234,
+   "hang": [],
+   "realm": null,
+   "noauth_root": true,
+   "statuses": {
+    "200": 1898,
+    "404": 894,
+    "405": 97,
+    "500": 1
+   },
+   "load_s": 1.4,
+   "pid": 3009
+  },
+  "build_id": "syn-head-0bc68f71",
+  "root_probe": "200",
+  "playbook_rc": 0,
+  "playbook_tail": "RC=0 elapsed=24s\n",
+  "elapsed_s": 47.5,
+  "envelopes": 1,
+  "status": "success",
+  "vendor": "lenovo",
+  "hostname": "yicad01",
+  "adapter_id": "redfish_lenovo_xcc3",
+  "adapter_first_pass": null,
+  "sections": {
+   "system": "not_supported",
+   "hardware": "success",
+   "bmc": "success",
+   "cpu": "success",
+   "memory": "success",
+   "storage": "success",
+   "network": "success",
+   "firmware": "success",
+   "users": "not_supported",
+   "power": "success",
+   "thermal": "success"
+  },
+  "errors": 0,
+  "failure": {
+   "failure_stage": null,
+   "failure_code": null,
+   "auth_success": true
+  },
+  "requests": 112,
+  "requests_distinct": 108,
+  "req_notes": {
+   "anon/200/noauth-root": 4,
+   "anon/401/anon-denied": 1,
+   "basic/200/tree": 107
+  }
+ }
+]

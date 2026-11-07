@@ -1,0 +1,46 @@
+{
+ "exposure": {
+  "disks_present": 4,
+  "disks_present_raw": 4,
+  "disks_absent_empty_bay": 0,
+  "disk_paths_present": [
+   "Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1",
+   "Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.1:Enclosure.Internal.0-1:RAID.Slot.6-1",
+   "Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.2:Enclosure.Internal.0-1:RAID.Slot.6-1",
+   "Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.3:Enclosure.Internal.0-1:RAID.Slot.6-1"
+  ],
+  "simple_storage_used": false,
+  "fc_ports": 4,
+  "fc_port_paths": [
+   "Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-1",
+   "Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-2",
+   "Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-1",
+   "Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-2"
+  ],
+  "ethernet_ports": 12,
+  "orphan_fc_ndf": [],
+  "host_fc_in_ethernet": [],
+  "power_state": {
+   "Systems/System.Embedded.1": "On"
+  },
+  "storage_collection_members": {
+   "Systems/System.Embedded.1/Storage": 3
+  }
+ },
+ "collected": {
+  "disks": 4,
+  "disks_unique": 4,
+  "fc_hbas": 4,
+  "fc_ports": 4,
+  "layer": "envelope"
+ },
+ "verdict": {
+  "pass": true,
+  "notes": [
+   "DISKS_MATCH",
+   "FC_MATCH"
+  ],
+  "unexplained": []
+ },
+ "label": "r1_DELL_R740_01"
+}

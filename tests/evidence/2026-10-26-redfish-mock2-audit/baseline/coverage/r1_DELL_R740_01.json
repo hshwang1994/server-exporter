@@ -1,0 +1,1933 @@
+{
+  "allowlist": "C:\\github\\ClovirONE\\clovirone-server-gathering\\tests\\reference\\redfish\\coverage_allowlist.yml",
+  "classification": {
+    "allowed": {
+      "AccountService": 1,
+      "Assembly": 21,
+      "BootOption": 5,
+      "BootOptionCollection": 1,
+      "Certificate": 11,
+      "CertificateCollection": 12,
+      "CertificateLocations": 1,
+      "CertificateService": 1,
+      "DellAssembly": 20,
+      "DellAttributes": 38,
+      "DellBIOSService": 1,
+      "DellBootSources": 2,
+      "DellCertificate": 89,
+      "DellCertificateCollection": 4,
+      "DellCertificateStoreCollection": 1,
+      "DellChassis": 1,
+      "DellChassisCollection": 1,
+      "DellController": 3,
+      "DellControllerBattery": 1,
+      "DellD4D": 1,
+      "DellEnclosure": 1,
+      "DellFirmwareImageHash": 9,
+      "DellFirmwareImageHashCollection": 1,
+      "DellGPUSensorCollection": 1,
+      "DellJob": 2,
+      "DellJobCollection": 1,
+      "DellJobService": 1,
+      "DellLCService": 1,
+      "DellLicensableDevice": 1,
+      "DellLicensableDeviceCollection": 1,
+      "DellLicense": 1,
+      "DellLicenseCollection": 1,
+      "DellLicenseManagementService": 1,
+      "DellMemory": 8,
+      "DellMetricService": 1,
+      "DellNIC": 12,
+      "DellNICCapabilities": 12,
+      "DellNICPortMetrics": 12,
+      "DellNetworkTransceiver": 12,
+      "DellNumericSensor": 22,
+      "DellNumericSensorCollection": 1,
+      "DellOSDeploymentService": 1,
+      "DellOpaqueManagementDataCollection": 1,
+      "DellPSNumericSensor": 3,
+      "DellPSNumericSensorCollection": 1,
+      "DellPersistentStorageService": 1,
+      "DellPhysicalDisk": 4,
+      "DellPowerSupply": 2,
+      "DellPowerSupplyView": 2,
+      "DellPresenceAndStatusSensorCollection": 1,
+      "DellProcessor": 2,
+      "DellRaidService": 1,
+      "DellRollupStatus": 11,
+      "DellRollupStatusCollection": 1,
+      "DellSensor": 62,
+      "DellSensorCollection": 2,
+      "DellSlot": 61,
+      "DellSlotCollection": 2,
+      "DellSoftwareInstallationService": 1,
+      "DellSoftwareInventory": 62,
+      "DellSwitchConnection": 13,
+      "DellSwitchConnectionCollection": 1,
+      "DellSwitchConnectionService": 1,
+      "DellSystem": 1,
+      "DellSystemManagementService": 1,
+      "DellSystemQuickSyncCollection": 1,
+      "DellTimeService": 1,
+      "DellUSBDeviceCollection": 1,
+      "DellVideoCollection": 1,
+      "DellVideoNetworkCollection": 1,
+      "DellVirtualDisk": 1,
+      "DelliDRACCard": 1,
+      "DelliDRACCardService": 1,
+      "DellvFlashCollection": 1,
+      "EnvironmentMetrics": 1,
+      "EventDestinationCollection": 1,
+      "EventService": 1,
+      "HostInterface": 1,
+      "HostInterfaceCollection": 1,
+      "Job": 2,
+      "JobCollection": 1,
+      "JobService": 1,
+      "JsonSchemaFile": 737,
+      "JsonSchemaFileCollection": 1,
+      "KeyCollection": 15,
+      "License": 1,
+      "LicenseCollection": 1,
+      "LicenseService": 1,
+      "LogEntry": 3865,
+      "LogEntryCollection": 60,
+      "LogService": 3,
+      "LogServiceCollection": 1,
+      "ManagerAccount": 16,
+      "ManagerAccountCollection": 1,
+      "MemoryMetrics": 8,
+      "MessageRegistryFile": 23,
+      "MessageRegistryFileCollection": 1,
+      "MetricDefinition": 234,
+      "MetricDefinitionCollection": 1,
+      "MetricReportCollection": 1,
+      "MetricReportDefinition": 27,
+      "MetricReportDefinitionCollection": 2,
+      "PortMetrics": 16,
+      "PowerSupplyMetrics": 2,
+      "PrivilegeRegistry": 1,
+      "Role": 4,
+      "RoleCollection": 1,
+      "SecureBoot": 1,
+      "SecureBootDatabase": 4,
+      "SecureBootDatabaseCollection": 1,
+      "Sensor": 32,
+      "SensorCollection": 1,
+      "SerialInterface": 1,
+      "SerialInterfaceCollection": 1,
+      "SessionCollection": 1,
+      "SessionService": 1,
+      "Signature": 78,
+      "SignatureCollection": 4,
+      "TaskCollection": 1,
+      "TaskService": 1,
+      "TelemetryService": 1,
+      "ThermalMetrics": 1,
+      "Triggers": 18,
+      "TriggersCollection": 1,
+      "UpdateService": 1,
+      "VirtualMedia": 4,
+      "VirtualMediaCollection": 2
+    },
+    "allowlist_unused": [
+      "ActionInfo",
+      "BatteryCollection",
+      "CapacitySource",
+      "ComponentIntegrity",
+      "ComponentIntegrityCollection",
+      "Control",
+      "ControlCollection",
+      "DellGPUSensor",
+      "DellVideo",
+      "DriveCollection",
+      "EventDestination",
+      "HpeAutomaticCertEnrollment",
+      "HpeBaseConfigs",
+      "HpeBiosMapping",
+      "HpeBundleUpdateReport",
+      "HpeBundleUpdateReportCollection",
+      "HpeCertAuth",
+      "HpeCertificateCollection",
+      "HpeComponent",
+      "HpeComponentCollection",
+      "HpeComponentInstallSet",
+      "HpeComponentInstallSetCollection",
+      "HpeComponentUpdateEntryCollection",
+      "HpeComponentUpdateTaskQueueCollection",
+      "HpeDirectoryTest",
+      "HpeESKM",
+      "HpeFallbackSensorCollection",
+      "HpeH3DebugLogCollection",
+      "HpeHttpsCert",
+      "HpeInvalidImageCollection",
+      "HpeKmsConfig",
+      "HpeMaintenanceWindowCollection",
+      "HpeNvmeOfSoftwareInitiator",
+      "HpePowerMeter",
+      "HpeRemoteSupport",
+      "HpeSNMPAlertDestinationCollection",
+      "HpeSNMPUsersCollection",
+      "HpeSecureEraseReportCollection",
+      "HpeSecureEraseReportService",
+      "HpeSecurityService",
+      "HpeServerBootSettings",
+      "HpeServerConfigLock",
+      "HpeServerDevice",
+      "HpeServerDeviceCollection",
+      "HpeServerPCISlot",
+      "HpeServerPCISlotCollection",
+      "HpeServerPciDevice",
+      "HpeServerPciDeviceCollection",
+      "HpeTlsConfig",
+      "HpeUSBDevicesCollection",
+      "HpeUSBPort",
+      "HpeUSBPortsCollection",
+      "HpeWorkloadPerformanceAdvisor",
+      "HpeWorkloadPerformanceAdvisorCollection",
+      "HpeiLOAccountCertificateMap",
+      "HpeiLOAccountCertificateMapCollection",
+      "HpeiLOActiveHealthSystem",
+      "HpeiLOBackupFileCollection",
+      "HpeiLOBackupRestoreService",
+      "HpeiLODateTime",
+      "HpeiLOEmbeddedMedia",
+      "HpeiLOFederatedGroupCapping",
+      "HpeiLOFederationGroup",
+      "HpeiLOFederationGroupCollection",
+      "HpeiLOFederationPeers",
+      "HpeiLOFederationPeersCollection",
+      "HpeiLOGUIService",
+      "HpeiLOLicense",
+      "HpeiLOLicenseCollection",
+      "HpeiLOResourceDirectory",
+      "HpeiLOSSO",
+      "HpeiLOSecurityDashboard",
+      "HpeiLOSecurityParam",
+      "HpeiLOSecurityParamCollection",
+      "HpeiLOSnmpService",
+      "HpeiSCSISoftwareInitiator",
+      "LenovoAlertRecipientCollection",
+      "LenovoBootManager",
+      "LenovoBootManagerCollection",
+      "LenovoConfigurationService",
+      "LenovoDNS",
+      "LenovoDateTimeService",
+      "LenovoFirmwareService",
+      "LenovoFirmwareServiceCollection",
+      "LenovoFoDKey",
+      "LenovoFoDKeyCollection",
+      "LenovoFoDService",
+      "LenovoHistoryMemRecovery",
+      "LenovoHistoryMetricValue",
+      "LenovoHistoryMetricValueContainer",
+      "LenovoHistoryMetricValueContainerCollection",
+      "LenovoLDAPClient",
+      "LenovoLED",
+      "LenovoLEDCollection",
+      "LenovoPortForwarding",
+      "LenovoPortForwardingMap",
+      "LenovoPortForwardingMapCollection",
+      "LenovoRemoteControlService",
+      "LenovoRemoteControlSession",
+      "LenovoRemoteControlSessionCollection",
+      "LenovoRemoteMapMediaCollection",
+      "LenovoRemoteMapService",
+      "LenovoRemoteMountMediaCollection",
+      "LenovoSMTPClient",
+      "LenovoSNMPProtocol",
+      "LenovoScheduledPowerAction",
+      "LenovoScheduledPowerActionCollection",
+      "LenovoSecureKeyLifecycle",
+      "LenovoSecurityService",
+      "LenovoServerProfileService",
+      "LenovoServiceData",
+      "LenovoSlot",
+      "LenovoSlotCollection",
+      "LenovoWatchdog",
+      "LenovoWatchdogCollection",
+      "ManagerDiagnosticData",
+      "MemoryDomainCollection",
+      "MetricReport",
+      "NetworkAdapterMetrics",
+      "NetworkDeviceFunctionMetrics",
+      "ProcessorMetrics",
+      "PumpCollection",
+      "RegisteredClient",
+      "RegisteredClientCollection",
+      "SUT",
+      "SUTSystemInventory",
+      "SUTTaskSettings",
+      "SecurityPolicy",
+      "ServiceConditions",
+      "Session",
+      "StorageControllerMetrics",
+      "StoragePool",
+      "StoragePoolCollection",
+      "Switch",
+      "Task",
+      "TrustedComponent",
+      "TrustedComponentCollection"
+    ],
+    "conditional": {
+      "Chassis": [
+        "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1",
+        "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/Settings"
+      ],
+      "Fabric": [
+        "/redfish/v1/Fabrics/PCIe"
+      ],
+      "FabricCollection": [
+        "/redfish/v1/Fabrics"
+      ],
+      "Fan": [
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.1",
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.2",
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.3",
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.4",
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.5",
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.6"
+      ],
+      "FanCollection": [
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans"
+      ],
+      "NetworkInterface": [
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/FC.Slot.1",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/FC.Slot.7",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/NIC.Integrated.1",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/NIC.Slot.2",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/NIC.Slot.3",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/NIC.Slot.5",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/NIC.Slot.8"
+      ],
+      "NetworkInterfaceCollection": [
+        "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces"
+      ],
+      "PCIeDevice": [
+        "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices/26-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-23",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-28",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-31",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/134-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/135-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/216-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/26-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/3-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/59-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/94-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/95-0"
+      ],
+      "PCIeDeviceCollection": [
+        "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices"
+      ],
+      "PCIeFunction": [
+        "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices/26-0/PCIeFunctions/26-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0/PCIeFunctions/0-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17/PCIeFunctions/0-17-5",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-23/PCIeFunctions/0-23-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-28/PCIeFunctions/0-28-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-28/PCIeFunctions/0-28-4",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-31/PCIeFunctions/0-31-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-31/PCIeFunctions/0-31-4",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/134-0/PCIeFunctions/134-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/134-0/PCIeFunctions/134-0-1",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/135-0/PCIeFunctions/135-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/135-0/PCIeFunctions/135-0-1",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/216-0/PCIeFunctions/216-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/216-0/PCIeFunctions/216-0-1",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions/24-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions/24-0-1",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-1",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/26-0/PCIeFunctions/26-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/3-0/PCIeFunctions/3-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/59-0/PCIeFunctions/59-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/59-0/PCIeFunctions/59-0-1",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/94-0/PCIeFunctions/94-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/94-0/PCIeFunctions/94-0-1",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/95-0/PCIeFunctions/95-0-0",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/95-0/PCIeFunctions/95-0-1"
+      ],
+      "PCIeFunctionCollection": [
+        "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices/26-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-23/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-28/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-31/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/134-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/135-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/216-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/26-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/3-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/59-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/94-0/PCIeFunctions",
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/95-0/PCIeFunctions"
+      ],
+      "PCIeSlots": [
+        "/redfish/v1/Chassis/System.Embedded.1/PCIeSlots"
+      ],
+      "Port": [
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-3",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-4",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/Ports/NIC.Slot.2-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/Ports/NIC.Slot.2-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/Ports/NIC.Slot.3-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/Ports/NIC.Slot.3-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/Ports/NIC.Slot.5-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/Ports/NIC.Slot.5-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/Ports/NIC.Slot.8-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/Ports/NIC.Slot.8-2"
+      ],
+      "PortCollection": [
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/Ports",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/Ports",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/Ports",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/Ports"
+      ],
+      "PowerSubsystem": [
+        "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem"
+      ],
+      "PowerSupply": [
+        "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies/PSU.Slot.1",
+        "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies/PSU.Slot.2"
+      ],
+      "PowerSupplyCollection": [
+        "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies"
+      ],
+      "SimpleStorage": [
+        "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/AHCI.Embedded.1-1",
+        "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/AHCI.Embedded.2-1",
+        "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/RAID.Slot.6-1"
+      ],
+      "SimpleStorageCollection": [
+        "/redfish/v1/Systems/System.Embedded.1/SimpleStorage"
+      ],
+      "StorageController": [
+        "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Controllers/AHCI.Embedded.1-1",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Controllers/AHCI.Embedded.1-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Controllers/AHCI.Embedded.2-1",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Controllers/AHCI.Embedded.2-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Controllers/RAID.Slot.6-1",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Controllers/RAID.Slot.6-1/Settings"
+      ],
+      "StorageControllerCollection": [
+        "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Controllers",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Controllers",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Controllers"
+      ],
+      "SwitchCollection": [
+        "/redfish/v1/Fabrics/PCIe/Switches"
+      ],
+      "ThermalSubsystem": [
+        "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem"
+      ]
+    },
+    "pattern": {
+      "(?i)/(Settings|Pending)/?$": [
+        "/redfish/v1/Systems/System.Embedded.1/Bios/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-4-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-1-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-2-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-1-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-2-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-1-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-2-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-1-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-2-1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/Settings",
+        "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Volumes/Disk.Virtual.0:RAID.Slot.6-1/Settings"
+      ],
+      "/UpdateService/FirmwareInventory/(Installed|Current|Previous|Available|Rollback)-": [
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104102-2.41__RAID.Backplane.Firmware.1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.1-2",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.7-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.7-2",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.2-1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.2-2-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.3-1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.3-2-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.5-1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.5-2-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.8-1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.8-2-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-104893-51.16.0-5150__RAID.Slot.6-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-159-2.26.1__BIOS.Setup.1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-2-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-3-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-4-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.1-2",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.7-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.7-2",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-104893-50.5.0-2819__RAID.Slot.6-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-159-2.3.10__BIOS.Setup.1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-25227-3.36.36.36__iDRAC.Embedded.1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-1-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-2-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-3-1",
+        "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-4-1"
+      ],
+      "/UpdateService/SoftwareInventory(/|$)": [
+        "/redfish/v1/UpdateService/SoftwareInventory"
+      ]
+    },
+    "unlisted": {
+      "DellFC": [
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFC/FC.Slot.1-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFC/FC.Slot.1-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFC/FC.Slot.7-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Oem/Dell/DellFC/FC.Slot.7-2"
+      ],
+      "DellFCCapabilities": [
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFCCapabilities/FC.Slot.1-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFCCapabilities/FC.Slot.1-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFCCapabilities/FC.Slot.7-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Oem/Dell/DellFCCapabilities/FC.Slot.7-2"
+      ],
+      "DellFCPortMetrics": [
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFCPortMetrics/FC.Slot.1-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFCPortMetrics/FC.Slot.1-2",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFCPortMetrics/FC.Slot.7-1",
+        "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Oem/Dell/DellFCPortMetrics/FC.Slot.7-2"
+      ],
+      "DellPresenceAndStatusSensor": [
+        "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPresenceAndStatusSensors/iDRAC.Embedded.1_0x23_VFLASHSD"
+      ]
+    }
+  },
+  "collected": [
+    "bmc",
+    "firmware",
+    "memory",
+    "network",
+    "network_adapters",
+    "power",
+    "processors",
+    "storage",
+    "system",
+    "thermal"
+  ],
+  "error_count": 0,
+  "exposed_by_type": {
+    "AccountService": 1,
+    "Assembly": 21,
+    "Bios": 2,
+    "BootOption": 5,
+    "BootOptionCollection": 1,
+    "Certificate": 11,
+    "CertificateCollection": 12,
+    "CertificateLocations": 1,
+    "CertificateService": 1,
+    "Chassis": 3,
+    "ChassisCollection": 1,
+    "ComputerSystem": 2,
+    "ComputerSystemCollection": 1,
+    "DellAssembly": 20,
+    "DellAttributes": 38,
+    "DellBIOSService": 1,
+    "DellBootSources": 2,
+    "DellCertificate": 89,
+    "DellCertificateCollection": 4,
+    "DellCertificateStoreCollection": 1,
+    "DellChassis": 1,
+    "DellChassisCollection": 1,
+    "DellController": 3,
+    "DellControllerBattery": 1,
+    "DellD4D": 1,
+    "DellEnclosure": 1,
+    "DellFC": 4,
+    "DellFCCapabilities": 4,
+    "DellFCPortMetrics": 4,
+    "DellFirmwareImageHash": 9,
+    "DellFirmwareImageHashCollection": 1,
+    "DellGPUSensorCollection": 1,
+    "DellJob": 2,
+    "DellJobCollection": 1,
+    "DellJobService": 1,
+    "DellLCService": 1,
+    "DellLicensableDevice": 1,
+    "DellLicensableDeviceCollection": 1,
+    "DellLicense": 1,
+    "DellLicenseCollection": 1,
+    "DellLicenseManagementService": 1,
+    "DellMemory": 8,
+    "DellMetricService": 1,
+    "DellNIC": 12,
+    "DellNICCapabilities": 12,
+    "DellNICPortMetrics": 12,
+    "DellNetworkTransceiver": 12,
+    "DellNumericSensor": 22,
+    "DellNumericSensorCollection": 1,
+    "DellOSDeploymentService": 1,
+    "DellOpaqueManagementDataCollection": 1,
+    "DellPSNumericSensor": 3,
+    "DellPSNumericSensorCollection": 1,
+    "DellPersistentStorageService": 1,
+    "DellPhysicalDisk": 4,
+    "DellPowerSupply": 2,
+    "DellPowerSupplyView": 2,
+    "DellPresenceAndStatusSensor": 1,
+    "DellPresenceAndStatusSensorCollection": 1,
+    "DellProcessor": 2,
+    "DellRaidService": 1,
+    "DellRollupStatus": 11,
+    "DellRollupStatusCollection": 1,
+    "DellSensor": 62,
+    "DellSensorCollection": 2,
+    "DellSlot": 61,
+    "DellSlotCollection": 2,
+    "DellSoftwareInstallationService": 1,
+    "DellSoftwareInventory": 62,
+    "DellSwitchConnection": 13,
+    "DellSwitchConnectionCollection": 1,
+    "DellSwitchConnectionService": 1,
+    "DellSystem": 1,
+    "DellSystemManagementService": 1,
+    "DellSystemQuickSyncCollection": 1,
+    "DellTimeService": 1,
+    "DellUSBDeviceCollection": 1,
+    "DellVideoCollection": 1,
+    "DellVideoNetworkCollection": 1,
+    "DellVirtualDisk": 1,
+    "DelliDRACCard": 1,
+    "DelliDRACCardService": 1,
+    "DellvFlashCollection": 1,
+    "Drive": 4,
+    "EnvironmentMetrics": 1,
+    "EthernetInterface": 13,
+    "EthernetInterfaceCollection": 2,
+    "EventDestinationCollection": 1,
+    "EventService": 1,
+    "Fabric": 1,
+    "FabricCollection": 1,
+    "Fan": 6,
+    "FanCollection": 1,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "Job": 2,
+    "JobCollection": 1,
+    "JobService": 1,
+    "JsonSchemaFile": 737,
+    "JsonSchemaFileCollection": 1,
+    "KeyCollection": 15,
+    "License": 1,
+    "LicenseCollection": 1,
+    "LicenseService": 1,
+    "LogEntry": 3865,
+    "LogEntryCollection": 60,
+    "LogService": 3,
+    "LogServiceCollection": 1,
+    "Manager": 1,
+    "ManagerAccount": 16,
+    "ManagerAccountCollection": 1,
+    "ManagerCollection": 1,
+    "ManagerNetworkProtocol": 1,
+    "Memory": 8,
+    "MemoryCollection": 1,
+    "MemoryMetrics": 8,
+    "MessageRegistryFile": 23,
+    "MessageRegistryFileCollection": 1,
+    "MetricDefinition": 234,
+    "MetricDefinitionCollection": 1,
+    "MetricReportCollection": 1,
+    "MetricReportDefinition": 27,
+    "MetricReportDefinitionCollection": 2,
+    "NetworkAdapter": 7,
+    "NetworkAdapterCollection": 1,
+    "NetworkDeviceFunction": 32,
+    "NetworkDeviceFunctionCollection": 7,
+    "NetworkInterface": 7,
+    "NetworkInterfaceCollection": 1,
+    "NetworkPort": 16,
+    "NetworkPortCollection": 7,
+    "PCIeDevice": 16,
+    "PCIeDeviceCollection": 2,
+    "PCIeFunction": 26,
+    "PCIeFunctionCollection": 16,
+    "PCIeSlots": 1,
+    "Port": 16,
+    "PortCollection": 7,
+    "PortMetrics": 16,
+    "Power": 1,
+    "PowerSubsystem": 1,
+    "PowerSupply": 2,
+    "PowerSupplyCollection": 1,
+    "PowerSupplyMetrics": 2,
+    "PrivilegeRegistry": 1,
+    "Processor": 2,
+    "ProcessorCollection": 1,
+    "Role": 4,
+    "RoleCollection": 1,
+    "SecureBoot": 1,
+    "SecureBootDatabase": 4,
+    "SecureBootDatabaseCollection": 1,
+    "Sensor": 32,
+    "SensorCollection": 1,
+    "SerialInterface": 1,
+    "SerialInterfaceCollection": 1,
+    "ServiceRoot": 1,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "Signature": 78,
+    "SignatureCollection": 4,
+    "SimpleStorage": 3,
+    "SimpleStorageCollection": 1,
+    "SoftwareInventory": 62,
+    "SoftwareInventoryCollection": 2,
+    "Storage": 3,
+    "StorageCollection": 1,
+    "StorageController": 6,
+    "StorageControllerCollection": 3,
+    "SwitchCollection": 1,
+    "TaskCollection": 1,
+    "TaskService": 1,
+    "TelemetryService": 1,
+    "Thermal": 1,
+    "ThermalMetrics": 1,
+    "ThermalSubsystem": 1,
+    "Triggers": 18,
+    "TriggersCollection": 1,
+    "UpdateService": 1,
+    "VirtualMedia": 4,
+    "VirtualMediaCollection": 2,
+    "Volume": 2,
+    "VolumeCollection": 3
+  },
+  "exposed_readable": 6073,
+  "exposed_unreadable": 2,
+  "failed_sections": [],
+  "format": "mirror",
+  "manager_layout": null,
+  "noauth_requests": {
+    "": 1
+  },
+  "requested_distinct": 137,
+  "requested_hit": 137,
+  "requested_missing": [],
+  "requested_total": 137,
+  "source": "C:\\github\\서버mock데이터\\1차\\DELL_R740\\01",
+  "source_stats": {
+    "dupes": 58,
+    "files": 6133,
+    "fragments_folded": 0,
+    "keyed": 6132
+  },
+  "status": "success",
+  "unreadable_by_status": {
+    "403": 2
+  },
+  "unsupported_sections": [],
+  "untouched": 5936,
+  "untouched_by_type": {
+    "AccountService": 1,
+    "Assembly": 21,
+    "Bios": 1,
+    "BootOption": 5,
+    "BootOptionCollection": 1,
+    "Certificate": 11,
+    "CertificateCollection": 12,
+    "CertificateLocations": 1,
+    "CertificateService": 1,
+    "Chassis": 2,
+    "ComputerSystem": 1,
+    "DellAssembly": 20,
+    "DellAttributes": 38,
+    "DellBIOSService": 1,
+    "DellBootSources": 2,
+    "DellCertificate": 89,
+    "DellCertificateCollection": 4,
+    "DellCertificateStoreCollection": 1,
+    "DellChassis": 1,
+    "DellChassisCollection": 1,
+    "DellController": 3,
+    "DellControllerBattery": 1,
+    "DellD4D": 1,
+    "DellEnclosure": 1,
+    "DellFC": 4,
+    "DellFCCapabilities": 4,
+    "DellFCPortMetrics": 4,
+    "DellFirmwareImageHash": 9,
+    "DellFirmwareImageHashCollection": 1,
+    "DellGPUSensorCollection": 1,
+    "DellJob": 2,
+    "DellJobCollection": 1,
+    "DellJobService": 1,
+    "DellLCService": 1,
+    "DellLicensableDevice": 1,
+    "DellLicensableDeviceCollection": 1,
+    "DellLicense": 1,
+    "DellLicenseCollection": 1,
+    "DellLicenseManagementService": 1,
+    "DellMemory": 8,
+    "DellMetricService": 1,
+    "DellNIC": 12,
+    "DellNICCapabilities": 12,
+    "DellNICPortMetrics": 12,
+    "DellNetworkTransceiver": 12,
+    "DellNumericSensor": 22,
+    "DellNumericSensorCollection": 1,
+    "DellOSDeploymentService": 1,
+    "DellOpaqueManagementDataCollection": 1,
+    "DellPSNumericSensor": 3,
+    "DellPSNumericSensorCollection": 1,
+    "DellPersistentStorageService": 1,
+    "DellPhysicalDisk": 4,
+    "DellPowerSupply": 2,
+    "DellPowerSupplyView": 2,
+    "DellPresenceAndStatusSensor": 1,
+    "DellPresenceAndStatusSensorCollection": 1,
+    "DellProcessor": 2,
+    "DellRaidService": 1,
+    "DellRollupStatus": 11,
+    "DellRollupStatusCollection": 1,
+    "DellSensor": 62,
+    "DellSensorCollection": 2,
+    "DellSlot": 61,
+    "DellSlotCollection": 2,
+    "DellSoftwareInstallationService": 1,
+    "DellSoftwareInventory": 62,
+    "DellSwitchConnection": 13,
+    "DellSwitchConnectionCollection": 1,
+    "DellSwitchConnectionService": 1,
+    "DellSystem": 1,
+    "DellSystemManagementService": 1,
+    "DellSystemQuickSyncCollection": 1,
+    "DellTimeService": 1,
+    "DellUSBDeviceCollection": 1,
+    "DellVideoCollection": 1,
+    "DellVideoNetworkCollection": 1,
+    "DellVirtualDisk": 1,
+    "DelliDRACCard": 1,
+    "DelliDRACCardService": 1,
+    "DellvFlashCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EventDestinationCollection": 1,
+    "EventService": 1,
+    "Fabric": 1,
+    "FabricCollection": 1,
+    "Fan": 6,
+    "FanCollection": 1,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "Job": 2,
+    "JobCollection": 1,
+    "JobService": 1,
+    "JsonSchemaFile": 737,
+    "JsonSchemaFileCollection": 1,
+    "KeyCollection": 15,
+    "License": 1,
+    "LicenseCollection": 1,
+    "LicenseService": 1,
+    "LogEntry": 3865,
+    "LogEntryCollection": 60,
+    "LogService": 3,
+    "LogServiceCollection": 1,
+    "ManagerAccount": 16,
+    "ManagerAccountCollection": 1,
+    "MemoryMetrics": 8,
+    "MessageRegistryFile": 23,
+    "MessageRegistryFileCollection": 1,
+    "MetricDefinition": 234,
+    "MetricDefinitionCollection": 1,
+    "MetricReportCollection": 1,
+    "MetricReportDefinition": 27,
+    "MetricReportDefinitionCollection": 2,
+    "NetworkDeviceFunction": 16,
+    "NetworkInterface": 7,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 16,
+    "PCIeDeviceCollection": 2,
+    "PCIeFunction": 26,
+    "PCIeFunctionCollection": 16,
+    "PCIeSlots": 1,
+    "Port": 16,
+    "PortCollection": 7,
+    "PortMetrics": 16,
+    "PowerSubsystem": 1,
+    "PowerSupply": 2,
+    "PowerSupplyCollection": 1,
+    "PowerSupplyMetrics": 2,
+    "PrivilegeRegistry": 1,
+    "Role": 4,
+    "RoleCollection": 1,
+    "SecureBoot": 1,
+    "SecureBootDatabase": 4,
+    "SecureBootDatabaseCollection": 1,
+    "Sensor": 32,
+    "SensorCollection": 1,
+    "SerialInterface": 1,
+    "SerialInterfaceCollection": 1,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "Signature": 78,
+    "SignatureCollection": 4,
+    "SimpleStorage": 3,
+    "SimpleStorageCollection": 1,
+    "SoftwareInventory": 30,
+    "SoftwareInventoryCollection": 1,
+    "StorageController": 6,
+    "StorageControllerCollection": 3,
+    "SwitchCollection": 1,
+    "TaskCollection": 1,
+    "TaskService": 1,
+    "TelemetryService": 1,
+    "ThermalMetrics": 1,
+    "ThermalSubsystem": 1,
+    "Triggers": 18,
+    "TriggersCollection": 1,
+    "UpdateService": 1,
+    "VirtualMedia": 4,
+    "VirtualMediaCollection": 2,
+    "Volume": 1
+  },
+  "untouched_examples": {
+    "AccountService": [
+      "/redfish/v1/AccountService"
+    ],
+    "Assembly": [
+      "/redfish/v1/Chassis/System.Embedded.1/Assembly",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Assembly",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Assembly"
+    ],
+    "Bios": [
+      "/redfish/v1/Systems/System.Embedded.1/Bios/Settings"
+    ],
+    "BootOption": [
+      "/redfish/v1/Systems/System.Embedded.1/BootOptions/Boot0000",
+      "/redfish/v1/Systems/System.Embedded.1/BootOptions/Boot0002",
+      "/redfish/v1/Systems/System.Embedded.1/BootOptions/Boot0003"
+    ],
+    "BootOptionCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/BootOptions"
+    ],
+    "Certificate": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/NetworkProtocol/HTTPS/Certificates/SecurityCertificate.1",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/KEK/Certificates/StdSecbootpolicy.2",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/KEK/Certificates/StdSecbootpolicy.3"
+    ],
+    "CertificateCollection": [
+      "/redfish/v1/AccountService/ActiveDirectory/Certificates",
+      "/redfish/v1/AccountService/LDAP/Certificates",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/NetworkProtocol/HTTPS/Certificates"
+    ],
+    "CertificateLocations": [
+      "/redfish/v1/CertificateService/CertificateLocations"
+    ],
+    "CertificateService": [
+      "/redfish/v1/CertificateService"
+    ],
+    "Chassis": [
+      "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1",
+      "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/Settings"
+    ],
+    "ComputerSystem": [
+      "/redfish/v1/Systems/System.Embedded.1/Settings"
+    ],
+    "DellAssembly": [
+      "/redfish/v1/Chassis/System.Embedded.1/Oem/Dell/DellAssembly/DIMM.Socket.A1_0x23_FRU",
+      "/redfish/v1/Chassis/System.Embedded.1/Oem/Dell/DellAssembly/DIMM.Socket.A2_0x23_FRU",
+      "/redfish/v1/Chassis/System.Embedded.1/Oem/Dell/DellAssembly/DIMM.Socket.A4_0x23_FRU"
+    ],
+    "DellAttributes": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellNetworkAttributes/FC.Slot.1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellNetworkAttributes/FC.Slot.1-1/Settings",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellNetworkAttributes/FC.Slot.1-2"
+    ],
+    "DellBIOSService": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellBIOSService"
+    ],
+    "DellBootSources": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellBootSources",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellBootSources/Settings"
+    ],
+    "DellCertificate": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/HWCertificates/SecurityCertificate.2",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/Certificates/DB/StdSecbootpolicy.10",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/Certificates/DB/StdSecbootpolicy.4"
+    ],
+    "DellCertificateCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/Certificates/DB",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/Certificates/DBX",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/Certificates/KEK"
+    ],
+    "DellCertificateStoreCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/Certificates"
+    ],
+    "DellChassis": [
+      "/redfish/v1/Chassis/System.Embedded.1/Oem/Dell/DellChassis/mainsystemchassis"
+    ],
+    "DellChassisCollection": [
+      "/redfish/v1/Chassis/System.Embedded.1/Oem/Dell/DellChassis"
+    ],
+    "DellController": [
+      "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Oem/Dell/DellControllers/AHCI.Embedded.1-1",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Oem/Dell/DellControllers/AHCI.Embedded.2-1",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Oem/Dell/DellControllers/RAID.Slot.6-1"
+    ],
+    "DellControllerBattery": [
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Oem/Dell/DellControllerBattery/Battery.Integrated.1:RAID.Slot.6-1"
+    ],
+    "DellD4D": [
+      "/redfish/v1/TelemetryService/Oem/Dell/D4D"
+    ],
+    "DellEnclosure": [
+      "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellEnclosures/Enclosure.Internal.0-1:RAID.Slot.6-1"
+    ],
+    "DellFC": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFC/FC.Slot.1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFC/FC.Slot.1-2",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFC/FC.Slot.7-1"
+    ],
+    "DellFCCapabilities": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFCCapabilities/FC.Slot.1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFCCapabilities/FC.Slot.1-2",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFCCapabilities/FC.Slot.7-1"
+    ],
+    "DellFCPortMetrics": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFCPortMetrics/FC.Slot.1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFCPortMetrics/FC.Slot.1-2",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFCPortMetrics/FC.Slot.7-1"
+    ],
+    "DellFirmwareImageHash": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/FirmwareImageHashes/1",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/FirmwareImageHashes/2",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/FirmwareImageHashes/3"
+    ],
+    "DellFirmwareImageHashCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/Oem/Dell/FirmwareImageHashes"
+    ],
+    "DellGPUSensorCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellGPUSensors"
+    ],
+    "DellJob": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/Jobs/JID_810800426370",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/Jobs/JID_811757321711"
+    ],
+    "DellJobCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/Jobs"
+    ],
+    "DellJobService": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellJobService"
+    ],
+    "DellLCService": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLCService"
+    ],
+    "DellLicensableDevice": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicensableDevices/iDRAC.Embedded.1"
+    ],
+    "DellLicensableDeviceCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicensableDevices"
+    ],
+    "DellLicense": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicenses/FD00000015766981"
+    ],
+    "DellLicenseCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicenses"
+    ],
+    "DellLicenseManagementService": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicenseManagementService"
+    ],
+    "DellMemory": [
+      "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/Oem/Dell/DellMemory/DIMM.Socket.A1",
+      "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A2/Oem/Dell/DellMemory/DIMM.Socket.A2",
+      "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A4/Oem/Dell/DellMemory/DIMM.Socket.A4"
+    ],
+    "DellMetricService": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellMetricService"
+    ],
+    "DellNIC": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Oem/Dell/DellNIC/NIC.Integrated.1-1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Oem/Dell/DellNIC/NIC.Integrated.1-2-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Oem/Dell/DellNIC/NIC.Integrated.1-3-1"
+    ],
+    "DellNICCapabilities": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Oem/Dell/DellNICCapabilities/NIC.Integrated.1-1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Oem/Dell/DellNICCapabilities/NIC.Integrated.1-2-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Oem/Dell/DellNICCapabilities/NIC.Integrated.1-3-1"
+    ],
+    "DellNICPortMetrics": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Oem/Dell/DellNICPortMetrics/NIC.Integrated.1-1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Oem/Dell/DellNICPortMetrics/NIC.Integrated.1-2-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Oem/Dell/DellNICPortMetrics/NIC.Integrated.1-3-1"
+    ],
+    "DellNetworkTransceiver": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:FC.Slot.1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-2/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:FC.Slot.1-2",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkPorts/FC.Slot.7-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:FC.Slot.7-1"
+    ],
+    "DellNumericSensor": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellNumericSensors/0x17__Fan.Embedded.1",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellNumericSensors/0x17__Fan.Embedded.2",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellNumericSensors/0x17__Fan.Embedded.3"
+    ],
+    "DellNumericSensorCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellNumericSensors"
+    ],
+    "DellOSDeploymentService": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellOSDeploymentService"
+    ],
+    "DellOpaqueManagementDataCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellOpaqueManagementData"
+    ],
+    "DellPSNumericSensor": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPSNumericSensors/iDRAC.Embedded.1_0x23_PS1Current1",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPSNumericSensors/iDRAC.Embedded.1_0x23_PS2Current2",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPSNumericSensors/iDRAC.Embedded.1_0x23_SystemBoardPwrConsumption"
+    ],
+    "DellPSNumericSensorCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPSNumericSensors"
+    ],
+    "DellPersistentStorageService": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellPersistentStorageService"
+    ],
+    "DellPhysicalDisk": [
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellDrives/Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.1:Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellDrives/Disk.Bay.1:Enclosure.Internal.0-1:RAID.Slot.6-1",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.2:Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellDrives/Disk.Bay.2:Enclosure.Internal.0-1:RAID.Slot.6-1"
+    ],
+    "DellPowerSupply": [
+      "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupply/PSU.Slot.1",
+      "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupply/PSU.Slot.2"
+    ],
+    "DellPowerSupplyView": [
+      "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupplyInventory/PSU.Slot.1",
+      "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupplyInventory/PSU.Slot.2"
+    ],
+    "DellPresenceAndStatusSensor": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPresenceAndStatusSensors/iDRAC.Embedded.1_0x23_VFLASHSD"
+    ],
+    "DellPresenceAndStatusSensorCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPresenceAndStatusSensors"
+    ],
+    "DellProcessor": [
+      "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.1/Oem/Dell/DellProcessors/CPU.Socket.1",
+      "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.2/Oem/Dell/DellProcessors/CPU.Socket.2"
+    ],
+    "DellRaidService": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellRaidService"
+    ],
+    "DellRollupStatus": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellRollupStatus/iDRAC.Embedded.1_0x23_SubSystem.1_0x23_Battery",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellRollupStatus/iDRAC.Embedded.1_0x23_SubSystem.1_0x23_Current",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellRollupStatus/iDRAC.Embedded.1_0x23_SubSystem.1_0x23_Fan"
+    ],
+    "DellRollupStatusCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellRollupStatus"
+    ],
+    "DellSensor": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSensors/iDRAC.Embedded.1_0x23_CPU1FIVRPG",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSensors/iDRAC.Embedded.1_0x23_CPU1MEM012VDDQPG",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSensors/iDRAC.Embedded.1_0x23_CPU1MEM012VPPPG"
+    ],
+    "DellSensorCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSensors",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSensors?$skip=50"
+    ],
+    "DellSlot": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSlots/045_0x7c_C_0x7c_Enclosure.Internal.0-1:RAID.Slot.6-1:Disk.Slot.0._0x23_Slot",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSlots/045_0x7c_C_0x7c_Enclosure.Internal.0-1:RAID.Slot.6-1:Disk.Slot.1._0x23_Slot",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSlots/045_0x7c_C_0x7c_Enclosure.Internal.0-1:RAID.Slot.6-1:Disk.Slot.10._0x23_Slot"
+    ],
+    "DellSlotCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSlots",
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSlots?$skip=50"
+    ],
+    "DellSoftwareInstallationService": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSoftwareInstallationService"
+    ],
+    "DellSoftwareInventory": [
+      "/redfish/v1/UpdateService/FirmwareInventory/Oem/Dell/DellSoftwareInventory/DCIM:CURRENT_0x23_301_C_RAID.Slot.6-1",
+      "/redfish/v1/UpdateService/FirmwareInventory/Oem/Dell/DellSoftwareInventory/DCIM:CURRENT_0x23_314_C_RAID.Backplane.Firmware.1",
+      "/redfish/v1/UpdateService/FirmwareInventory/Oem/Dell/DellSoftwareInventory/DCIM:CURRENT_0x23_701__NIC.Integrated.1-1-1"
+    ],
+    "DellSwitchConnection": [
+      "/redfish/v1/Systems/System.Embedded.1/NetworkPorts/Oem/Dell/DellSwitchConnections/NIC.Integrated.1-1-1",
+      "/redfish/v1/Systems/System.Embedded.1/NetworkPorts/Oem/Dell/DellSwitchConnections/NIC.Integrated.1-2-1",
+      "/redfish/v1/Systems/System.Embedded.1/NetworkPorts/Oem/Dell/DellSwitchConnections/NIC.Integrated.1-3-1"
+    ],
+    "DellSwitchConnectionCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/NetworkPorts/Oem/Dell/DellSwitchConnections"
+    ],
+    "DellSwitchConnectionService": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSwitchConnectionService"
+    ],
+    "DellSystem": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSystem/System.Embedded.1"
+    ],
+    "DellSystemManagementService": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSystemManagementService"
+    ],
+    "DellSystemQuickSyncCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellSystemQuickSync"
+    ],
+    "DellTimeService": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellTimeService"
+    ],
+    "DellUSBDeviceCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellUSBDevices"
+    ],
+    "DellVideoCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellVideo"
+    ],
+    "DellVideoNetworkCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellVideoNetwork"
+    ],
+    "DellVirtualDisk": [
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Volumes/Disk.Virtual.0:RAID.Slot.6-1/Oem/Dell/DellVolumes/Disk.Virtual.0:RAID.Slot.6-1"
+    ],
+    "DelliDRACCard": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DelliDRACCard/iDRAC.Embedded.1-1_0x23_IDRACinfo"
+    ],
+    "DelliDRACCardService": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DelliDRACCardService"
+    ],
+    "DellvFlashCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellvFlash"
+    ],
+    "EnvironmentMetrics": [
+      "/redfish/v1/Chassis/System.Embedded.1/EnvironmentMetrics"
+    ],
+    "EventDestinationCollection": [
+      "/redfish/v1/EventService/Subscriptions"
+    ],
+    "EventService": [
+      "/redfish/v1/EventService"
+    ],
+    "Fabric": [
+      "/redfish/v1/Fabrics/PCIe"
+    ],
+    "FabricCollection": [
+      "/redfish/v1/Fabrics"
+    ],
+    "Fan": [
+      "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.1",
+      "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.2",
+      "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans/Fan.Embedded.3"
+    ],
+    "FanCollection": [
+      "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/Fans"
+    ],
+    "HostInterface": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/HostInterfaces/Host.1"
+    ],
+    "HostInterfaceCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/HostInterfaces"
+    ],
+    "Job": [
+      "/redfish/v1/JobService/Jobs/JID_810800426370",
+      "/redfish/v1/JobService/Jobs/JID_811757321711"
+    ],
+    "JobCollection": [
+      "/redfish/v1/JobService/Jobs"
+    ],
+    "JobService": [
+      "/redfish/v1/JobService"
+    ],
+    "JsonSchemaFile": [
+      "/redfish/v1/JsonSchemas/AccelerationFunction",
+      "/redfish/v1/JsonSchemas/AccelerationFunction.v1_0_3",
+      "/redfish/v1/JsonSchemas/AccelerationFunctionCollection"
+    ],
+    "JsonSchemaFileCollection": [
+      "/redfish/v1/JsonSchemas"
+    ],
+    "KeyCollection": [
+      "/redfish/v1/AccountService/Accounts/10/Keys",
+      "/redfish/v1/AccountService/Accounts/11/Keys",
+      "/redfish/v1/AccountService/Accounts/12/Keys"
+    ],
+    "License": [
+      "/redfish/v1/LicenseService/Licenses/FD00000015766981"
+    ],
+    "LicenseCollection": [
+      "/redfish/v1/LicenseService/Licenses"
+    ],
+    "LicenseService": [
+      "/redfish/v1/LicenseService"
+    ],
+    "LogEntry": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/Lclog/Entries/5492",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/Lclog/Entries/5493",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/Lclog/Entries/5494"
+    ],
+    "LogEntryCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/FaultList/Entries",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/Lclog/Entries",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/Lclog/Entries?$skip=100"
+    ],
+    "LogService": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/FaultList",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/Lclog",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices/Sel"
+    ],
+    "LogServiceCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices"
+    ],
+    "ManagerAccount": [
+      "/redfish/v1/AccountService/Accounts/1",
+      "/redfish/v1/AccountService/Accounts/10",
+      "/redfish/v1/AccountService/Accounts/11"
+    ],
+    "ManagerAccountCollection": [
+      "/redfish/v1/AccountService/Accounts"
+    ],
+    "MemoryMetrics": [
+      "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/MemoryMetrics",
+      "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A2/MemoryMetrics",
+      "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A4/MemoryMetrics"
+    ],
+    "MessageRegistryFile": [
+      "/redfish/v1/Registries/BaseMessages",
+      "/redfish/v1/Registries/BiosAttributeRegistry.v1_0_0",
+      "/redfish/v1/Registries/BootSourcesRegistry.v1_0_0"
+    ],
+    "MessageRegistryFileCollection": [
+      "/redfish/v1/Registries"
+    ],
+    "MetricDefinition": [
+      "/redfish/v1/TelemetryService/MetricDefinitions/AccCoreCyclesHigh",
+      "/redfish/v1/TelemetryService/MetricDefinitions/AccCoreCyclesLow",
+      "/redfish/v1/TelemetryService/MetricDefinitions/AddressParityError"
+    ],
+    "MetricDefinitionCollection": [
+      "/redfish/v1/TelemetryService/MetricDefinitions"
+    ],
+    "MetricReportCollection": [
+      "/redfish/v1/TelemetryService/MetricReports"
+    ],
+    "MetricReportDefinition": [
+      "/redfish/v1/TelemetryService/MetricReportDefinitions/AggregationMetrics",
+      "/redfish/v1/TelemetryService/MetricReportDefinitions/CPUMemMetrics",
+      "/redfish/v1/TelemetryService/MetricReportDefinitions/CPURegisters"
+    ],
+    "MetricReportDefinitionCollection": [
+      "/redfish/v1/TelemetryService/MetricReportDefinitions",
+      "/redfish/v1/TelemetryService/Oem/Dell/D4D/ReportDefinitions"
+    ],
+    "NetworkDeviceFunction": [
+      "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Settings",
+      "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Settings",
+      "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Settings"
+    ],
+    "NetworkInterface": [
+      "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/FC.Slot.1",
+      "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/FC.Slot.7",
+      "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces/NIC.Integrated.1"
+    ],
+    "NetworkInterfaceCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces"
+    ],
+    "PCIeDevice": [
+      "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices/26-0",
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0",
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17"
+    ],
+    "PCIeDeviceCollection": [
+      "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices",
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices"
+    ],
+    "PCIeFunction": [
+      "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices/26-0/PCIeFunctions/26-0-0",
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0/PCIeFunctions/0-0-0",
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17/PCIeFunctions/0-17-5"
+    ],
+    "PCIeFunctionCollection": [
+      "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1/PCIeDevices/26-0/PCIeFunctions",
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0/PCIeFunctions",
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17/PCIeFunctions"
+    ],
+    "PCIeSlots": [
+      "/redfish/v1/Chassis/System.Embedded.1/PCIeSlots"
+    ],
+    "Port": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-1",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-2",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-1"
+    ],
+    "PortCollection": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports"
+    ],
+    "PortMetrics": [
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-1/Metrics",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-2/Metrics",
+      "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-1/Metrics"
+    ],
+    "PowerSubsystem": [
+      "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem"
+    ],
+    "PowerSupply": [
+      "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies/PSU.Slot.1",
+      "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies/PSU.Slot.2"
+    ],
+    "PowerSupplyCollection": [
+      "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies"
+    ],
+    "PowerSupplyMetrics": [
+      "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies/PSU.Slot.1/Metrics",
+      "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem/PowerSupplies/PSU.Slot.2/Metrics"
+    ],
+    "PrivilegeRegistry": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/PrivilegeRegistry"
+    ],
+    "Role": [
+      "/redfish/v1/AccountService/Roles/Administrator",
+      "/redfish/v1/AccountService/Roles/None",
+      "/redfish/v1/AccountService/Roles/Operator"
+    ],
+    "RoleCollection": [
+      "/redfish/v1/AccountService/Roles"
+    ],
+    "SecureBoot": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot"
+    ],
+    "SecureBootDatabase": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/KEK",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/PK",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/db"
+    ],
+    "SecureBootDatabaseCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases"
+    ],
+    "Sensor": [
+      "/redfish/v1/Chassis/System.Embedded.1/Sensors/CPU1MEM012VR",
+      "/redfish/v1/Chassis/System.Embedded.1/Sensors/CPU1MEM345VR",
+      "/redfish/v1/Chassis/System.Embedded.1/Sensors/CPU1Temp"
+    ],
+    "SensorCollection": [
+      "/redfish/v1/Chassis/System.Embedded.1/Sensors"
+    ],
+    "SerialInterface": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/SerialInterfaces/Serial.1"
+    ],
+    "SerialInterfaceCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/SerialInterfaces"
+    ],
+    "SessionCollection": [
+      "/redfish/v1/SessionService/Sessions"
+    ],
+    "SessionService": [
+      "/redfish/v1/SessionService"
+    ],
+    "Signature": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/dbx/Signatures/StdSecbootpolicy.11",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/dbx/Signatures/StdSecbootpolicy.12",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/dbx/Signatures/StdSecbootpolicy.13"
+    ],
+    "SignatureCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/KEK/Signatures",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/PK/Signatures",
+      "/redfish/v1/Systems/System.Embedded.1/SecureBoot/SecureBootDatabases/db/Signatures"
+    ],
+    "SimpleStorage": [
+      "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/AHCI.Embedded.1-1",
+      "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/AHCI.Embedded.2-1",
+      "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/RAID.Slot.6-1"
+    ],
+    "SimpleStorageCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/SimpleStorage"
+    ],
+    "SoftwareInventory": [
+      "/redfish/v1/UpdateService/FirmwareInventory/Installed-104102-2.41__RAID.Backplane.Firmware.1",
+      "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.1-1",
+      "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.1-2"
+    ],
+    "SoftwareInventoryCollection": [
+      "/redfish/v1/UpdateService/SoftwareInventory"
+    ],
+    "StorageController": [
+      "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Controllers/AHCI.Embedded.1-1",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Controllers/AHCI.Embedded.1-1/Settings",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Controllers/AHCI.Embedded.2-1"
+    ],
+    "StorageControllerCollection": [
+      "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Controllers",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Controllers",
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Controllers"
+    ],
+    "SwitchCollection": [
+      "/redfish/v1/Fabrics/PCIe/Switches"
+    ],
+    "TaskCollection": [
+      "/redfish/v1/TaskService/Tasks"
+    ],
+    "TaskService": [
+      "/redfish/v1/TaskService"
+    ],
+    "TelemetryService": [
+      "/redfish/v1/TelemetryService"
+    ],
+    "ThermalMetrics": [
+      "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem/ThermalMetrics"
+    ],
+    "ThermalSubsystem": [
+      "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem"
+    ],
+    "Triggers": [
+      "/redfish/v1/TelemetryService/Triggers/CPUCriticalTrigger",
+      "/redfish/v1/TelemetryService/Triggers/CPUWarnTrigger",
+      "/redfish/v1/TelemetryService/Triggers/FANCriticalTrigger"
+    ],
+    "TriggersCollection": [
+      "/redfish/v1/TelemetryService/Triggers"
+    ],
+    "UpdateService": [
+      "/redfish/v1/UpdateService"
+    ],
+    "VirtualMedia": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/VirtualMedia/CD",
+      "/redfish/v1/Managers/iDRAC.Embedded.1/VirtualMedia/RemovableDisk",
+      "/redfish/v1/Systems/System.Embedded.1/VirtualMedia/1"
+    ],
+    "VirtualMediaCollection": [
+      "/redfish/v1/Managers/iDRAC.Embedded.1/VirtualMedia",
+      "/redfish/v1/Systems/System.Embedded.1/VirtualMedia"
+    ],
+    "Volume": [
+      "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Volumes/Disk.Virtual.0:RAID.Slot.6-1/Settings"
+    ]
+  },
+  "untouched_linked_by_type": {
+    "AccountService": 1,
+    "Assembly": 18,
+    "Bios": 1,
+    "BootOptionCollection": 1,
+    "CertificateCollection": 4,
+    "CertificateService": 1,
+    "Chassis": 1,
+    "ComputerSystem": 1,
+    "DellAttributes": 19,
+    "DellBIOSService": 1,
+    "DellBootSources": 1,
+    "DellChassis": 1,
+    "DellChassisCollection": 1,
+    "DellController": 3,
+    "DellControllerBattery": 1,
+    "DellFC": 4,
+    "DellFCCapabilities": 4,
+    "DellFCPortMetrics": 4,
+    "DellGPUSensorCollection": 1,
+    "DellJobCollection": 1,
+    "DellJobService": 1,
+    "DellLCService": 1,
+    "DellLicensableDeviceCollection": 1,
+    "DellLicenseCollection": 1,
+    "DellLicenseManagementService": 1,
+    "DellMemory": 8,
+    "DellMetricService": 1,
+    "DellNIC": 12,
+    "DellNICCapabilities": 12,
+    "DellNICPortMetrics": 12,
+    "DellNetworkTransceiver": 12,
+    "DellNumericSensorCollection": 1,
+    "DellOSDeploymentService": 1,
+    "DellOpaqueManagementDataCollection": 1,
+    "DellPSNumericSensor": 2,
+    "DellPSNumericSensorCollection": 1,
+    "DellPersistentStorageService": 1,
+    "DellPhysicalDisk": 4,
+    "DellPowerSupply": 2,
+    "DellPowerSupplyView": 2,
+    "DellPresenceAndStatusSensorCollection": 1,
+    "DellProcessor": 2,
+    "DellRaidService": 1,
+    "DellRollupStatusCollection": 1,
+    "DellSensorCollection": 1,
+    "DellSlotCollection": 1,
+    "DellSoftwareInstallationService": 1,
+    "DellSwitchConnectionCollection": 1,
+    "DellSwitchConnectionService": 1,
+    "DellSystem": 1,
+    "DellSystemManagementService": 1,
+    "DellSystemQuickSyncCollection": 1,
+    "DellTimeService": 1,
+    "DellUSBDeviceCollection": 1,
+    "DellVideoCollection": 1,
+    "DellVideoNetworkCollection": 1,
+    "DellVirtualDisk": 1,
+    "DelliDRACCard": 1,
+    "DelliDRACCardService": 1,
+    "DellvFlashCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EventService": 1,
+    "FabricCollection": 1,
+    "HostInterfaceCollection": 1,
+    "JobService": 1,
+    "JsonSchemaFileCollection": 1,
+    "LicenseService": 1,
+    "LogServiceCollection": 1,
+    "MemoryMetrics": 8,
+    "MessageRegistryFileCollection": 1,
+    "NetworkDeviceFunction": 16,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 15,
+    "PCIeDeviceCollection": 1,
+    "PCIeFunction": 25,
+    "PCIeSlots": 1,
+    "Port": 16,
+    "PortCollection": 7,
+    "PowerSubsystem": 1,
+    "SecureBoot": 1,
+    "SensorCollection": 1,
+    "SerialInterfaceCollection": 1,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "SimpleStorage": 3,
+    "SimpleStorageCollection": 1,
+    "SoftwareInventory": 30,
+    "StorageControllerCollection": 3,
+    "TaskService": 1,
+    "TelemetryService": 1,
+    "ThermalSubsystem": 1,
+    "UpdateService": 1,
+    "VirtualMediaCollection": 2,
+    "Volume": 1
+  },
+  "untouched_linked_paths": [
+    "/redfish/v1/AccountService",
+    "/redfish/v1/CertificateService",
+    "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1",
+    "/redfish/v1/Chassis/System.Embedded.1/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/EnvironmentMetrics",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFC/FC.Slot.1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFCCapabilities/FC.Slot.1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellFCPortMetrics/FC.Slot.1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Oem/Dell/DellNetworkAttributes/FC.Slot.1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFC/FC.Slot.1-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFCCapabilities/FC.Slot.1-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellFCPortMetrics/FC.Slot.1-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Oem/Dell/DellNetworkAttributes/FC.Slot.1-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:FC.Slot.1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-2/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:FC.Slot.1-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/Ports/FC.Slot.1-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFC/FC.Slot.7-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFCCapabilities/FC.Slot.7-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellFCPortMetrics/FC.Slot.7-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Oem/Dell/DellNetworkAttributes/FC.Slot.7-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Oem/Dell/DellFC/FC.Slot.7-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Oem/Dell/DellFCCapabilities/FC.Slot.7-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Oem/Dell/DellFCPortMetrics/FC.Slot.7-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Oem/Dell/DellNetworkAttributes/FC.Slot.7-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkPorts/FC.Slot.7-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:FC.Slot.7-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkPorts/FC.Slot.7-2/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:FC.Slot.7-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/Ports/FC.Slot.7-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Oem/Dell/DellNIC/NIC.Integrated.1-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Oem/Dell/DellNICCapabilities/NIC.Integrated.1-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Oem/Dell/DellNICPortMetrics/NIC.Integrated.1-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Oem/Dell/DellNetworkAttributes/NIC.Integrated.1-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Oem/Dell/DellNIC/NIC.Integrated.1-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Oem/Dell/DellNICCapabilities/NIC.Integrated.1-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Oem/Dell/DellNICPortMetrics/NIC.Integrated.1-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Oem/Dell/DellNetworkAttributes/NIC.Integrated.1-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Oem/Dell/DellNIC/NIC.Integrated.1-3-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Oem/Dell/DellNICCapabilities/NIC.Integrated.1-3-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Oem/Dell/DellNICPortMetrics/NIC.Integrated.1-3-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Oem/Dell/DellNetworkAttributes/NIC.Integrated.1-3-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-4-1/Oem/Dell/DellNIC/NIC.Integrated.1-4-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-4-1/Oem/Dell/DellNICCapabilities/NIC.Integrated.1-4-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-4-1/Oem/Dell/DellNICPortMetrics/NIC.Integrated.1-4-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-4-1/Oem/Dell/DellNetworkAttributes/NIC.Integrated.1-4-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-3",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/Ports/NIC.Integrated.1-4",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-1-1/Oem/Dell/DellNIC/NIC.Slot.2-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-1-1/Oem/Dell/DellNICCapabilities/NIC.Slot.2-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-1-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.2-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-1-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.2-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-2-1/Oem/Dell/DellNIC/NIC.Slot.2-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-2-1/Oem/Dell/DellNICCapabilities/NIC.Slot.2-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-2-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.2-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-2-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.2-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkPorts/NIC.Slot.2-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkPorts/NIC.Slot.2-2/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.2-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/Ports",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/Ports/NIC.Slot.2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.2/Ports/NIC.Slot.2-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-1-1/Oem/Dell/DellNIC/NIC.Slot.3-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-1-1/Oem/Dell/DellNICCapabilities/NIC.Slot.3-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-1-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.3-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-1-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.3-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-2-1/Oem/Dell/DellNIC/NIC.Slot.3-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-2-1/Oem/Dell/DellNICCapabilities/NIC.Slot.3-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-2-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.3-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-2-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.3-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkPorts/NIC.Slot.3-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.3-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkPorts/NIC.Slot.3-2/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.3-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/Ports",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/Ports/NIC.Slot.3-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/Ports/NIC.Slot.3-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-1-1/Oem/Dell/DellNIC/NIC.Slot.5-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-1-1/Oem/Dell/DellNICCapabilities/NIC.Slot.5-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-1-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.5-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-1-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.5-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-2-1/Oem/Dell/DellNIC/NIC.Slot.5-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-2-1/Oem/Dell/DellNICCapabilities/NIC.Slot.5-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-2-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.5-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-2-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.5-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkPorts/NIC.Slot.5-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.5-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkPorts/NIC.Slot.5-2/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.5-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/Ports",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/Ports/NIC.Slot.5-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/Ports/NIC.Slot.5-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-1-1/Oem/Dell/DellNIC/NIC.Slot.8-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-1-1/Oem/Dell/DellNICCapabilities/NIC.Slot.8-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-1-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.8-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-1-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.8-1-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-2-1/Oem/Dell/DellNIC/NIC.Slot.8-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-2-1/Oem/Dell/DellNICCapabilities/NIC.Slot.8-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-2-1/Oem/Dell/DellNICPortMetrics/NIC.Slot.8-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-2-1/Oem/Dell/DellNetworkAttributes/NIC.Slot.8-2-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkPorts/NIC.Slot.8-1/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.8-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkPorts/NIC.Slot.8-2/Oem/Dell/DellNetworkTransceivers/NetworkTransceiver.Integrated.1:NIC.Slot.8-2",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/Ports",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/Ports/NIC.Slot.8-1",
+    "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.8/Ports/NIC.Slot.8-2",
+    "/redfish/v1/Chassis/System.Embedded.1/Oem/Dell/DellChassis",
+    "/redfish/v1/Chassis/System.Embedded.1/Oem/Dell/DellChassis/mainsystemchassis",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-0/PCIeFunctions/0-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-17/PCIeFunctions/0-17-5",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-23",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-23/PCIeFunctions/0-23-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-28",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-28/PCIeFunctions/0-28-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-28/PCIeFunctions/0-28-4",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-31",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-31/PCIeFunctions/0-31-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-31/PCIeFunctions/0-31-4",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/134-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/134-0/PCIeFunctions/134-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/134-0/PCIeFunctions/134-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/135-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/135-0/PCIeFunctions/135-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/135-0/PCIeFunctions/135-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/216-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/216-0/PCIeFunctions/216-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/216-0/PCIeFunctions/216-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions/24-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions/24-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/26-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/26-0/PCIeFunctions/26-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/3-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/3-0/PCIeFunctions/3-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/59-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/59-0/PCIeFunctions/59-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/59-0/PCIeFunctions/59-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/94-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/94-0/PCIeFunctions/94-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/94-0/PCIeFunctions/94-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/95-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/95-0/PCIeFunctions/95-0-0",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/95-0/PCIeFunctions/95-0-1",
+    "/redfish/v1/Chassis/System.Embedded.1/PCIeSlots",
+    "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupply/PSU.Slot.1",
+    "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupply/PSU.Slot.2",
+    "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupplyInventory/PSU.Slot.1",
+    "/redfish/v1/Chassis/System.Embedded.1/Power/Oem/Dell/DellPowerSupplyInventory/PSU.Slot.2",
+    "/redfish/v1/Chassis/System.Embedded.1/Power/PowerSupplies/PSU.Slot.1/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/Power/PowerSupplies/PSU.Slot.2/Assembly",
+    "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem",
+    "/redfish/v1/Chassis/System.Embedded.1/Sensors",
+    "/redfish/v1/Chassis/System.Embedded.1/ThermalSubsystem",
+    "/redfish/v1/EventService",
+    "/redfish/v1/Fabrics",
+    "/redfish/v1/JobService",
+    "/redfish/v1/JsonSchemas",
+    "/redfish/v1/LicenseService",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/HostInterfaces",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/LogServices",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/NetworkProtocol/HTTPS/Certificates",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellAttributes/LifecycleController.Embedded.1",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellAttributes/System.Embedded.1",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellAttributes/iDRAC.Embedded.1",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellJobService",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLCService",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicensableDevices",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicenseManagementService",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellLicenses",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellOpaqueManagementData",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellPersistentStorageService",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellSystemQuickSync",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellTimeService",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellUSBDevices",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DelliDRACCard/iDRAC.Embedded.1-1_0x23_IDRACinfo",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DelliDRACCardService",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/DellvFlash",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/Jobs",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/RemoteSystemLogs/CA/Certificates",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/Oem/Dell/RemoteSystemLogs/HTTPS/Certificates",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/SerialInterfaces",
+    "/redfish/v1/Managers/iDRAC.Embedded.1/VirtualMedia",
+    "/redfish/v1/Registries",
+    "/redfish/v1/SessionService",
+    "/redfish/v1/SessionService/Sessions",
+    "/redfish/v1/Systems/System.Embedded.1/Bios/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/Boot/Certificates",
+    "/redfish/v1/Systems/System.Embedded.1/BootOptions",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/Oem/Dell/DellMemory/DIMM.Socket.A1",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A2/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A2/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A2/Oem/Dell/DellMemory/DIMM.Socket.A2",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A4/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A4/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A4/Oem/Dell/DellMemory/DIMM.Socket.A4",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A5/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A5/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A5/Oem/Dell/DellMemory/DIMM.Socket.A5",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B1/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B1/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B1/Oem/Dell/DellMemory/DIMM.Socket.B1",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B2/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B2/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B2/Oem/Dell/DellMemory/DIMM.Socket.B2",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B4/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B4/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B4/Oem/Dell/DellMemory/DIMM.Socket.B4",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B5/Assembly",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B5/MemoryMetrics",
+    "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B5/Oem/Dell/DellMemory/DIMM.Socket.B5",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-2/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions/FC.Slot.7-2/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-1-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-2-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-3-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Integrated.1/NetworkDeviceFunctions/NIC.Integrated.1-4-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-1-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.2/NetworkDeviceFunctions/NIC.Slot.2-2-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-1-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkDeviceFunctions/NIC.Slot.3-2-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-1-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkDeviceFunctions/NIC.Slot.5-2-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-1-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters/NIC.Slot.8/NetworkDeviceFunctions/NIC.Slot.8-2-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces",
+    "/redfish/v1/Systems/System.Embedded.1/NetworkPorts/Oem/Dell/DellSwitchConnections",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellBIOSService",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellBootSources",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellGPUSensors",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellMetricService",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellNumericSensors",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellOSDeploymentService",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPSNumericSensors",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPSNumericSensors/iDRAC.Embedded.1_0x23_PS1Current1",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPSNumericSensors/iDRAC.Embedded.1_0x23_PS2Current2",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPresenceAndStatusSensors",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellRaidService",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellRollupStatus",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSensors",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSlots",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSoftwareInstallationService",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSwitchConnectionService",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSystem/System.Embedded.1",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellSystemManagementService",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellVideo",
+    "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellVideoNetwork",
+    "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.1/Oem/Dell/DellProcessors/CPU.Socket.1",
+    "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.2/Oem/Dell/DellProcessors/CPU.Socket.2",
+    "/redfish/v1/Systems/System.Embedded.1/SecureBoot",
+    "/redfish/v1/Systems/System.Embedded.1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/SimpleStorage",
+    "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/AHCI.Embedded.1-1",
+    "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/AHCI.Embedded.2-1",
+    "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Controllers",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.1-1/Oem/Dell/DellControllers/AHCI.Embedded.1-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Controllers",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Embedded.2-1/Oem/Dell/DellControllers/AHCI.Embedded.2-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Controllers",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellDrives/Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.1:Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellDrives/Disk.Bay.1:Enclosure.Internal.0-1:RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.2:Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellDrives/Disk.Bay.2:Enclosure.Internal.0-1:RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Drives/Disk.Bay.3:Enclosure.Internal.0-1:RAID.Slot.6-1/Oem/Dell/DellDrives/Disk.Bay.3:Enclosure.Internal.0-1:RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Oem/Dell/DellControllerBattery/Battery.Integrated.1:RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Oem/Dell/DellControllers/RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Volumes/Disk.Virtual.0:RAID.Slot.6-1/Oem/Dell/DellVolumes/Disk.Virtual.0:RAID.Slot.6-1",
+    "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Volumes/Disk.Virtual.0:RAID.Slot.6-1/Settings",
+    "/redfish/v1/Systems/System.Embedded.1/VirtualMedia",
+    "/redfish/v1/TaskService",
+    "/redfish/v1/TelemetryService",
+    "/redfish/v1/UpdateService",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104102-2.41__RAID.Backplane.Firmware.1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.1-2",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.7-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104483-16.25.11__FC.Slot.7-2",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.2-1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.2-2-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.3-1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.3-2-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.5-1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.5-2-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.8-1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104862-21.40.25.31__NIC.Slot.8-2-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-104893-51.16.0-5150__RAID.Slot.6-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-159-2.26.1__BIOS.Setup.1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-2-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-3-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Installed-27481-23.61.3__NIC.Integrated.1-4-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.1-2",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.7-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-104483-15.00.00__FC.Slot.7-2",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-104893-50.5.0-2819__RAID.Slot.6-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-159-2.3.10__BIOS.Setup.1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-25227-3.36.36.36__iDRAC.Embedded.1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-1-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-2-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-3-1",
+    "/redfish/v1/UpdateService/FirmwareInventory/Previous-27481-21.40.21__NIC.Integrated.1-4-1"
+  ],
+  "untouched_ratio": 0.9774411328832537,
+  "vendor": "dell"
+}

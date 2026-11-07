@@ -1,0 +1,3129 @@
+[
+ {
+  "server": "csus3200_01",
+  "resources": 2316,
+  "by_kind": {
+   "json": 2006,
+   "raw": 16,
+   "empty": 1,
+   "manifest-only": 293
+  },
+  "by_bucket": {
+   "ok": 2023,
+   "absent": 57,
+   "device_error": 6,
+   "excluded": 1,
+   "skipped": 229
+  },
+  "by_status": {
+   "200": 2021,
+   "201": 1,
+   "204": 1,
+   "404": 57,
+   "0": 1,
+   "500": 5,
+   "None": 230
+  },
+  "by_classification": {
+   "exists_untouched": 1807,
+   "exists": 182,
+   "binary_or_non_json": 16,
+   "not_mounted_or_empty": 18,
+   "not_supported": 57,
+   "collect_error": 6,
+   "excluded_or_skipped_policy": 230
+  },
+  "json_parse_fail_2xx": [
+   "/redfish/v1/LogService/Oem/ChassisHistory"
+  ],
+  "requested_tier1_distinct": 182,
+  "requested_but_not_in_mirror": [
+   "Chassis/Rack1/Power",
+   "Chassis/Rack1/PowerSubsystem",
+   "Chassis/Rack1/Thermal",
+   "Chassis/Rack1/ThermalSubsystem",
+   "Chassis/RackGroup/Power",
+   "Chassis/RackGroup/PowerSubsystem",
+   "Chassis/RackGroup/Thermal",
+   "Chassis/RackGroup/ThermalSubsystem",
+   "Chassis/r001u01/EnvironmentMetrics",
+   "Chassis/r001u01/Power",
+   "Chassis/r001u01/Thermal"
+  ],
+  "odata_types_untouched": {
+   "Signature": 1315,
+   "Sensor": 72,
+   "Processor": 64,
+   "Port": 57,
+   "?": 39,
+   "Certificate": 37,
+   "JsonSchemaFile": 28,
+   "ActionInfo": 19,
+   "PortCollection": 14,
+   "LogEntry": 12,
+   "CertificateCollection": 9,
+   "Assembly": 8,
+   "SecureBootDatabase": 8,
+   "Task": 8,
+   "PCIeFunctionCollection": 6,
+   "PCIeFunction": 6,
+   "ProcessorCollection": 6,
+   "NetworkInterface": 6,
+   "NetworkDeviceFunctionCollection": 6,
+   "MessageRegistryFile": 5,
+   "MetricReportDefinition": 5,
+   "ManagerAccount": 4,
+   "Role": 4,
+   "LogEntryCollection": 4,
+   "MessageRegistry": 4,
+   "Session": 4,
+   "MetricReport": 4,
+   "MetricDefinition": 3,
+   "TrustedComponent": 2,
+   "ComputerSystem": 2,
+   "NetworkInterfaceCollection": 2,
+   "SecurityPolicy": 2,
+   "BootOption": 2,
+   "LogService": 2,
+   "SignatureCollection": 2,
+   "VirtualMedia": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "DriveCollection": 1,
+   "PCIeSlots": 1,
+   "TrustedComponentCollection": 1,
+   "EthernetInterfaceCollection": 1,
+   "MemoryCollection": 1,
+   "EventService": 1,
+   "JsonSchemaFileCollection": 1,
+   "HostInterfaceCollection": 1,
+   "HostInterface": 1,
+   "ManagerDiagnosticData": 1,
+   "MessageRegistryFileCollection": 1,
+   "AttributeRegistry": 1,
+   "ServiceConditions": 1,
+   "SessionService": 1,
+   "SessionCollection": 1,
+   "Bios": 1,
+   "BootOptionCollection": 1,
+   "LogServiceCollection": 1,
+   "MemoryMetrics": 1
+  },
+  "odata_types_all": {
+   "Signature": 1315,
+   "Sensor": 88,
+   "Port": 69,
+   "Processor": 68,
+   "?": 38,
+   "Certificate": 37,
+   "Memory": 32,
+   "JsonSchemaFile": 28,
+   "PortCollection": 20,
+   "ActionInfo": 19,
+   "CertificateCollection": 15,
+   "NetworkDeviceFunctionCollection": 12,
+   "NetworkDeviceFunction": 12,
+   "EthernetInterface": 12,
+   "LogEntry": 12,
+   "Fan": 10,
+   "LogService": 9,
+   "Assembly": 8,
+   "SecureBootDatabase": 8,
+   "Task": 8,
+   "NetworkAdapter": 7,
+   "PCIeDevice": 7,
+   "PCIeFunctionCollection": 7,
+   "ProcessorCollection": 7,
+   "LogEntryCollection": 7,
+   "PCIeFunction": 6,
+   "NetworkInterface": 6,
+   "MessageRegistryFile": 5,
+   "MetricReportDefinition": 5,
+   "MetricReport": 5,
+   "ManagerAccount": 4,
+   "Role": 4,
+   "Drive": 4,
+   "PowerSupply": 4,
+   "PowerSupplyMetrics": 4,
+   "MessageRegistry": 4,
+   "Session": 4,
+   "SignatureCollection": 4,
+   "KeyCollection": 3,
+   "Chassis": 3,
+   "ComputerSystem": 3,
+   "EthernetInterfaceCollection": 3,
+   "MetricDefinition": 3,
+   "TrustedComponent": 2,
+   "MemoryCollection": 2,
+   "NetworkInterfaceCollection": 2,
+   "Switch": 2,
+   "LogServiceCollection": 2,
+   "SecurityPolicy": 2,
+   "Bios": 2,
+   "BootOption": 2,
+   "VirtualMedia": 2,
+   "SoftwareInventory": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "DriveCollection": 1,
+   "NetworkAdapterCollection": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "PowerSubsystem": 1,
+   "PowerSupplyCollection": 1,
+   "SensorCollection": 1,
+   "ThermalSubsystem": 1,
+   "FanCollection": 1,
+   "ThermalMetrics": 1,
+   "TrustedComponentCollection": 1,
+   "CompositionService": 1,
+   "ResourceBlockCollection": 1,
+   "ResourceBlock": 1,
+   "EventService": 1,
+   "EventDestinationCollection": 1,
+   "FabricCollection": 1,
+   "Fabric": 1,
+   "SwitchCollection": 1,
+   "JsonSchemaFileCollection": 1
+  },
+  "manifest": {
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "discovered": 2083,
+   "fetched_ok": 2020,
+   "root_product": "Compute Scale-up Server 3200",
+   "root_redfish_version": "1.19.0",
+   "auth_mode": "basic",
+   "incomplete_reasons": [
+    "device_error=6"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Complex Firmware",
+     "version": "1.77.30-20260911_061319"
+    },
+    {
+     "name": "Npar 0 Current Firmware",
+     "version": "1.77.30-20260911_061319"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1823,
+   "exposed": null
+  },
+  "elapsed_s": 2.1
+ },
+ {
+  "server": "csus3200_02",
+  "resources": 2273,
+  "by_kind": {
+   "json": 1962,
+   "raw": 14,
+   "empty": 1,
+   "manifest-only": 296
+  },
+  "by_bucket": {
+   "ok": 1977,
+   "absent": 57,
+   "device_error": 9,
+   "excluded": 1,
+   "skipped": 229
+  },
+  "by_status": {
+   "200": 1975,
+   "204": 1,
+   "201": 1,
+   "404": 57,
+   "500": 8,
+   "0": 1,
+   "None": 230
+  },
+  "by_classification": {
+   "exists_untouched": 1815,
+   "exists": 130,
+   "binary_or_non_json": 14,
+   "not_mounted_or_empty": 18,
+   "not_supported": 57,
+   "collect_error": 9,
+   "excluded_or_skipped_policy": 230
+  },
+  "json_parse_fail_2xx": [
+   "/redfish/v1/LogService/Oem/ChassisHistory"
+  ],
+  "requested_tier1_distinct": 130,
+  "requested_but_not_in_mirror": [
+   "Chassis/Rack1/Power",
+   "Chassis/Rack1/PowerSubsystem",
+   "Chassis/Rack1/Thermal",
+   "Chassis/Rack1/ThermalSubsystem",
+   "Chassis/RackGroup/Power",
+   "Chassis/RackGroup/PowerSubsystem",
+   "Chassis/RackGroup/Thermal",
+   "Chassis/RackGroup/ThermalSubsystem",
+   "Chassis/r001u01/EnvironmentMetrics",
+   "Chassis/r001u01/Power",
+   "Chassis/r001u01/Thermal"
+  ],
+  "odata_types_untouched": {
+   "Signature": 1315,
+   "Processor": 112,
+   "Port": 57,
+   "Sensor": 56,
+   "?": 38,
+   "Certificate": 37,
+   "JsonSchemaFile": 28,
+   "ActionInfo": 19,
+   "LogEntry": 12,
+   "Task": 12,
+   "PortCollection": 10,
+   "CertificateCollection": 9,
+   "SecureBootDatabase": 8,
+   "ProcessorCollection": 6,
+   "MessageRegistryFile": 5,
+   "MetricReportDefinition": 5,
+   "ManagerAccount": 4,
+   "Role": 4,
+   "Assembly": 4,
+   "LogEntryCollection": 4,
+   "MessageRegistry": 4,
+   "MetricReport": 4,
+   "MetricDefinition": 3,
+   "PCIeFunctionCollection": 2,
+   "PCIeFunction": 2,
+   "TrustedComponent": 2,
+   "ComputerSystem": 2,
+   "NetworkInterfaceCollection": 2,
+   "NetworkInterface": 2,
+   "NetworkDeviceFunctionCollection": 2,
+   "SecurityPolicy": 2,
+   "BootOption": 2,
+   "LogService": 2,
+   "SignatureCollection": 2,
+   "VirtualMedia": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "DriveCollection": 1,
+   "PCIeSlots": 1,
+   "TrustedComponentCollection": 1,
+   "EthernetInterfaceCollection": 1,
+   "MemoryCollection": 1,
+   "EventService": 1,
+   "JsonSchemaFileCollection": 1,
+   "HostInterfaceCollection": 1,
+   "HostInterface": 1,
+   "ManagerDiagnosticData": 1,
+   "MessageRegistryFileCollection": 1,
+   "AttributeRegistry": 1,
+   "ServiceConditions": 1,
+   "SessionService": 1,
+   "SessionCollection": 1,
+   "Session": 1,
+   "Bios": 1,
+   "BootOptionCollection": 1,
+   "LogServiceCollection": 1,
+   "MemoryMetrics": 1
+  },
+  "odata_types_all": {
+   "Signature": 1315,
+   "Processor": 116,
+   "Sensor": 72,
+   "Port": 61,
+   "?": 37,
+   "Certificate": 37,
+   "JsonSchemaFile": 28,
+   "ActionInfo": 19,
+   "Memory": 16,
+   "CertificateCollection": 15,
+   "PortCollection": 12,
+   "LogEntry": 12,
+   "Task": 12,
+   "Fan": 10,
+   "LogService": 9,
+   "EthernetInterface": 8,
+   "SecureBootDatabase": 8,
+   "ProcessorCollection": 7,
+   "LogEntryCollection": 7,
+   "MessageRegistryFile": 5,
+   "MetricReportDefinition": 5,
+   "MetricReport": 5,
+   "ManagerAccount": 4,
+   "Role": 4,
+   "Assembly": 4,
+   "Drive": 4,
+   "NetworkDeviceFunctionCollection": 4,
+   "NetworkDeviceFunction": 4,
+   "PowerSupply": 4,
+   "PowerSupplyMetrics": 4,
+   "MessageRegistry": 4,
+   "SignatureCollection": 4,
+   "KeyCollection": 3,
+   "Chassis": 3,
+   "NetworkAdapter": 3,
+   "PCIeDevice": 3,
+   "PCIeFunctionCollection": 3,
+   "ComputerSystem": 3,
+   "EthernetInterfaceCollection": 3,
+   "MetricDefinition": 3,
+   "PCIeFunction": 2,
+   "TrustedComponent": 2,
+   "MemoryCollection": 2,
+   "NetworkInterfaceCollection": 2,
+   "NetworkInterface": 2,
+   "Switch": 2,
+   "LogServiceCollection": 2,
+   "SecurityPolicy": 2,
+   "Bios": 2,
+   "BootOption": 2,
+   "VirtualMedia": 2,
+   "SoftwareInventory": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "DriveCollection": 1,
+   "NetworkAdapterCollection": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "PowerSubsystem": 1,
+   "PowerSupplyCollection": 1,
+   "SensorCollection": 1,
+   "ThermalSubsystem": 1,
+   "FanCollection": 1,
+   "ThermalMetrics": 1,
+   "TrustedComponentCollection": 1,
+   "CompositionService": 1,
+   "ResourceBlockCollection": 1,
+   "ResourceBlock": 1,
+   "EventService": 1,
+   "EventDestinationCollection": 1,
+   "FabricCollection": 1,
+   "Fabric": 1,
+   "SwitchCollection": 1,
+   "JsonSchemaFileCollection": 1,
+   "ManagerCollection": 1
+  },
+  "manifest": {
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "discovered": 2040,
+   "fetched_ok": 1974,
+   "root_product": "Compute Scale-up Server 3200",
+   "root_redfish_version": "1.19.0",
+   "auth_mode": "basic",
+   "incomplete_reasons": [
+    "device_error=9"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Complex Firmware",
+     "version": "1.77.30-20260911_061319"
+    },
+    {
+     "name": "Npar 0 Current Firmware",
+     "version": "1.77.30-20260911_061319"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1831,
+   "exposed": null
+  },
+  "elapsed_s": 1.8
+ },
+ {
+  "server": "csus3200_03",
+  "resources": 2281,
+  "by_kind": {
+   "json": 1971,
+   "raw": 16,
+   "empty": 1,
+   "manifest-only": 293
+  },
+  "by_bucket": {
+   "ok": 1988,
+   "absent": 57,
+   "device_error": 6,
+   "excluded": 1,
+   "skipped": 229
+  },
+  "by_status": {
+   "200": 1986,
+   "204": 1,
+   "201": 1,
+   "404": 57,
+   "0": 1,
+   "500": 5,
+   "None": 230
+  },
+  "by_classification": {
+   "exists_untouched": 1788,
+   "exists": 166,
+   "binary_or_non_json": 16,
+   "not_mounted_or_empty": 18,
+   "not_supported": 57,
+   "collect_error": 6,
+   "excluded_or_skipped_policy": 230
+  },
+  "json_parse_fail_2xx": [
+   "/redfish/v1/LogService/Oem/ChassisHistory"
+  ],
+  "requested_tier1_distinct": 166,
+  "requested_but_not_in_mirror": [
+   "Chassis/Rack1/Power",
+   "Chassis/Rack1/PowerSubsystem",
+   "Chassis/Rack1/Thermal",
+   "Chassis/Rack1/ThermalSubsystem",
+   "Chassis/RackGroup/Power",
+   "Chassis/RackGroup/PowerSubsystem",
+   "Chassis/RackGroup/Thermal",
+   "Chassis/RackGroup/ThermalSubsystem",
+   "Chassis/r001u01/EnvironmentMetrics",
+   "Chassis/r001u01/Power",
+   "Chassis/r001u01/Thermal"
+  ],
+  "odata_types_untouched": {
+   "Signature": 1315,
+   "Processor": 64,
+   "Port": 57,
+   "Sensor": 56,
+   "?": 39,
+   "Certificate": 37,
+   "JsonSchemaFile": 28,
+   "ActionInfo": 19,
+   "PortCollection": 14,
+   "LogEntry": 12,
+   "CertificateCollection": 9,
+   "Assembly": 8,
+   "SecureBootDatabase": 8,
+   "Task": 8,
+   "PCIeFunctionCollection": 6,
+   "PCIeFunction": 6,
+   "ProcessorCollection": 6,
+   "NetworkInterface": 6,
+   "NetworkDeviceFunctionCollection": 6,
+   "MessageRegistryFile": 5,
+   "MetricReportDefinition": 5,
+   "ManagerAccount": 4,
+   "Role": 4,
+   "LogEntryCollection": 4,
+   "MessageRegistry": 4,
+   "MetricReport": 4,
+   "MetricDefinition": 3,
+   "TrustedComponent": 2,
+   "ComputerSystem": 2,
+   "NetworkInterfaceCollection": 2,
+   "SecurityPolicy": 2,
+   "BootOption": 2,
+   "LogService": 2,
+   "SignatureCollection": 2,
+   "VirtualMedia": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "DriveCollection": 1,
+   "PCIeSlots": 1,
+   "TrustedComponentCollection": 1,
+   "EthernetInterfaceCollection": 1,
+   "MemoryCollection": 1,
+   "EventService": 1,
+   "JsonSchemaFileCollection": 1,
+   "HostInterfaceCollection": 1,
+   "HostInterface": 1,
+   "ManagerDiagnosticData": 1,
+   "MessageRegistryFileCollection": 1,
+   "AttributeRegistry": 1,
+   "ServiceConditions": 1,
+   "SessionService": 1,
+   "SessionCollection": 1,
+   "Session": 1,
+   "Bios": 1,
+   "BootOptionCollection": 1,
+   "LogServiceCollection": 1,
+   "MemoryMetrics": 1
+  },
+  "odata_types_all": {
+   "Signature": 1315,
+   "Sensor": 72,
+   "Port": 69,
+   "Processor": 68,
+   "?": 38,
+   "Certificate": 37,
+   "JsonSchemaFile": 28,
+   "PortCollection": 20,
+   "ActionInfo": 19,
+   "Memory": 16,
+   "CertificateCollection": 15,
+   "NetworkDeviceFunctionCollection": 12,
+   "NetworkDeviceFunction": 12,
+   "EthernetInterface": 12,
+   "LogEntry": 12,
+   "Fan": 10,
+   "LogService": 9,
+   "Assembly": 8,
+   "SecureBootDatabase": 8,
+   "Task": 8,
+   "NetworkAdapter": 7,
+   "PCIeDevice": 7,
+   "PCIeFunctionCollection": 7,
+   "ProcessorCollection": 7,
+   "LogEntryCollection": 7,
+   "PCIeFunction": 6,
+   "NetworkInterface": 6,
+   "MessageRegistryFile": 5,
+   "MetricReportDefinition": 5,
+   "MetricReport": 5,
+   "ManagerAccount": 4,
+   "Role": 4,
+   "Drive": 4,
+   "PowerSupply": 4,
+   "PowerSupplyMetrics": 4,
+   "MessageRegistry": 4,
+   "SignatureCollection": 4,
+   "KeyCollection": 3,
+   "Chassis": 3,
+   "ComputerSystem": 3,
+   "EthernetInterfaceCollection": 3,
+   "MetricDefinition": 3,
+   "TrustedComponent": 2,
+   "MemoryCollection": 2,
+   "NetworkInterfaceCollection": 2,
+   "Switch": 2,
+   "LogServiceCollection": 2,
+   "SecurityPolicy": 2,
+   "Bios": 2,
+   "BootOption": 2,
+   "VirtualMedia": 2,
+   "SoftwareInventory": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "DriveCollection": 1,
+   "NetworkAdapterCollection": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "PowerSubsystem": 1,
+   "PowerSupplyCollection": 1,
+   "SensorCollection": 1,
+   "ThermalSubsystem": 1,
+   "FanCollection": 1,
+   "ThermalMetrics": 1,
+   "TrustedComponentCollection": 1,
+   "CompositionService": 1,
+   "ResourceBlockCollection": 1,
+   "ResourceBlock": 1,
+   "EventService": 1,
+   "EventDestinationCollection": 1,
+   "FabricCollection": 1,
+   "Fabric": 1,
+   "SwitchCollection": 1,
+   "JsonSchemaFileCollection": 1,
+   "ManagerCollection": 1
+  },
+  "manifest": {
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "discovered": 2048,
+   "fetched_ok": 1985,
+   "root_product": "Compute Scale-up Server 3200",
+   "root_redfish_version": "1.19.0",
+   "auth_mode": "basic",
+   "incomplete_reasons": [
+    "device_error=6"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Complex Firmware",
+     "version": "1.77.30-20260911_061319"
+    },
+    {
+     "name": "Npar 0 Current Firmware",
+     "version": "1.77.30-20260911_061319"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1804,
+   "exposed": null
+  },
+  "elapsed_s": 1.9
+ },
+ {
+  "server": "dl380_gen12_01",
+  "resources": 2434,
+  "by_kind": {
+   "raw": 9,
+   "json": 1771,
+   "manifest-only": 654
+  },
+  "by_bucket": {
+   "ok": 1780,
+   "absent": 263,
+   "not_gettable": 3,
+   "rejected": 278,
+   "skipped": 110
+  },
+  "by_status": {
+   "None": 118,
+   "200": 1772,
+   "404": 263,
+   "405": 3,
+   "406": 276,
+   "400": 2
+  },
+  "by_classification": {
+   "binary_or_non_json": 9,
+   "exists_untouched": 1570,
+   "exists": 152,
+   "not_mounted_or_empty": 49,
+   "not_supported": 266,
+   "rejected": 278,
+   "excluded_or_skipped_policy": 110
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 152,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 714,
+   "JsonSchemaFile": 260,
+   "Sensor": 44,
+   "MetricReportDefinition": 41,
+   "Certificate": 34,
+   "MetricReport": 33,
+   "BootOption": 23,
+   "MetricDefinition": 22,
+   "PCIeFunction": 20,
+   "Assembly": 18,
+   "Port": 18,
+   "HpeServerDevice": 14,
+   "PCIeDevice": 14,
+   "PCIeFunctionCollection": 14,
+   "MessageRegistryFile": 14,
+   "PortMetrics": 12,
+   "Fan": 12,
+   "CertificateCollection": 12,
+   "SecureBootDatabase": 12,
+   "NetworkDeviceFunctionMetrics": 10,
+   "HpeiLOSecurityParam": 10,
+   "Signature": 10,
+   "HpeUSBPort": 10,
+   "HpeServerPciDevice": 9,
+   "HpeServerPCISlot": 9,
+   "HpeComponent": 8,
+   "NetworkAdapter": 7,
+   "NetworkInterface": 7,
+   "Triggers": 6,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "NetworkAdapterMetrics": 5,
+   "LogService": 5,
+   "NetworkDeviceFunction": 4,
+   "LogEntryCollection": 4,
+   "?": 3,
+   "ManagerAccount": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "EnvironmentMetrics": 3,
+   "HpePowerMeter": 3,
+   "PortCollection": 3,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "DriveMetrics": 2,
+   "ComponentIntegrity": 2,
+   "JsonSchemaFileCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "HpeWorkloadPerformanceAdvisor": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1,
+   "HpeiLOAccountCertificateMapCollection": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 714,
+   "JsonSchemaFile": 260,
+   "Sensor": 44,
+   "MetricReportDefinition": 41,
+   "Certificate": 34,
+   "MetricReport": 33,
+   "Port": 32,
+   "Memory": 32,
+   "CertificateCollection": 28,
+   "SoftwareInventory": 25,
+   "BootOption": 23,
+   "MetricDefinition": 22,
+   "PCIeFunction": 20,
+   "Assembly": 18,
+   "NetworkDeviceFunction": 18,
+   "HpeServerDevice": 14,
+   "NetworkAdapter": 14,
+   "PCIeDevice": 14,
+   "PCIeFunctionCollection": 14,
+   "MessageRegistryFile": 14,
+   "EthernetInterface": 13,
+   "PortMetrics": 12,
+   "Fan": 12,
+   "SecureBootDatabase": 12,
+   "PortCollection": 10,
+   "NetworkDeviceFunctionMetrics": 10,
+   "HpeiLOSecurityParam": 10,
+   "Signature": 10,
+   "HpeUSBPort": 10,
+   "HpeServerPciDevice": 9,
+   "HpeServerPCISlot": 9,
+   "Drive": 8,
+   "SignatureCollection": 8,
+   "HpeComponent": 8,
+   "NetworkDeviceFunctionCollection": 7,
+   "NetworkInterface": 7,
+   "Triggers": 6,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "NetworkAdapterMetrics": 5,
+   "LogService": 5,
+   "LogEntryCollection": 5,
+   "?": 3,
+   "ManagerAccount": 3,
+   "KeyCollection": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "EnvironmentMetrics": 3,
+   "HpePowerMeter": 3,
+   "ManagerAccountCollection": 2,
+   "Chassis": 2,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "DriveMetrics": 2,
+   "ComponentIntegrity": 2,
+   "HpeCertificateCollection": 2,
+   "JsonSchemaFileCollection": 2,
+   "EthernetInterfaceCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "Processor": 2,
+   "Volume": 2,
+   "HpeWorkloadPerformanceAdvisor": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeComponentUpdateEntryCollection": 2,
+   "SoftwareInventoryCollection": 2,
+   "Bios": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1,
+   "HpeiLOAccountCertificateMapCollection": 1,
+   "CertificateService": 1,
+   "CertificateEnrollmentCollection": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1
+  },
+  "manifest": {
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "discovered": 2321,
+   "fetched_ok": 1777,
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "auth_mode": "session",
+   "incomplete_reasons": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "PCIe Riser 3 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.82 (06/26/2026)"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.17.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1618,
+   "exposed": null
+  },
+  "elapsed_s": 1.7
+ },
+ {
+  "server": "dl380_gen12_02",
+  "resources": 2020,
+  "by_kind": {
+   "raw": 4,
+   "json": 1500,
+   "manifest-only": 516
+  },
+  "by_bucket": {
+   "ok": 1504,
+   "absent": 127,
+   "not_gettable": 3,
+   "rejected": 276,
+   "skipped": 110
+  },
+  "by_status": {
+   "None": 113,
+   "200": 1501,
+   "404": 127,
+   "405": 3,
+   "406": 276
+  },
+  "by_classification": {
+   "binary_or_non_json": 4,
+   "exists_untouched": 1308,
+   "exists": 143,
+   "not_mounted_or_empty": 49,
+   "not_supported": 130,
+   "rejected": 276,
+   "excluded_or_skipped_policy": 110
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 143,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 476,
+   "JsonSchemaFile": 260,
+   "Sensor": 44,
+   "MetricReportDefinition": 41,
+   "Certificate": 34,
+   "MetricReport": 33,
+   "MetricDefinition": 22,
+   "BootOption": 20,
+   "Assembly": 17,
+   "PCIeFunction": 17,
+   "Port": 16,
+   "MessageRegistryFile": 14,
+   "HpeServerDevice": 12,
+   "PCIeDevice": 12,
+   "PCIeFunctionCollection": 12,
+   "Fan": 12,
+   "CertificateCollection": 12,
+   "SecureBootDatabase": 12,
+   "PortMetrics": 10,
+   "HpeiLOSecurityParam": 10,
+   "Signature": 10,
+   "HpeUSBPort": 10,
+   "NetworkDeviceFunctionMetrics": 8,
+   "HpeServerPciDevice": 8,
+   "HpeServerPCISlot": 7,
+   "NetworkAdapter": 6,
+   "NetworkInterface": 6,
+   "Triggers": 6,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "EnvironmentMetrics": 5,
+   "LogService": 5,
+   "NetworkAdapterMetrics": 4,
+   "NetworkDeviceFunction": 4,
+   "DriveMetrics": 4,
+   "LogEntryCollection": 4,
+   "?": 3,
+   "ManagerAccount": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "HpePowerMeter": 3,
+   "ComponentIntegrity": 3,
+   "PortCollection": 3,
+   "HpeWorkloadPerformanceAdvisor": 3,
+   "HpeComponent": 3,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "JsonSchemaFileCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1,
+   "HpeiLOAccountCertificateMapCollection": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 476,
+   "JsonSchemaFile": 260,
+   "Sensor": 44,
+   "MetricReportDefinition": 41,
+   "Certificate": 34,
+   "MetricReport": 33,
+   "Memory": 32,
+   "CertificateCollection": 28,
+   "Port": 28,
+   "SoftwareInventory": 25,
+   "MetricDefinition": 22,
+   "BootOption": 20,
+   "Assembly": 17,
+   "PCIeFunction": 17,
+   "NetworkDeviceFunction": 16,
+   "MessageRegistryFile": 14,
+   "HpeServerDevice": 12,
+   "NetworkAdapter": 12,
+   "PCIeDevice": 12,
+   "PCIeFunctionCollection": 12,
+   "Fan": 12,
+   "SecureBootDatabase": 12,
+   "EthernetInterface": 11,
+   "PortMetrics": 10,
+   "HpeiLOSecurityParam": 10,
+   "Signature": 10,
+   "HpeUSBPort": 10,
+   "PortCollection": 9,
+   "NetworkDeviceFunctionMetrics": 8,
+   "Drive": 8,
+   "HpeServerPciDevice": 8,
+   "SignatureCollection": 8,
+   "HpeServerPCISlot": 7,
+   "NetworkDeviceFunctionCollection": 6,
+   "NetworkInterface": 6,
+   "Triggers": 6,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "EnvironmentMetrics": 5,
+   "LogService": 5,
+   "LogEntryCollection": 5,
+   "NetworkAdapterMetrics": 4,
+   "DriveMetrics": 4,
+   "?": 3,
+   "ManagerAccount": 3,
+   "KeyCollection": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "HpePowerMeter": 3,
+   "ComponentIntegrity": 3,
+   "HpeWorkloadPerformanceAdvisor": 3,
+   "HpeComponent": 3,
+   "ManagerAccountCollection": 2,
+   "Chassis": 2,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "HpeCertificateCollection": 2,
+   "JsonSchemaFileCollection": 2,
+   "EthernetInterfaceCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "Processor": 2,
+   "Volume": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeComponentUpdateEntryCollection": 2,
+   "SoftwareInventoryCollection": 2,
+   "Bios": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1,
+   "HpeiLOAccountCertificateMapCollection": 1,
+   "CertificateService": 1,
+   "CertificateEnrollmentCollection": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1
+  },
+  "manifest": {
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "discovered": 1907,
+   "fetched_ok": 1501,
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "auth_mode": "session",
+   "incomplete_reasons": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.90 (08/20/2026)"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.18.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1356,
+   "exposed": null
+  },
+  "elapsed_s": 1.5
+ },
+ {
+  "server": "dl380_gen12_03",
+  "resources": 1696,
+  "by_kind": {
+   "raw": 9,
+   "json": 1202,
+   "manifest-only": 485
+  },
+  "by_bucket": {
+   "ok": 1211,
+   "absent": 91,
+   "not_gettable": 3,
+   "rejected": 281,
+   "skipped": 110
+  },
+  "by_status": {
+   "None": 118,
+   "200": 1203,
+   "404": 91,
+   "405": 3,
+   "400": 5,
+   "406": 276
+  },
+  "by_classification": {
+   "binary_or_non_json": 9,
+   "exists_untouched": 1067,
+   "exists": 79,
+   "not_mounted_or_empty": 56,
+   "not_supported": 94,
+   "rejected": 281,
+   "excluded_or_skipped_policy": 110
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 80,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 478,
+   "JsonSchemaFile": 260,
+   "Sensor": 44,
+   "Certificate": 22,
+   "MessageRegistryFile": 14,
+   "Assembly": 13,
+   "Fan": 12,
+   "BootOption": 12,
+   "SecureBootDatabase": 12,
+   "HpeServerDevice": 10,
+   "HpeiLOSecurityParam": 10,
+   "HpeUSBPort": 10,
+   "CertificateCollection": 9,
+   "HpeServerPCISlot": 7,
+   "HpeComponent": 7,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "Port": 5,
+   "PCIeFunction": 5,
+   "LogService": 5,
+   "PCIeDevice": 4,
+   "PCIeFunctionCollection": 4,
+   "LogEntryCollection": 4,
+   "HpeServerPciDevice": 4,
+   "?": 3,
+   "ManagerAccount": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "HpePowerMeter": 3,
+   "NetworkAdapter": 2,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "JsonSchemaFileCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "NetworkInterface": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1,
+   "HpeiLOAccountCertificateMapCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "HpeServerDeviceCollection": 1,
+   "EnvironmentMetrics": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "PowerSubsystem": 1,
+   "PowerSupplyCollection": 1,
+   "SensorCollection": 1,
+   "ThermalSubsystem": 1,
+   "FanCollection": 1,
+   "ThermalMetrics": 1,
+   "ComponentIntegrityCollection": 1,
+   "ComponentIntegrity": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 478,
+   "JsonSchemaFile": 260,
+   "Sensor": 44,
+   "Memory": 32,
+   "CertificateCollection": 28,
+   "Certificate": 22,
+   "MessageRegistryFile": 14,
+   "Assembly": 13,
+   "SoftwareInventory": 13,
+   "Fan": 12,
+   "BootOption": 12,
+   "SecureBootDatabase": 12,
+   "HpeServerDevice": 10,
+   "HpeiLOSecurityParam": 10,
+   "HpeUSBPort": 10,
+   "Port": 9,
+   "SignatureCollection": 8,
+   "EthernetInterface": 7,
+   "HpeServerPCISlot": 7,
+   "HpeComponent": 7,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "PCIeFunction": 5,
+   "LogService": 5,
+   "LogEntryCollection": 5,
+   "NetworkAdapter": 4,
+   "PCIeDevice": 4,
+   "PCIeFunctionCollection": 4,
+   "HpeServerPciDevice": 4,
+   "?": 3,
+   "ManagerAccount": 3,
+   "KeyCollection": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "PortCollection": 3,
+   "HpePowerMeter": 3,
+   "ManagerAccountCollection": 2,
+   "NetworkDeviceFunctionCollection": 2,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "HpeCertificateCollection": 2,
+   "JsonSchemaFileCollection": 2,
+   "EthernetInterfaceCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "NetworkInterface": 2,
+   "Processor": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeComponentUpdateEntryCollection": 2,
+   "SoftwareInventoryCollection": 2,
+   "Bios": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1,
+   "HpeiLOAccountCertificateMapCollection": 1,
+   "CertificateService": 1,
+   "CertificateEnrollmentCollection": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "Chassis": 1,
+   "HpeServerDeviceCollection": 1,
+   "EnvironmentMetrics": 1,
+   "HpeFallbackSensorCollection": 1,
+   "NetworkAdapterCollection": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "Power": 1,
+   "PowerSubsystem": 1,
+   "BatteryCollection": 1,
+   "PowerSupplyCollection": 1,
+   "SensorCollection": 1,
+   "Thermal": 1,
+   "ThermalSubsystem": 1,
+   "FanCollection": 1,
+   "PumpCollection": 1
+  },
+  "manifest": {
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "discovered": 1583,
+   "fetched_ok": 1208,
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "auth_mode": "session",
+   "incomplete_reasons": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.82 (06/26/2026)"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.17.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1121,
+   "exposed": null
+  },
+  "elapsed_s": 1.0
+ },
+ {
+  "server": "dl380_gen12_04",
+  "resources": 2327,
+  "by_kind": {
+   "raw": 10,
+   "json": 1783,
+   "manifest-only": 534
+  },
+  "by_bucket": {
+   "ok": 1793,
+   "absent": 144,
+   "not_gettable": 3,
+   "rejected": 277,
+   "skipped": 110
+  },
+  "by_status": {
+   "None": 119,
+   "200": 1784,
+   "404": 144,
+   "405": 3,
+   "406": 276,
+   "400": 1
+  },
+  "by_classification": {
+   "binary_or_non_json": 10,
+   "exists_untouched": 1595,
+   "exists": 143,
+   "not_mounted_or_empty": 45,
+   "not_supported": 147,
+   "rejected": 277,
+   "excluded_or_skipped_policy": 110
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 143,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 742,
+   "JsonSchemaFile": 260,
+   "Certificate": 46,
+   "Sensor": 44,
+   "MetricReportDefinition": 41,
+   "MetricReport": 33,
+   "MetricDefinition": 22,
+   "BootOption": 20,
+   "Assembly": 17,
+   "PCIeFunction": 17,
+   "Port": 16,
+   "CertificateCollection": 15,
+   "MessageRegistryFile": 14,
+   "HpeServerDevice": 12,
+   "PCIeDevice": 12,
+   "PCIeFunctionCollection": 12,
+   "Fan": 12,
+   "SecureBootDatabase": 12,
+   "PortMetrics": 10,
+   "HpeiLOSecurityParam": 10,
+   "Signature": 10,
+   "HpeUSBPort": 10,
+   "HpeComponent": 9,
+   "NetworkDeviceFunctionMetrics": 8,
+   "HpeServerPciDevice": 8,
+   "HpeServerPCISlot": 7,
+   "NetworkAdapter": 6,
+   "NetworkInterface": 6,
+   "Triggers": 6,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "EnvironmentMetrics": 5,
+   "LogService": 5,
+   "NetworkDeviceFunction": 4,
+   "NetworkAdapterMetrics": 4,
+   "DriveMetrics": 4,
+   "LogEntryCollection": 4,
+   "?": 3,
+   "ManagerAccount": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "HpePowerMeter": 3,
+   "PortCollection": 3,
+   "HpeWorkloadPerformanceAdvisor": 3,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "ComponentIntegrity": 2,
+   "JsonSchemaFileCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "SignatureCollection": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 742,
+   "JsonSchemaFile": 260,
+   "Certificate": 46,
+   "Sensor": 44,
+   "MetricReportDefinition": 41,
+   "MetricReport": 33,
+   "Memory": 32,
+   "CertificateCollection": 28,
+   "Port": 28,
+   "SoftwareInventory": 25,
+   "MetricDefinition": 22,
+   "BootOption": 20,
+   "Assembly": 17,
+   "PCIeFunction": 17,
+   "NetworkDeviceFunction": 16,
+   "MessageRegistryFile": 14,
+   "HpeServerDevice": 12,
+   "NetworkAdapter": 12,
+   "PCIeDevice": 12,
+   "PCIeFunctionCollection": 12,
+   "Fan": 12,
+   "SecureBootDatabase": 12,
+   "EthernetInterface": 11,
+   "PortMetrics": 10,
+   "HpeiLOSecurityParam": 10,
+   "Signature": 10,
+   "HpeUSBPort": 10,
+   "PortCollection": 9,
+   "HpeComponent": 9,
+   "NetworkDeviceFunctionMetrics": 8,
+   "Drive": 8,
+   "HpeServerPciDevice": 8,
+   "SignatureCollection": 8,
+   "HpeServerPCISlot": 7,
+   "NetworkDeviceFunctionCollection": 6,
+   "NetworkInterface": 6,
+   "Triggers": 6,
+   "HpeBaseConfigs": 6,
+   "Role": 5,
+   "EnvironmentMetrics": 5,
+   "LogService": 5,
+   "LogEntryCollection": 5,
+   "NetworkAdapterMetrics": 4,
+   "DriveMetrics": 4,
+   "?": 3,
+   "ManagerAccount": 3,
+   "KeyCollection": 3,
+   "HpeiLOAccountCertificateMap": 3,
+   "HpePowerMeter": 3,
+   "HpeWorkloadPerformanceAdvisor": 3,
+   "ManagerAccountCollection": 2,
+   "Chassis": 2,
+   "PowerSupply": 2,
+   "PowerSupplyMetrics": 2,
+   "ComponentIntegrity": 2,
+   "HpeCertificateCollection": 2,
+   "JsonSchemaFileCollection": 2,
+   "EthernetInterfaceCollection": 2,
+   "LogServiceCollection": 2,
+   "VirtualMedia": 2,
+   "Processor": 2,
+   "Volume": 2,
+   "HpeBundleUpdateReport": 2,
+   "HpeComponentUpdateEntryCollection": 2,
+   "SoftwareInventoryCollection": 2,
+   "Bios": 2,
+   "HpeServerBootSettings": 2,
+   "HpeiSCSISoftwareInitiator": 2,
+   "HpeNvmeOfSoftwareInitiator": 2,
+   "HpeServerConfigLock": 2,
+   "HpeTlsConfig": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "HpeDirectoryTest": 1,
+   "RoleCollection": 1,
+   "HpeiLOAccountCertificateMapCollection": 1,
+   "CertificateService": 1,
+   "CertificateEnrollmentCollection": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1
+  },
+  "manifest": {
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "discovered": 2214,
+   "fetched_ok": 1790,
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "auth_mode": "session",
+   "incomplete_reasons": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.82 (06/26/2026)"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.17.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1639,
+   "exposed": null
+  },
+  "elapsed_s": 1.8
+ },
+ {
+  "server": "sr650_v4_01",
+  "resources": 3129,
+  "by_kind": {
+   "json": 1899,
+   "raw": 234,
+   "manifest-only": 996
+  },
+  "by_bucket": {
+   "ok": 2133,
+   "absent": 894,
+   "not_gettable": 97,
+   "device_error": 1,
+   "excluded": 1,
+   "skipped": 3
+  },
+  "by_status": {
+   "200": 2133,
+   "404": 894,
+   "405": 97,
+   "500": 1,
+   "None": 4
+  },
+  "by_classification": {
+   "exists_untouched": 1780,
+   "exists": 108,
+   "binary_or_non_json": 234,
+   "not_mounted_or_empty": 11,
+   "not_supported": 991,
+   "collect_error": 1,
+   "excluded_or_skipped_policy": 4
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 108,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 603,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "Job": 36,
+   "LenovoLED": 28,
+   "Sensor": 25,
+   "JobCollection": 17,
+   "Task": 16,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "VirtualMedia": 10,
+   "MessageRegistry": 9,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "MetricReport": 7,
+   "Fan": 6,
+   "Certificate": 5,
+   "PCIeFunction": 5,
+   "BootOption": 5,
+   "LogEntryCollection": 5,
+   "CertificateCollection": 4,
+   "Role": 4,
+   "LenovoBuiltInImageService": 4,
+   "MetricDefinition": 4,
+   "PCIeDevice": 3,
+   "PCIeFunctionCollection": 3,
+   "PowerSupply": 3,
+   "Chassis": 3,
+   "LenovoWatchdog": 3,
+   "ProcessorMetrics": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "EventDestination": 2,
+   "Session": 2,
+   "NetworkInterface": 2,
+   "SecureBoot": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "FastAccuratePowerService": 1,
+   "SensorCollection": 1,
+   "ThermalSubsystem": 1,
+   "FanCollection": 1,
+   "ThermalMetrics": 1,
+   "ComponentIntegrityCollection": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 603,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "Job": 36,
+   "Memory": 33,
+   "SoftwareInventory": 29,
+   "LenovoLED": 28,
+   "Sensor": 25,
+   "JobCollection": 17,
+   "Task": 16,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "VirtualMedia": 10,
+   "MessageRegistry": 9,
+   "EthernetInterface": 7,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "MetricReport": 7,
+   "CertificateCollection": 6,
+   "Fan": 6,
+   "LogEntryCollection": 6,
+   "Certificate": 5,
+   "Port": 5,
+   "PCIeFunction": 5,
+   "BootOption": 5,
+   "Role": 4,
+   "Chassis": 4,
+   "NetworkDeviceFunction": 4,
+   "LenovoBuiltInImageService": 4,
+   "Drive": 4,
+   "MetricDefinition": 4,
+   "PortCollection": 3,
+   "PCIeDevice": 3,
+   "PCIeFunctionCollection": 3,
+   "PowerSupply": 3,
+   "EthernetInterfaceCollection": 3,
+   "LenovoWatchdog": 3,
+   "ProcessorMetrics": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "KeyCollection": 2,
+   "NetworkAdapter": 2,
+   "NetworkDeviceFunctionCollection": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "EventDestination": 2,
+   "ManagerNetworkProtocol": 2,
+   "LenovoGroupMemberCollection": 2,
+   "Session": 2,
+   "StorageCollection": 2,
+   "ComputerSystem": 2,
+   "Bios": 2,
+   "MemoryCollection": 2,
+   "NetworkInterface": 2,
+   "Processor": 2,
+   "SecureBoot": 2,
+   "VolumeCollection": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "AggregationSourceCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "NetworkAdapterCollection": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "Power": 1,
+   "FastAccuratePowerService": 1,
+   "SensorCollection": 1
+  },
+  "manifest": {
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "discovered": 3122,
+   "fetched_ok": 2130,
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "auth_mode": "session",
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20L-1.50"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1790,
+   "exposed": null
+  },
+  "elapsed_s": 2.4
+ },
+ {
+  "server": "sr650_v4_02",
+  "resources": 3242,
+  "by_kind": {
+   "json": 2011,
+   "raw": 234,
+   "manifest-only": 997
+  },
+  "by_bucket": {
+   "ok": 2245,
+   "absent": 894,
+   "not_gettable": 98,
+   "device_error": 1,
+   "excluded": 1,
+   "skipped": 3
+  },
+  "by_status": {
+   "200": 2245,
+   "404": 894,
+   "405": 98,
+   "500": 1,
+   "None": 4
+  },
+  "by_classification": {
+   "exists_untouched": 1875,
+   "exists": 123,
+   "binary_or_non_json": 234,
+   "not_mounted_or_empty": 13,
+   "not_supported": 992,
+   "collect_error": 1,
+   "excluded_or_skipped_policy": 4
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 125,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 681,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "Job": 36,
+   "LenovoLED": 28,
+   "Sensor": 25,
+   "JobCollection": 17,
+   "Task": 16,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "VirtualMedia": 10,
+   "PCIeFunction": 9,
+   "MessageRegistry": 9,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "MetricReport": 7,
+   "Fan": 6,
+   "Certificate": 5,
+   "PCIeDevice": 5,
+   "PCIeFunctionCollection": 5,
+   "Chassis": 5,
+   "BootOption": 5,
+   "LogEntryCollection": 5,
+   "CertificateCollection": 4,
+   "Role": 4,
+   "LenovoBuiltInImageService": 4,
+   "NetworkInterface": 4,
+   "MetricDefinition": 4,
+   "PowerSupply": 3,
+   "LenovoWatchdog": 3,
+   "Session": 3,
+   "ProcessorMetrics": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "EventDestination": 2,
+   "SecureBoot": 2,
+   "StoragePool": 2,
+   "VolumeCollection": 2,
+   "Capacity": 2,
+   "DriveCollection": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "FastAccuratePowerService": 1,
+   "SensorCollection": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 681,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "Job": 36,
+   "Memory": 33,
+   "SoftwareInventory": 31,
+   "LenovoLED": 28,
+   "Sensor": 25,
+   "JobCollection": 17,
+   "Task": 16,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "EthernetInterface": 11,
+   "VirtualMedia": 10,
+   "Port": 9,
+   "PCIeFunction": 9,
+   "MessageRegistry": 9,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "MetricReport": 7,
+   "CertificateCollection": 6,
+   "Chassis": 6,
+   "Fan": 6,
+   "LogEntryCollection": 6,
+   "Certificate": 5,
+   "PortCollection": 5,
+   "PCIeDevice": 5,
+   "PCIeFunctionCollection": 5,
+   "BootOption": 5,
+   "Role": 4,
+   "NetworkAdapter": 4,
+   "NetworkDeviceFunctionCollection": 4,
+   "NetworkDeviceFunction": 4,
+   "LenovoBuiltInImageService": 4,
+   "NetworkInterface": 4,
+   "Drive": 4,
+   "MetricDefinition": 4,
+   "PowerSupply": 3,
+   "EthernetInterfaceCollection": 3,
+   "LenovoWatchdog": 3,
+   "Session": 3,
+   "ProcessorMetrics": 3,
+   "VolumeCollection": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "KeyCollection": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "EventDestination": 2,
+   "ManagerNetworkProtocol": 2,
+   "LenovoGroupMemberCollection": 2,
+   "StorageCollection": 2,
+   "ComputerSystem": 2,
+   "Bios": 2,
+   "MemoryCollection": 2,
+   "Processor": 2,
+   "SecureBoot": 2,
+   "StoragePool": 2,
+   "Capacity": 2,
+   "DriveCollection": 2,
+   "Volume": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "AggregationSourceCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "NetworkAdapterCollection": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1
+  },
+  "manifest": {
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "discovered": 3235,
+   "fetched_ok": 2242,
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "auth_mode": "session",
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20L-1.50"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.04"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.04"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1885,
+   "exposed": null
+  },
+  "elapsed_s": 2.6
+ },
+ {
+  "server": "sr650_v4_03",
+  "resources": 3717,
+  "by_kind": {
+   "json": 2488,
+   "raw": 234,
+   "manifest-only": 995
+  },
+  "by_bucket": {
+   "ok": 2722,
+   "absent": 894,
+   "not_gettable": 96,
+   "device_error": 1,
+   "excluded": 1,
+   "skipped": 3
+  },
+  "by_status": {
+   "200": 2722,
+   "404": 894,
+   "405": 96,
+   "500": 1,
+   "None": 4
+  },
+  "by_classification": {
+   "exists_untouched": 2318,
+   "exists": 157,
+   "binary_or_non_json": 234,
+   "not_mounted_or_empty": 13,
+   "not_supported": 990,
+   "collect_error": 1,
+   "excluded_or_skipped_policy": 4
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 159,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 1095,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "Sensor": 39,
+   "Job": 39,
+   "LenovoLED": 28,
+   "JobCollection": 17,
+   "Task": 16,
+   "PCIeFunction": 15,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "VirtualMedia": 10,
+   "MessageRegistry": 9,
+   "PCIeDevice": 8,
+   "PCIeFunctionCollection": 8,
+   "Chassis": 8,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "NetworkInterface": 7,
+   "MetricReport": 7,
+   "Fan": 6,
+   "Certificate": 5,
+   "BootOption": 5,
+   "LogEntryCollection": 5,
+   "CertificateCollection": 4,
+   "Role": 4,
+   "LenovoBuiltInImageService": 4,
+   "MetricDefinition": 4,
+   "PowerSupply": 3,
+   "LenovoWatchdog": 3,
+   "ProcessorMetrics": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "Session": 2,
+   "SecureBoot": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "FastAccuratePowerService": 1,
+   "SensorCollection": 1,
+   "ThermalSubsystem": 1,
+   "FanCollection": 1,
+   "ThermalMetrics": 1,
+   "ComponentIntegrityCollection": 1,
+   "ComponentIntegrity": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 1095,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "SoftwareInventory": 41,
+   "Sensor": 39,
+   "Job": 39,
+   "Memory": 33,
+   "LenovoLED": 28,
+   "JobCollection": 17,
+   "EthernetInterface": 17,
+   "Task": 16,
+   "Port": 15,
+   "PCIeFunction": 15,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "NetworkDeviceFunction": 10,
+   "VirtualMedia": 10,
+   "Chassis": 9,
+   "MessageRegistry": 9,
+   "PortCollection": 8,
+   "PCIeDevice": 8,
+   "PCIeFunctionCollection": 8,
+   "NetworkAdapter": 7,
+   "NetworkDeviceFunctionCollection": 7,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "NetworkInterface": 7,
+   "MetricReport": 7,
+   "CertificateCollection": 6,
+   "Fan": 6,
+   "LogEntryCollection": 6,
+   "Certificate": 5,
+   "BootOption": 5,
+   "Role": 4,
+   "LenovoBuiltInImageService": 4,
+   "MetricDefinition": 4,
+   "PowerSupply": 3,
+   "EthernetInterfaceCollection": 3,
+   "LenovoWatchdog": 3,
+   "ProcessorMetrics": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "KeyCollection": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "ManagerNetworkProtocol": 2,
+   "LenovoGroupMemberCollection": 2,
+   "Session": 2,
+   "StorageCollection": 2,
+   "ComputerSystem": 2,
+   "Bios": 2,
+   "MemoryCollection": 2,
+   "Processor": 2,
+   "SecureBoot": 2,
+   "Drive": 2,
+   "VolumeCollection": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "AggregationSourceCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "NetworkAdapterCollection": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "Power": 1,
+   "FastAccuratePowerService": 1,
+   "SensorCollection": 1,
+   "Thermal": 1
+  },
+  "manifest": {
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "discovered": 3710,
+   "fetched_ok": 2719,
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "auth_mode": "session",
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20P-1.51"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "4.90 (0x80021365)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "4.90 (0x80021365)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "4.90 (0x80021362)"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.02"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.02"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "4.90 (0x80021362)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "4.90 (0x80021362)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "096A1365.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "096A1365.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "096A1362.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "00000004.00000004.50000001.00000157.0000"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "096A1362.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "00000004.00000004.50000001.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "096A1362.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "00000004.00000004.50000001.00000157.0000"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 2328,
+   "exposed": null
+  },
+  "elapsed_s": 2.9
+ },
+ {
+  "server": "sr650_v4_04",
+  "resources": 3090,
+  "by_kind": {
+   "json": 1859,
+   "raw": 234,
+   "manifest-only": 997
+  },
+  "by_bucket": {
+   "ok": 2093,
+   "absent": 894,
+   "not_gettable": 98,
+   "device_error": 1,
+   "excluded": 1,
+   "skipped": 3
+  },
+  "by_status": {
+   "200": 2093,
+   "404": 894,
+   "405": 98,
+   "500": 1,
+   "None": 4
+  },
+  "by_classification": {
+   "exists_untouched": 1735,
+   "exists": 113,
+   "binary_or_non_json": 234,
+   "not_mounted_or_empty": 11,
+   "not_supported": 992,
+   "collect_error": 1,
+   "excluded_or_skipped_policy": 4
+  },
+  "json_parse_fail_2xx": [],
+  "requested_tier1_distinct": 113,
+  "requested_but_not_in_mirror": [],
+  "odata_types_untouched": {
+   "LogEntry": 548,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "Job": 36,
+   "Sensor": 31,
+   "LenovoLED": 28,
+   "JobCollection": 17,
+   "Task": 16,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "VirtualMedia": 10,
+   "MessageRegistry": 9,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "MetricReport": 7,
+   "Fan": 6,
+   "Certificate": 5,
+   "PCIeFunction": 5,
+   "BootOption": 5,
+   "LogEntryCollection": 5,
+   "CertificateCollection": 4,
+   "Role": 4,
+   "LenovoBuiltInImageService": 4,
+   "MetricDefinition": 4,
+   "PCIeDevice": 3,
+   "PCIeFunctionCollection": 3,
+   "PowerSupply": 3,
+   "Chassis": 3,
+   "LenovoWatchdog": 3,
+   "ProcessorMetrics": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "EventDestination": 2,
+   "Session": 2,
+   "NetworkInterface": 2,
+   "SecureBoot": 2,
+   "StoragePool": 2,
+   "VolumeCollection": 2,
+   "Capacity": 2,
+   "DriveCollection": 2,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1,
+   "PCIeSlots": 1,
+   "FastAccuratePowerService": 1,
+   "SensorCollection": 1
+  },
+  "odata_types_all": {
+   "LogEntry": 548,
+   "?": 408,
+   "JsonSchemaFile": 390,
+   "Job": 36,
+   "Memory": 33,
+   "Sensor": 31,
+   "SoftwareInventory": 31,
+   "LenovoLED": 28,
+   "JobCollection": 17,
+   "Task": 16,
+   "LenovoPortForwardingMap": 15,
+   "MetricReportDefinition": 14,
+   "MessageRegistryFile": 13,
+   "LenovoHistoryMetricValueContainer": 13,
+   "VirtualMedia": 10,
+   "MessageRegistry": 9,
+   "EthernetInterface": 7,
+   "ActionInfo": 7,
+   "LogService": 7,
+   "MetricReport": 7,
+   "CertificateCollection": 6,
+   "Fan": 6,
+   "LogEntryCollection": 6,
+   "Drive": 6,
+   "Certificate": 5,
+   "Port": 5,
+   "PCIeFunction": 5,
+   "BootOption": 5,
+   "Role": 4,
+   "Chassis": 4,
+   "NetworkDeviceFunction": 4,
+   "LenovoBuiltInImageService": 4,
+   "MetricDefinition": 4,
+   "PortCollection": 3,
+   "PCIeDevice": 3,
+   "PCIeFunctionCollection": 3,
+   "PowerSupply": 3,
+   "EthernetInterfaceCollection": 3,
+   "LenovoWatchdog": 3,
+   "ProcessorMetrics": 3,
+   "VolumeCollection": 3,
+   "AttributeRegistry": 3,
+   "ManagerAccount": 2,
+   "KeyCollection": 2,
+   "NetworkAdapter": 2,
+   "NetworkDeviceFunctionCollection": 2,
+   "PowerSubsystem": 2,
+   "PowerSupplyCollection": 2,
+   "PowerSupplyMetrics": 2,
+   "EventDestination": 2,
+   "ManagerNetworkProtocol": 2,
+   "LenovoGroupMemberCollection": 2,
+   "Session": 2,
+   "StorageCollection": 2,
+   "ComputerSystem": 2,
+   "Bios": 2,
+   "MemoryCollection": 2,
+   "NetworkInterface": 2,
+   "Processor": 2,
+   "SecureBoot": 2,
+   "StoragePool": 2,
+   "Capacity": 2,
+   "DriveCollection": 2,
+   "Volume": 2,
+   "ServiceRoot": 1,
+   "AccountService": 1,
+   "ManagerAccountCollection": 1,
+   "RoleCollection": 1,
+   "AggregationService": 1,
+   "AggregationSourceCollection": 1,
+   "CertificateService": 1,
+   "CertificateLocations": 1,
+   "ChassisCollection": 1,
+   "ControlCollection": 1,
+   "Control": 1,
+   "EnvironmentMetrics": 1,
+   "NetworkAdapterCollection": 1,
+   "LenovoLEDCollection": 1,
+   "LenovoSysVpd": 1,
+   "PCIeDeviceCollection": 1
+  },
+  "manifest": {
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "discovered": 3083,
+   "fetched_ok": 2090,
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "auth_mode": "session",
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20L-1.50"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ]
+  },
+  "coverage_tool": {
+   "requested": null,
+   "untouched": 1745,
+   "exposed": null
+  },
+  "elapsed_s": 2.2
+ }
+]

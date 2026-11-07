@@ -1,0 +1,684 @@
+# 132칸 재판정 보조표
+
+- 분석 Round: `tests/evidence/2026-10-26-redfish-mock2-audit/coverage/coverage-132.json` · 구현 재판정: `tests/evidence/2026-10-27-redfish-mock2-impl/coverage-132-after.json`
+- 내 봉투: after `C:/Users/hshwa/AppData/Local/Temp/claude/C--github-ClovirONE-clovirone-server-gathering/02a5d5b7-d6b8-44e6-a90d-053073c90f95/scratchpad/tier1_after` · before `tests/evidence/2026-10-27-redfish-mock2-impl/tier1-before`
+
+## 상태 전이 (분석 Round → 구현 재판정)
+
+- ISSUE → ISSUE: 2
+- ISSUE → MOCK_LIMITATION: 2
+- ISSUE → PASS: 73
+- NOT_APPLICABLE → NOT_APPLICABLE: 8
+- PASS → PASS: 47
+
+- 합계 132
+
+## cpu
+
+- **csus3200_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 4, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 4, "cores": 64}`
+  - 구현 근거: (종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=4 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"manufacturer(사전 선언·미발행)": "ISSUE"}
+- **csus3200_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 4, "cores": 112}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 4, "cores": 112}`
+  - 구현 근거: logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=4 cores=112
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_threads": "ISSUE", "manufacturer(사전 선언·미발행)": "ISSUE"}
+- **csus3200_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 4, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 4, "cores": 64}`
+  - 구현 근거: (종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=4 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"manufacturer(사전 선언·미발행)": "ISSUE"}
+- **dl380_gen12_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: (종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"manufacturer(사전 선언·미발행)": "ISSUE"}
+- **dl380_gen12_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: (종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"manufacturer(사전 선언·미발행)": "ISSUE"}
+- **dl380_gen12_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_threads": "ISSUE", "manufacturer(사전 선언·미발행)": "ISSUE"}
+- **dl380_gen12_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: (종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"manufacturer(사전 선언·미발행)": "ISSUE"}
+- **sr650_v4_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_threads": "ISSUE", "manufacturer(사전 선언·미발행)": "ISSUE"}
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_threads": "ISSUE", "manufacturer(사전 선언·미발행)": "ISSUE"}
+- **sr650_v4_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: (종전 PASS 유지) logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"manufacturer(사전 선언·미발행)": "ISSUE"}
+- **sr650_v4_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"logical_threads_any": true, "manufacturer": null, "sockets": 2, "cores": 64}`
+  - 내 after : `{"logical_threads_any": false, "manufacturer": "Intel", "sockets": 2, "cores": 64}`
+  - 구현 근거: logical_threads 키 없음(FIX 1) · manufacturer='Intel'(FIX 2) · sockets=2 cores=64
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_threads": "ISSUE", "manufacturer(사전 선언·미발행)": "ISSUE"}
+
+## system
+
+- **csus3200_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": "yicdspdb01", "hostname_source": "system"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": "yicdspdb01", "hostname_source": "system"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname='yicdspdb01' (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **csus3200_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": "yicgsfabap01", "hostname_source": "system"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": "yicgsfabap01", "hostname_source": "system"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname='yicgsfabap01' (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **csus3200_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": "yicgsfabdb01", "hostname_source": "system"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": "yicgsfabdb01", "hostname_source": "system"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname='yicgsfabdb01' (FIX 4 — not_supported 유지 + 원천(RMC 이름 정책) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **dl380_gen12_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": "yicesxmgmt05", "hostname_source": "system"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": "yicesxmgmt05", "hostname_source": "system"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname='yicesxmgmt05' (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **dl380_gen12_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **dl380_gen12_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **dl380_gen12_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **sr650_v4_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **sr650_v4_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+- **sr650_v4_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 내 after : `{"sections.system": "not_supported", "hostname": null, "hostname_source": "bmc"}`
+  - 구현 근거: sections.system=not_supported · data.system.hostname=None (FIX 4 — not_supported 유지 + 원천(ComputerSystem `HostName`) 있을 때만 hostname 발행, HostOS 승격 없음; 01-hardware-002 health 는 hardware 칸)
+
+## network
+
+- **csus3200_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **csus3200_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 4, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 4, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 4 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=4
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **csus3200_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **dl380_gen12_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 10, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown", "up"], "if_speed": ["None"], "adapters": 7, "ports": 14, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 10, "eight_octet_in_if": 0, "mtu": ["1500"], "if_link": ["down", "up"], "if_speed": ["None"], "adapters": 7, "ports": 14, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 10 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=10
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **dl380_gen12_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown", "up"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["down", "up"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **dl380_gen12_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"interfaces": 4, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 4, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 1}`
+  - 구현 근거: 전원 Off notice 에 '네트워크' 포함(2026-10-28 R3 `ac368a4b` — 새 Tier 1 봉투) · interfaces 4(link unknown) · adapters 2 · ports 4 — network 값은 before = after, 칸 근거는 notice 문구 (03-storage-001 (a); 2026-10-28 근거 교체)
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **dl380_gen12_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["up"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 8, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["up"], "if_speed": ["None"], "adapters": 6, "ports": 12, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 8 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=8
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **sr650_v4_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 5, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["0", "25600", "None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 5, "eight_octet_in_if": 0, "mtu": ["1500", "None"], "if_link": ["down", "unknown", "up"], "if_speed": ["0", "25600", "None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 4건(03-network-002, 2026-10-28 — 칸 판정 기준 밖)
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"interfaces": 9, "eight_octet_in_if": 4, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["0", "25600", "None"], "adapters": 4, "ports": 8, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 5, "eight_octet_in_if": 0, "mtu": ["1500", "None"], "if_link": ["down", "unknown", "up"], "if_speed": ["0", "25600", "None"], "adapters": 4, "ports": 8, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 3건(03-network-002, 2026-10-28 — 칸 판정 기준 밖) · 링크 미확정 1 NIC 잔여(NIC6 — 03-network-002 HOLD)
+  - 분석 Round 칸 내 비-PASS 필드: {"interfaces": "ISSUE", "summary": "ISSUE", "driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **sr650_v4_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"interfaces": 15, "eight_octet_in_if": 4, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["0", "25600", "32768", "None"], "adapters": 7, "ports": 14, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 11, "eight_octet_in_if": 0, "mtu": ["1500", "None"], "if_link": ["unknown", "up"], "if_speed": ["25600", "None"], "adapters": 7, "ports": 14, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: interfaces 11 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=11 · link 보충 10건(03-network-002, 2026-10-28 — 칸 판정 기준 밖)
+  - 분석 Round 칸 내 비-PASS 필드: {"interfaces": "ISSUE", "summary": "ISSUE", "driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+- **sr650_v4_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"interfaces": 5, "eight_octet_in_if": 0, "mtu": ["None"], "if_link": ["unknown"], "if_speed": ["0", "25600", "None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 내 after : `{"interfaces": 5, "eight_octet_in_if": 0, "mtu": ["1500", "None"], "if_link": ["down", "unknown", "up"], "if_speed": ["0", "25600", "None"], "adapters": 2, "ports": 4, "port_speed0": 0, "ipv6_addr": 0, "power_off_notice": 0}`
+  - 구현 근거: (종전 PASS 유지) interfaces 5 · FC/8옥텟 주소 혼입 0 (INV-5) · port_count=5 · link 보충 3건(03-network-002, 2026-10-28 — 칸 판정 기준 밖) · 링크 미확정 1 NIC 잔여(NIC4 — 03-network-002 HOLD)
+  - 분석 Round 칸 내 비-PASS 필드: {"driver_map": "NOT_APPLICABLE", "portgroups": "NOT_APPLICABLE", "virtual_switches": "NOT_APPLICABLE"}
+
+## storage
+
+- **csus3200_01** [ISSUE→MOCK_LIMITATION] (impl before=ISSUE)
+  - 내 before: `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 0, "link_missing_notices": 2, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 2, "link_missing_notices": 2, "wwn": 0, "controllers": 1}`
+  - 구현 근거: hbas 4 link_status down True · 카드 조건 notice 2건(A안, 값 불변) — 포트 단위 링크는 RMC 가 주지 않아 재생으로 확정 불가
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_volumes": "NOT_APPLICABLE", "hbas": "ISSUE", "datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **csus3200_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 4, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 4, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) FC HBA 없음(hbas 0 · 노출 0, 개수 정합) · disks=4
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_volumes": "NOT_APPLICABLE", "datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **csus3200_03** [ISSUE→MOCK_LIMITATION] (impl before=ISSUE)
+  - 내 before: `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 0, "link_missing_notices": 2, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 2, "link_missing_notices": 2, "wwn": 0, "controllers": 1}`
+  - 구현 근거: hbas 4 link_status down True · 카드 조건 notice 2건(A안, 값 불변) — 포트 단위 링크는 RMC 가 주지 않아 재생으로 확정 불가
+  - 분석 Round 칸 내 비-PASS 필드: {"logical_volumes": "NOT_APPLICABLE", "hbas": "ISSUE", "datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **dl380_gen12_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 2, "hbas": 4, "hba_link": ["down", "up"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 2, "hbas": 4, "hba_link": ["down", "up"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 2, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) disks=2 hbas=4
+  - 분석 Round 칸 내 비-PASS 필드: {"datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **dl380_gen12_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 4, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) disks=4 hbas=4
+  - 분석 Round 칸 내 비-PASS 필드: {"datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **dl380_gen12_03** [ISSUE→ISSUE] (impl before=ISSUE)
+  - 내 before: `{"disks": 0, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 0}`
+  - 내 after : `{"disks": 0, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 0}`
+  - 구현 근거: 03-storage-001 (b) controllers 보강 HOLD(사용자 결정) — (a) 전원 Off notice 있음, storage 컬렉션 0건은 placeholder 없이 0 유지(disks=0)
+  - 분석 Round 칸 내 비-PASS 필드: {"controllers": "ISSUE", "physical_disks": "ISSUE", "logical_volumes": "ISSUE", "summary": "ISSUE", "datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **dl380_gen12_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 4, "hbas": 4, "hba_link": ["down", "up"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 4, "hbas": 4, "hba_link": ["down", "up"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 4, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) disks=4 hbas=4
+  - 분석 Round 칸 내 비-PASS 필드: {"datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **sr650_v4_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 4, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 4, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) disks=4 hbas=0
+  - 분석 Round 칸 내 비-PASS 필드: {"datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **sr650_v4_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 4, "hbas": 4, "hba_link": ["down"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) disks=4 hbas=4
+  - 분석 Round 칸 내 비-PASS 필드: {"datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **sr650_v4_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 2, "hbas": 4, "hba_link": ["down", "up"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 2, "hbas": 4, "hba_link": ["down", "up"], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) disks=2 hbas=4
+  - 분석 Round 칸 내 비-PASS 필드: {"datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+- **sr650_v4_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"disks": 6, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 내 after : `{"disks": 6, "hbas": 0, "hba_link": [], "card_cond_notices": 0, "link_missing_notices": 0, "wwn": 0, "controllers": 1}`
+  - 구현 근거: (종전 PASS 유지) disks=6 hbas=0
+  - 분석 Round 칸 내 비-PASS 필드: {"datastores": "NOT_APPLICABLE", "filesystems": "NOT_APPLICABLE", "infiniband": "NOT_APPLICABLE"}
+
+## memory
+
+- **csus3200_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"slots": 32, "rank": ["None"], "locator_ex": ["rack1/chassis_u1/cpu0/dimmA0", "rack1/chassis_u1/cpu2/dimmA0"], "speed": ["3200"], "zero_cap_slots": 0, "total_mb": 1048576}`
+  - 내 after : `{"slots": 32, "rank": ["1"], "locator_ex": ["rack1/chassis_u1/cpu0/dimmA0", "rack1/chassis_u1/cpu2/dimmA0"], "speed": ["3200"], "zero_cap_slots": 0, "total_mb": 1048576}`
+  - 구현 근거: slots 32 rank_count=[1] (02-memory-004) · speed_mhz 원값 보존(FIX 3 문서) · total_basis 관찰
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE", "summary": "ISSUE"}
+- **csus3200_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"slots": 16, "rank": ["None"], "locator_ex": ["rack1/chassis_u1/cpu0/dimmA0", "rack1/chassis_u1/cpu2/dimmA0"], "speed": ["3200"], "zero_cap_slots": 0, "total_mb": 524288}`
+  - 내 after : `{"slots": 16, "rank": ["1"], "locator_ex": ["rack1/chassis_u1/cpu0/dimmA0", "rack1/chassis_u1/cpu2/dimmA0"], "speed": ["3200"], "zero_cap_slots": 0, "total_mb": 524288}`
+  - 구현 근거: slots 16 rank_count=[1] (02-memory-004) · speed_mhz 원값 보존(FIX 3 문서) · total_basis 관찰
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE", "summary": "ISSUE"}
+- **csus3200_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"slots": 16, "rank": ["None"], "locator_ex": ["rack1/chassis_u1/cpu0/dimmA0", "rack1/chassis_u1/cpu2/dimmA0"], "speed": ["3200"], "zero_cap_slots": 0, "total_mb": 524288}`
+  - 내 after : `{"slots": 16, "rank": ["1"], "locator_ex": ["rack1/chassis_u1/cpu0/dimmA0", "rack1/chassis_u1/cpu2/dimmA0"], "speed": ["3200"], "zero_cap_slots": 0, "total_mb": 524288}`
+  - 구현 근거: slots 16 rank_count=[1] (02-memory-004) · speed_mhz 원값 보존(FIX 3 문서) · total_basis 관찰
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE", "summary": "ISSUE"}
+- **dl380_gen12_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"slots": 16, "rank": ["2"], "locator_ex": ["PROC 1 DIMM 1", "PROC 1 DIMM 3"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 1572864}`
+  - 내 after : `{"slots": 16, "rank": ["2"], "locator_ex": ["PROC 1 DIMM 1", "PROC 1 DIMM 3"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 1572864}`
+  - 구현 근거: (종전 PASS 유지) slots 16
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE"}
+- **dl380_gen12_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"slots": 8, "rank": ["2"], "locator_ex": ["PROC 1 DIMM 3", "PROC 1 DIMM 7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 262144}`
+  - 내 after : `{"slots": 8, "rank": ["2"], "locator_ex": ["PROC 1 DIMM 3", "PROC 1 DIMM 7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 262144}`
+  - 구현 근거: (종전 PASS 유지) slots 8
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE"}
+- **dl380_gen12_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"slots": 32, "rank": ["2", "None"], "locator_ex": ["PROC 1 DIMM 1", "PROC 1 DIMM 2"], "speed": ["6400", "None"], "zero_cap_slots": 16, "total_mb": 524288}`
+  - 내 after : `{"slots": 16, "rank": ["2"], "locator_ex": ["PROC 1 DIMM 1", "PROC 1 DIMM 3"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 524288}`
+  - 구현 근거: slots 16 (빈 슬롯 제외, 종전 32) · 빈 placeholder 0 (02-memory-001)
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE"}
+- **dl380_gen12_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"slots": 8, "rank": ["2"], "locator_ex": ["PROC 1 DIMM 3", "PROC 1 DIMM 7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 262144}`
+  - 내 after : `{"slots": 8, "rank": ["2"], "locator_ex": ["PROC 1 DIMM 3", "PROC 1 DIMM 7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 262144}`
+  - 구현 근거: (종전 PASS 유지) slots 8
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE"}
+- **sr650_v4_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"slots": 2, "rank": ["2"], "locator_ex": ["23", "7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 131072}`
+  - 내 after : `{"slots": 2, "rank": ["2"], "locator_ex": ["DIMM 23", "DIMM 7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 131072}`
+  - 구현 근거: (종전 PASS 유지) slots 2
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE"}
+- **sr650_v4_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"slots": 2, "rank": ["2"], "locator_ex": ["23", "7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 131072}`
+  - 내 after : `{"slots": 2, "rank": ["2"], "locator_ex": ["DIMM 23", "DIMM 7"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 131072}`
+  - 구현 근거: (종전 PASS 유지) slots 2
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE"}
+- **sr650_v4_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"slots": 16, "rank": ["2"], "locator_ex": ["32", "30"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 1048576}`
+  - 내 after : `{"slots": 16, "rank": ["2"], "locator_ex": ["DIMM 32", "DIMM 30"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 1048576}`
+  - 구현 근거: (종전 PASS 유지) slots 16
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE"}
+- **sr650_v4_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"slots": 8, "rank": ["2"], "locator_ex": ["30", "26"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 262144}`
+  - 내 after : `{"slots": 8, "rank": ["2"], "locator_ex": ["DIMM 30", "DIMM 26"], "speed": ["6400"], "zero_cap_slots": 0, "total_mb": 262144}`
+  - 구현 근거: (종전 PASS 유지) slots 8
+  - 분석 Round 칸 내 비-PASS 필드: {"free_mb": "NOT_APPLICABLE", "visible_mb": "NOT_APPLICABLE", "slots[]": "ISSUE"}
+
+## firmware
+
+- **csus3200_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 13, "categories": {"other": 4, "nic": 4, "storage_controller": 1, "psu": 4}, "pending_null_version": 0, "uefi_cat": [], "raid_like": []}`
+  - 내 after : `{"count": 13, "categories": {"other": 4, "nic": 4, "storage_controller": 1, "psu": 4}, "pending_null_version": 0, "uefi_cat": [], "raid_like": []}`
+  - 구현 근거: Partition0_FW/ComplexFW category=['other', 'other'] (구조 근거 없음 → other 유지, VALIDATED) · updateable null 허용(사전 boolean|null)
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].updateable": "ISSUE", "firmware[].category": "ISSUE"}
+- **csus3200_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 9, "categories": {"other": 2, "nic": 2, "storage_controller": 1, "psu": 4}, "pending_null_version": 0, "uefi_cat": [], "raid_like": []}`
+  - 내 after : `{"count": 9, "categories": {"other": 2, "nic": 2, "storage_controller": 1, "psu": 4}, "pending_null_version": 0, "uefi_cat": [], "raid_like": []}`
+  - 구현 근거: Partition0_FW/ComplexFW category=['other', 'other'] (구조 근거 없음 → other 유지, VALIDATED) · updateable null 허용(사전 boolean|null)
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].updateable": "ISSUE", "firmware[].category": "ISSUE"}
+- **csus3200_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 13, "categories": {"other": 4, "nic": 4, "storage_controller": 1, "psu": 4}, "pending_null_version": 0, "uefi_cat": [], "raid_like": []}`
+  - 내 after : `{"count": 13, "categories": {"other": 4, "nic": 4, "storage_controller": 1, "psu": 4}, "pending_null_version": 0, "uefi_cat": [], "raid_like": []}`
+  - 구현 근거: Partition0_FW/ComplexFW category=['other', 'other'] (구조 근거 없음 → other 유지, VALIDATED) · updateable null 허용(사전 boolean|null)
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].updateable": "ISSUE", "firmware[].category": "ISSUE"}
+- **dl380_gen12_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 25, "categories": {"bmc": 1, "bios": 1, "other": 10, "psu": 2, "tpm": 1, "nic": 5, "storage_controller": 1, "drive": 2, "backplane": 2}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=other"]}`
+  - 내 after : `{"count": 25, "categories": {"bmc": 1, "bios": 1, "other": 6, "cpld": 4, "psu": 2, "tpm": 1, "storage_controller": 1, "nic": 5, "drive": 2, "backplane": 2}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=storage_controller"]}`
+  - 구현 근거: MR4xxi category=['storage_controller'] · Embedded Video Controller category=['other'] (04-firmware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+- **dl380_gen12_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 25, "categories": {"bmc": 1, "bios": 1, "other": 9, "psu": 2, "tpm": 1, "nic": 4, "storage_controller": 1, "drive": 4, "backplane": 2}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=other"]}`
+  - 내 after : `{"count": 25, "categories": {"bmc": 1, "bios": 1, "other": 6, "cpld": 3, "psu": 2, "tpm": 1, "storage_controller": 1, "nic": 4, "drive": 4, "backplane": 2}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=storage_controller"]}`
+  - 구현 근거: MR4xxi category=['storage_controller'] · Embedded Video Controller category=['other'] (04-firmware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+- **dl380_gen12_03** [ISSUE→ISSUE] (impl before=ISSUE)
+  - 내 before: `{"count": 13, "categories": {"bmc": 1, "bios": 1, "other": 7, "tpm": 1, "nic": 2, "storage_controller": 1}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=other"]}`
+  - 내 after : `{"count": 13, "categories": {"bmc": 1, "bios": 1, "other": 5, "cpld": 3, "tpm": 1, "nic": 2}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=other"]}`
+  - 구현 근거: MR4xxi category=['other'] · Embedded Video Controller category=['other'] (04-firmware-002) — 전원 Off 호스트는 Storage 0건이라 controller 조인 근거가 없어 other(controllers=0; 03-storage-001 (b) HOLD 와 같은 원인)
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+- **dl380_gen12_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 25, "categories": {"bmc": 1, "bios": 1, "other": 9, "psu": 2, "tpm": 1, "nic": 4, "storage_controller": 1, "drive": 4, "backplane": 2}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=other"]}`
+  - 내 after : `{"count": 25, "categories": {"bmc": 1, "bios": 1, "other": 6, "cpld": 3, "psu": 2, "tpm": 1, "storage_controller": 1, "nic": 4, "drive": 4, "backplane": 2}, "pending_null_version": 0, "uefi_cat": [], "raid_like": ["HPE MR416i-o Gen11=storage_controller"]}`
+  - 구현 근거: MR4xxi category=['storage_controller'] · Embedded Video Controller category=['other'] (04-firmware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+- **sr650_v4_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 28, "categories": {"bmc": 3, "other": 6, "driver_pack": 2, "drive": 6, "nic": 8, "storage_controller": 1, "psu": 2}, "pending_null_version": 4, "uefi_cat": ["other"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"]}`
+  - 내 after : `{"count": 24, "categories": {"bmc": 2, "cpld": 1, "bios": 1, "other": 2, "driver_pack": 2, "drive": 4, "nic": 8, "storage_controller": 1, "backplane": 1, "psu": 2}, "pending_null_version": 0, "uefi_cat": ["bios"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapt`
+  - 구현 근거: UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 24
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].pending": "ISSUE", "firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 30, "categories": {"bmc": 3, "other": 8, "driver_pack": 2, "drive": 6, "nic": 8, "storage_controller": 1, "psu": 2}, "pending_null_version": 4, "uefi_cat": ["other"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"]}`
+  - 내 after : `{"count": 26, "categories": {"bmc": 2, "cpld": 1, "bios": 1, "other": 4, "driver_pack": 2, "drive": 4, "nic": 8, "storage_controller": 1, "backplane": 1, "psu": 2}, "pending_null_version": 0, "uefi_cat": ["bios"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapt`
+  - 구현 근거: UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 26
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].pending": "ISSUE", "firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+- **sr650_v4_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 40, "categories": {"bmc": 3, "other": 8, "driver_pack": 2, "drive": 4, "nic": 20, "storage_controller": 1, "psu": 2}, "pending_null_version": 4, "uefi_cat": ["other"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"]}`
+  - 내 after : `{"count": 36, "categories": {"bmc": 2, "cpld": 1, "bios": 1, "other": 4, "driver_pack": 2, "drive": 2, "nic": 20, "storage_controller": 1, "backplane": 1, "psu": 2}, "pending_null_version": 0, "uefi_cat": ["bios"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adap`
+  - 구현 근거: UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 36
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].pending": "ISSUE", "firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+- **sr650_v4_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"count": 30, "categories": {"bmc": 3, "other": 6, "driver_pack": 2, "drive": 8, "nic": 8, "storage_controller": 1, "psu": 2}, "pending_null_version": 4, "uefi_cat": ["other"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter=storage_controller"]}`
+  - 내 after : `{"count": 26, "categories": {"bmc": 2, "cpld": 1, "bios": 1, "other": 2, "driver_pack": 2, "drive": 6, "nic": 8, "storage_controller": 1, "backplane": 1, "psu": 2}, "pending_null_version": 0, "uefi_cat": ["bios"], "raid_like": ["Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapt`
+  - 구현 근거: UEFI category=['bios'] · PSoC=['backplane'] · 빈 -Pending 0 (04-firmware-001/003/006) · firmware 26
+  - 분석 Round 칸 내 비-PASS 필드: {"firmware[].pending": "ISSUE", "firmware[].category": "ISSUE", "complex_only 보충 (A-9)": "NOT_APPLICABLE"}
+
+## bios
+
+- **csus3200_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"attrs": 76, "bios_version": "1.77.30-20260911_061319", "bios_date": null}`
+  - 내 after : `{"attrs": 76, "bios_version": "1.77.30-20260911_061319", "bios_date": null}`
+  - 구현 근거: bios_version=1.77.30-20260911_061319 == bmc.firmware_version=1.77.30-20260911_061319 (complex 번들, 04-firmware-011 문서) · UEFI 항목 category other(VALIDATED)
+  - 분석 Round 칸 내 비-PASS 필드: {"hardware.bios_date": "NOT_APPLICABLE", "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE", "hardware.bios_version ↔ firmware[] bios": "ISSUE"}
+- **csus3200_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"attrs": 76, "bios_version": "1.77.30-20260911_061319", "bios_date": null}`
+  - 내 after : `{"attrs": 76, "bios_version": "1.77.30-20260911_061319", "bios_date": null}`
+  - 구현 근거: bios_version=1.77.30-20260911_061319 == bmc.firmware_version=1.77.30-20260911_061319 (complex 번들, 04-firmware-011 문서) · UEFI 항목 category other(VALIDATED)
+  - 분석 Round 칸 내 비-PASS 필드: {"hardware.bios_date": "NOT_APPLICABLE", "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE", "hardware.bios_version ↔ firmware[] bios": "ISSUE"}
+- **csus3200_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"attrs": 76, "bios_version": "1.77.30-20260911_061319", "bios_date": null}`
+  - 내 after : `{"attrs": 76, "bios_version": "1.77.30-20260911_061319", "bios_date": null}`
+  - 구현 근거: bios_version=1.77.30-20260911_061319 == bmc.firmware_version=1.77.30-20260911_061319 (complex 번들, 04-firmware-011 문서) · UEFI 항목 category other(VALIDATED)
+  - 분석 Round 칸 내 비-PASS 필드: {"hardware.bios_date": "NOT_APPLICABLE", "bmc.firmware_version ↔ firmware[] bmc": "NOT_APPLICABLE", "hardware.bios_version ↔ firmware[] bios": "ISSUE"}
+- **dl380_gen12_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"attrs": 311, "bios_version": "U68 v1.82 (06/26/2026)", "bios_date": "2026-06-26"}`
+  - 내 after : `{"attrs": 311, "bios_version": "U68 v1.82 (06/26/2026)", "bios_date": "2026-06-26"}`
+  - 구현 근거: (종전 PASS 유지) bios_version=U68 v1.82 (06/26/2026)
+- **dl380_gen12_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"attrs": 301, "bios_version": "U68 v1.90 (08/20/2026)", "bios_date": "2026-08-20"}`
+  - 내 after : `{"attrs": 301, "bios_version": "U68 v1.90 (08/20/2026)", "bios_date": "2026-08-20"}`
+  - 구현 근거: (종전 PASS 유지) bios_version=U68 v1.90 (08/20/2026)
+- **dl380_gen12_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"attrs": 275, "bios_version": "U68 v1.82 (06/26/2026)", "bios_date": "2026-06-26"}`
+  - 내 after : `{"attrs": 275, "bios_version": "U68 v1.82 (06/26/2026)", "bios_date": "2026-06-26"}`
+  - 구현 근거: (종전 PASS 유지) bios_version=U68 v1.82 (06/26/2026)
+- **dl380_gen12_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"attrs": 297, "bios_version": "U68 v1.82 (06/26/2026)", "bios_date": "2026-06-26"}`
+  - 내 after : `{"attrs": 297, "bios_version": "U68 v1.82 (06/26/2026)", "bios_date": "2026-06-26"}`
+  - 구현 근거: (종전 PASS 유지) bios_version=U68 v1.82 (06/26/2026)
+- **sr650_v4_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"attrs": 778, "bios_version": "IHE120L", "bios_date": null}`
+  - 내 after : `{"attrs": 778, "bios_version": "IHE120L", "bios_date": "2026-05-11"}`
+  - 구현 근거: bios_date=2026-05-11 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)
+  - 분석 Round 칸 내 비-PASS 필드: {"hardware.bios_date": "ISSUE", "hardware.bios_version ↔ firmware[] bios": "ISSUE"}
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"attrs": 1116, "bios_version": "IHE120L", "bios_date": null}`
+  - 내 after : `{"attrs": 1116, "bios_version": "IHE120L", "bios_date": "2026-05-11"}`
+  - 구현 근거: bios_date=2026-05-11 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)
+  - 분석 Round 칸 내 비-PASS 필드: {"hardware.bios_date": "ISSUE", "hardware.bios_version ↔ firmware[] bios": "ISSUE"}
+- **sr650_v4_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"attrs": 1299, "bios_version": "IHE120P", "bios_date": null}`
+  - 내 after : `{"attrs": 1299, "bios_version": "IHE120P", "bios_date": "2026-06-22"}`
+  - 구현 근거: bios_date=2026-06-22 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)
+  - 분석 Round 칸 내 비-PASS 필드: {"hardware.bios_date": "ISSUE", "hardware.bios_version ↔ firmware[] bios": "ISSUE"}
+- **sr650_v4_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"attrs": 778, "bios_version": "IHE120L", "bios_date": null}`
+  - 내 after : `{"attrs": 778, "bios_version": "IHE120L", "bios_date": "2026-05-11"}`
+  - 구현 근거: bios_date=2026-05-11 (FirmwareInventory UEFI ReleaseDate 폴백, 01-hardware-004≡04-bios-001)
+  - 분석 Round 칸 내 비-PASS 필드: {"hardware.bios_date": "ISSUE", "hardware.bios_version ↔ firmware[] bios": "ISSUE"}
+
+## thermal
+
+- **csus3200_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"temps": 63, "fans": 10, "absent": 0, "non_enabled_with_reading": 0, "negative": 4}`
+  - 내 after : `{"temps": 63, "fans": 10, "absent": 0, "non_enabled_with_reading": 0, "negative": 4}`
+  - 구현 근거: (종전 PASS 유지) temps 63 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0
+  - 분석 Round 칸 내 비-PASS 필드: {"temperatures[].health/state": "NOT_APPLICABLE", "temperatures[].upper_critical": "NOT_APPLICABLE"}
+- **csus3200_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"temps": 47, "fans": 10, "absent": 0, "non_enabled_with_reading": 0, "negative": 4}`
+  - 내 after : `{"temps": 47, "fans": 10, "absent": 0, "non_enabled_with_reading": 0, "negative": 4}`
+  - 구현 근거: (종전 PASS 유지) temps 47 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0
+  - 분석 Round 칸 내 비-PASS 필드: {"temperatures[].health/state": "NOT_APPLICABLE", "temperatures[].upper_critical": "NOT_APPLICABLE"}
+- **csus3200_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"temps": 47, "fans": 10, "absent": 0, "non_enabled_with_reading": 0, "negative": 4}`
+  - 내 after : `{"temps": 47, "fans": 10, "absent": 0, "non_enabled_with_reading": 0, "negative": 4}`
+  - 구현 근거: (종전 PASS 유지) temps 47 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0
+  - 분석 Round 칸 내 비-PASS 필드: {"temperatures[].health/state": "NOT_APPLICABLE", "temperatures[].upper_critical": "NOT_APPLICABLE"}
+- **dl380_gen12_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"temps": 56, "fans": 6, "absent": 7, "non_enabled_with_reading": 7, "negative": 0}`
+  - 내 after : `{"temps": 49, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 0}`
+  - 구현 근거: temps 49 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 1
+  - 분석 Round 칸 내 비-PASS 필드: {"temperatures[]": "ISSUE", "temperatures[].reading_celsius": "ISSUE"}
+- **dl380_gen12_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"temps": 44, "fans": 6, "absent": 8, "non_enabled_with_reading": 8, "negative": 0}`
+  - 내 after : `{"temps": 36, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 0}`
+  - 구현 근거: temps 36 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 1
+  - 분석 Round 칸 내 비-PASS 필드: {"temperatures[]": "ISSUE", "temperatures[].reading_celsius": "ISSUE"}
+- **dl380_gen12_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"temps": 42, "fans": 6, "absent": 0, "non_enabled_with_reading": 48, "negative": 0}`
+  - 내 after : `{"temps": 42, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 0}`
+  - 구현 근거: temps 42 비-Enabled reading null True · Absent 0 (05-thermal-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"temperatures[]": "ISSUE", "temperatures[].reading_celsius": "ISSUE", "temperatures[].upper_critical": "ISSUE", "fans[]": "ISSUE", "fans[].reading/reading_units": "ISSUE"}
+- **dl380_gen12_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"temps": 54, "fans": 6, "absent": 8, "non_enabled_with_reading": 8, "negative": 0}`
+  - 내 after : `{"temps": 46, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 0}`
+  - 구현 근거: temps 46 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 1
+  - 분석 Round 칸 내 비-PASS 필드: {"temperatures[]": "ISSUE", "temperatures[].reading_celsius": "ISSUE"}
+- **sr650_v4_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"temps": 8, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 내 after : `{"temps": 8, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 구현 근거: (종전 PASS 유지) temps 8 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0
+- **sr650_v4_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"temps": 8, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 내 after : `{"temps": 8, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 구현 근거: (종전 PASS 유지) temps 8 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0
+- **sr650_v4_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"temps": 22, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 내 after : `{"temps": 22, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 구현 근거: (종전 PASS 유지) temps 22 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0
+- **sr650_v4_04** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"temps": 14, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 내 after : `{"temps": 14, "fans": 6, "absent": 0, "non_enabled_with_reading": 0, "negative": 2}`
+  - 구현 근거: (종전 PASS 유지) temps 14 · Absent 항목 0 · 비-Enabled 0°C 0 (05-thermal-001) · notice 0
+
+## hardware
+
+- **csus3200_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"health": "OK", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "OK", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 구현 근거: (종전 PASS 유지) health='OK' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "bios_date": "NOT_APPLICABLE"}
+- **csus3200_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"health": "OK", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "OK", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 구현 근거: (종전 PASS 유지) health='OK' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "bios_date": "NOT_APPLICABLE"}
+- **csus3200_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"health": "OK", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "OK", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 구현 근거: (종전 PASS 유지) health='OK' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "bios_date": "NOT_APPLICABLE"}
+- **dl380_gen12_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"health": "Warning", "bios_date": "2026-06-26", "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Warning", "bios_date": "2026-06-26", "oem_machine_type": null, "oem_led": null}`
+  - 구현 근거: health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "health": "ISSUE"}
+- **dl380_gen12_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"health": "Warning", "bios_date": "2026-08-20", "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Warning", "bios_date": "2026-08-20", "oem_machine_type": null, "oem_led": null}`
+  - 구현 근거: health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "health": "ISSUE"}
+- **dl380_gen12_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"health": "Warning", "bios_date": "2026-06-26", "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Warning", "bios_date": "2026-06-26", "oem_machine_type": null, "oem_led": null}`
+  - 구현 근거: (종전 PASS 유지) health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION"}
+- **dl380_gen12_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"health": "Warning", "bios_date": "2026-06-26", "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Warning", "bios_date": "2026-06-26", "oem_machine_type": null, "oem_led": null}`
+  - 구현 근거: health='Warning' = Status.Health 원값(Rollup 폴백은 null 일 때만, 01-hardware-002)
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "health": "ISSUE"}
+- **sr650_v4_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"health": "Critical", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Critical", "bios_date": "2026-05-11", "oem_machine_type": "7DGD", "oem_led": "Off"}`
+  - 구현 근거: bios_date=2026-05-11 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "bios_date": "ISSUE", "tpm": "NOT_APPLICABLE", "oem": "ISSUE"}
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"health": "Critical", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Critical", "bios_date": "2026-05-11", "oem_machine_type": "7DGD", "oem_led": "Off"}`
+  - 구현 근거: bios_date=2026-05-11 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "bios_date": "ISSUE", "tpm": "NOT_APPLICABLE", "oem": "ISSUE"}
+- **sr650_v4_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"health": "Critical", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Critical", "bios_date": "2026-06-22", "oem_machine_type": "7DGD", "oem_led": "Off"}`
+  - 구현 근거: bios_date=2026-06-22 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "bios_date": "ISSUE", "tpm": "NOT_APPLICABLE", "oem": "ISSUE"}
+- **sr650_v4_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"health": "Critical", "bios_date": null, "oem_machine_type": null, "oem_led": null}`
+  - 내 after : `{"health": "Critical", "bios_date": "2026-05-11", "oem_machine_type": "7DGD", "oem_led": "Off"}`
+  - 구현 근거: bios_date=2026-05-11 · oem.machine_type='7DGD' led_indicator='Off' (01-hardware-004/005) · adapter=redfish_lenovo_xcc3
+  - 분석 Round 칸 내 비-PASS 필드: {"uuid_byte_order_vs_os": "MOCK_LIMITATION", "bios_date": "ISSUE", "tpm": "NOT_APPLICABLE", "oem": "ISSUE"}
+
+## bmc
+
+- **csus3200_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "RMC", "timezone": "Asia/Seoul", "datetime": "2026-10-22T14:51:29+09:00", "offset": "+09:00", "ip": "11.65.23.24", "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis", "auth_success": true}`
+  - 내 after : `{"name": "RMC", "timezone": "Asia/Seoul", "datetime": "2026-10-22T14:51:29+09:00", "offset": "+09:00", "ip": "11.65.23.24", "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis", "auth_success": true}`
+  - 구현 근거: name='RMC' (06-bmc-006; layout 없는 재생도 RMC) · uuid=None 문서 정정(06-bmc-009)
+  - 분석 Round 칸 내 비-PASS 필드: {"name": "ISSUE", "power_state": "NOT_APPLICABLE", "uuid": "NOT_APPLICABLE", "last_reset_time": "NOT_APPLICABLE", "oem": "NOT_APPLICABLE", "users": "NOT_APPLICABLE"}
+- **csus3200_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "RMC", "timezone": "Asia/Seoul", "datetime": "2026-10-22T14:51:28+09:00", "offset": "+09:00", "ip": "11.65.23.31", "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis", "auth_success": true}`
+  - 내 after : `{"name": "RMC", "timezone": "Asia/Seoul", "datetime": "2026-10-22T14:51:28+09:00", "offset": "+09:00", "ip": "11.65.23.31", "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis", "auth_success": true}`
+  - 구현 근거: name='RMC' (06-bmc-006; layout 없는 재생도 RMC) · uuid=None 문서 정정(06-bmc-009)
+  - 분석 Round 칸 내 비-PASS 필드: {"name": "ISSUE", "power_state": "NOT_APPLICABLE", "uuid": "NOT_APPLICABLE", "last_reset_time": "NOT_APPLICABLE", "oem": "NOT_APPLICABLE", "users": "NOT_APPLICABLE"}
+- **csus3200_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "RMC", "timezone": "Asia/Seoul", "datetime": "2026-10-22T15:13:28+09:00", "offset": "+09:00", "ip": "11.65.23.28", "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis", "auth_success": true}`
+  - 내 after : `{"name": "RMC", "timezone": "Asia/Seoul", "datetime": "2026-10-22T15:13:28+09:00", "offset": "+09:00", "ip": "11.65.23.28", "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis", "auth_success": true}`
+  - 구현 근거: name='RMC' (06-bmc-006; layout 없는 재생도 RMC) · uuid=None 문서 정정(06-bmc-009)
+  - 분석 Round 칸 내 비-PASS 필드: {"name": "ISSUE", "power_state": "NOT_APPLICABLE", "uuid": "NOT_APPLICABLE", "last_reset_time": "NOT_APPLICABLE", "oem": "NOT_APPLICABLE", "users": "NOT_APPLICABLE"}
+- **dl380_gen12_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "iLO", "timezone": null, "datetime": "2026-10-22T06:15:43Z", "offset": "+09:00", "ip": "11.65.23.95", "model": "iLO 7", "auth_success": true}`
+  - 내 after : `{"name": "iLO", "timezone": "JST-9:00", "datetime": "2026-10-22T06:15:43Z", "offset": "+09:00", "ip": "11.65.23.95", "model": "iLO 7", "auth_success": true}`
+  - 구현 근거: timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:15:43Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.95 (06-bmc-005 값 불변)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_state": "NOT_APPLICABLE", "serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "last_reset_time": "NOT_APPLICABLE", "timezone": "ISSUE", "datetime": "ISSUE", "users": "NOT_APPLICABLE"}
+- **dl380_gen12_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "iLO", "timezone": null, "datetime": "2026-10-22T06:27:39Z", "offset": "+09:00", "ip": "11.65.23.201", "model": "iLO 7", "auth_success": true}`
+  - 내 after : `{"name": "iLO", "timezone": "JST-9:00", "datetime": "2026-10-22T06:27:39Z", "offset": "+09:00", "ip": "11.65.23.201", "model": "iLO 7", "auth_success": true}`
+  - 구현 근거: timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:27:39Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.201 (06-bmc-005 값 불변)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_state": "NOT_APPLICABLE", "serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "last_reset_time": "NOT_APPLICABLE", "timezone": "ISSUE", "datetime": "ISSUE", "users": "NOT_APPLICABLE"}
+- **dl380_gen12_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "iLO", "timezone": null, "datetime": "2026-10-22T06:41:28Z", "offset": "+09:00", "ip": "11.65.23.55", "model": "iLO 7", "auth_success": true}`
+  - 내 after : `{"name": "iLO", "timezone": "JST-9:00", "datetime": "2026-10-22T06:41:28Z", "offset": "+09:00", "ip": "11.65.23.55", "model": "iLO 7", "auth_success": true}`
+  - 구현 근거: timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:41:28Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.55 (06-bmc-005 값 불변)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_state": "NOT_APPLICABLE", "serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "last_reset_time": "NOT_APPLICABLE", "timezone": "ISSUE", "datetime": "ISSUE", "users": "NOT_APPLICABLE"}
+- **dl380_gen12_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "iLO", "timezone": null, "datetime": "2026-10-22T06:38:01Z", "offset": "+09:00", "ip": "11.65.23.52", "model": "iLO 7", "auth_success": true}`
+  - 내 after : `{"name": "iLO", "timezone": "JST-9:00", "datetime": "2026-10-22T06:38:01Z", "offset": "+09:00", "ip": "11.65.23.52", "model": "iLO 7", "auth_success": true}`
+  - 구현 근거: timezone='JST-9:00' (06-bmc-003 DateTimeService) · datetime=2026-10-22T06:38:01Z offset=+09:00 (06-bmc-004 문서) · ip=11.65.23.52 (06-bmc-005 값 불변)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_state": "NOT_APPLICABLE", "serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "last_reset_time": "NOT_APPLICABLE", "timezone": "ISSUE", "datetime": "ISSUE", "users": "NOT_APPLICABLE"}
+- **sr650_v4_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T15:48:28+09:00", "offset": "+09:00", "ip": "11.65.23.87", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 내 after : `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T15:48:28+09:00", "offset": "+09:00", "ip": "11.65.23.87", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 구현 근거: meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC
+  - 분석 Round 칸 내 비-PASS 필드: {"serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "timezone": "NOT_APPLICABLE", "meta.adapter_id": "ISSUE", "users": "NOT_APPLICABLE"}
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T16:05:07+09:00", "offset": "+09:00", "ip": "11.65.23.88", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 내 after : `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T16:05:07+09:00", "offset": "+09:00", "ip": "11.65.23.88", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 구현 근거: meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC
+  - 분석 Round 칸 내 비-PASS 필드: {"serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "timezone": "NOT_APPLICABLE", "meta.adapter_id": "ISSUE", "users": "NOT_APPLICABLE"}
+- **sr650_v4_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T16:10:20+09:00", "offset": "+09:00", "ip": "11.65.23.76", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 내 after : `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T16:10:20+09:00", "offset": "+09:00", "ip": "11.65.23.76", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 구현 근거: meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC
+  - 분석 Round 칸 내 비-PASS 필드: {"serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "timezone": "NOT_APPLICABLE", "meta.adapter_id": "ISSUE", "users": "NOT_APPLICABLE"}
+- **sr650_v4_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T15:56:52+09:00", "offset": "+09:00", "ip": "11.65.23.37", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 내 after : `{"name": "XCC", "timezone": null, "datetime": "2026-10-22T15:56:52+09:00", "offset": "+09:00", "ip": "11.65.23.37", "model": "Lenovo XClarity Controller 3", "auth_success": true}`
+  - 구현 근거: meta.adapter_id=redfish_lenovo_xcc3 (01-adapter-001 재선택) · name=XCC
+  - 분석 Round 칸 내 비-PASS 필드: {"serial": "NOT_APPLICABLE", "part_number": "NOT_APPLICABLE", "manufacturer": "NOT_APPLICABLE", "timezone": "NOT_APPLICABLE", "meta.adapter_id": "ISSUE", "users": "NOT_APPLICABLE"}
+
+## power
+
+- **csus3200_01** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"psu": 4, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 내 after : `{"psu": 4, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 구현 근거: (종전 PASS 유지) PSU 4 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 0건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].power_capacity_w": "NOT_APPLICABLE", "power_control.power_capacity_watts": "NOT_APPLICABLE", "power_control.min/avg/max/interval": "NOT_APPLICABLE"}
+- **csus3200_02** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"psu": 4, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 내 after : `{"psu": 4, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 구현 근거: (종전 PASS 유지) PSU 4 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 0건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].power_capacity_w": "NOT_APPLICABLE", "power_control.power_capacity_watts": "NOT_APPLICABLE", "power_control.min/avg/max/interval": "NOT_APPLICABLE"}
+- **csus3200_03** [PASS→PASS] (impl before=PASS)
+  - 내 before: `{"psu": 4, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 내 after : `{"psu": 4, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 구현 근거: (종전 PASS 유지) PSU 4 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 0건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].power_capacity_w": "NOT_APPLICABLE", "power_control.power_capacity_watts": "NOT_APPLICABLE", "power_control.min/avg/max/interval": "NOT_APPLICABLE"}
+- **dl380_gen12_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 1}`
+  - 구현 근거: PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].state/health": "ISSUE", "summary": "ISSUE"}
+- **dl380_gen12_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 1}`
+  - 구현 근거: PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].state/health": "ISSUE", "summary": "ISSUE"}
+- **dl380_gen12_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 2, "model_padded": 0, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 구현 근거: PSU 2 (Absent 2) · Absent 의 capacity/firmware null True (05-power-001)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[]": "ISSUE", "power_supplies[].state/health": "ISSUE", "power_supplies[].power_capacity_w": "ISSUE", "power_supplies[].firmware_version": "ISSUE", "power_supplies[].model": "ISSUE", "summary": "ISSUE"}
+- **dl380_gen12_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 1}`
+  - 구현 근거: PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].state/health": "ISSUE", "summary": "ISSUE"}
+- **sr650_v4_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 0, "model_padded": 2, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 1}`
+  - 구현 근거: PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].state/health": "ISSUE", "power_supplies[].model": "ISSUE", "summary": "ISSUE"}
+- **sr650_v4_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 0, "model_padded": 2, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 1}`
+  - 구현 근거: PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].state/health": "ISSUE", "power_supplies[].model": "ISSUE", "summary": "ISSUE"}
+- **sr650_v4_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 0, "model_padded": 2, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 1}`
+  - 구현 근거: PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].state/health": "ISSUE", "power_supplies[].model": "ISSUE", "summary": "ISSUE"}
+- **sr650_v4_04** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"psu": 2, "absent_with_values": 0, "model_padded": 2, "input0_notices": 0}`
+  - 내 after : `{"psu": 2, "absent_with_values": 0, "model_padded": 0, "input0_notices": 1}`
+  - 구현 근거: PSU 2 · model 패딩 0 (05-power-003) · 입력 0 관측 notice 1건 (05-power-002) · power_capacity_watts 정의 문서(05-power-005)
+  - 분석 Round 칸 내 비-PASS 필드: {"power_supplies[].state/health": "ISSUE", "power_supplies[].model": "ISSUE", "summary": "ISSUE"}
+
+## multi_node
+
+- **csus3200_01** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"enabled": true, "rb_counts": [[0, 0]], "partitions": 1}`
+  - 내 after : `{"enabled": true, "rb_counts": [[null, null]], "partitions": 1}`
+  - 구현 근거: composition count null True (FIX 6) · 링크 없는 섀시 경로 요청 0 (01-multi_node-006) · layout=rmc_primary · baseline 실측 교체(FIX 5, 01-multi_node-003)
+  - 분석 Round 칸 내 비-PASS 필드: {"chassis": "ISSUE", "composition": "ISSUE"}
+- **csus3200_02** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"enabled": true, "rb_counts": [[0, 0]], "partitions": 1}`
+  - 내 after : `{"enabled": true, "rb_counts": [[null, null]], "partitions": 1}`
+  - 구현 근거: composition count null True (FIX 6) · 링크 없는 섀시 경로 요청 0 (01-multi_node-006) · layout=rmc_primary · baseline 실측 교체(FIX 5, 01-multi_node-003)
+  - 분석 Round 칸 내 비-PASS 필드: {"chassis": "ISSUE", "composition": "ISSUE"}
+- **csus3200_03** [ISSUE→PASS] (impl before=ISSUE)
+  - 내 before: `{"enabled": true, "rb_counts": [[0, 0]], "partitions": 1}`
+  - 내 after : `{"enabled": true, "rb_counts": [[null, null]], "partitions": 1}`
+  - 구현 근거: composition count null True (FIX 6) · 링크 없는 섀시 경로 요청 0 (01-multi_node-006) · layout=rmc_primary · baseline 실측 교체(FIX 5, 01-multi_node-003)
+  - 분석 Round 칸 내 비-PASS 필드: {"chassis": "ISSUE", "composition": "ISSUE"}
+- **dl380_gen12_01** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+- **dl380_gen12_02** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+- **dl380_gen12_03** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+- **dl380_gen12_04** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+- **sr650_v4_01** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+- **sr650_v4_02** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+- **sr650_v4_03** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+- **sr650_v4_04** [NOT_APPLICABLE→NOT_APPLICABLE] (impl before=NOT_APPLICABLE)
+  - 내 before: `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 내 after : `{"enabled": null, "rb_counts": [], "partitions": 0}`
+  - 구현 근거: adapter 가 layout 을 주지 않음(변경 없음)
+

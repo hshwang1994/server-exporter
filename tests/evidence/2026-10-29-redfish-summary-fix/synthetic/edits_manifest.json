@@ -1,0 +1,173 @@
+{
+ "cases": {
+  "syn_csus_nocomp": {
+   "base_dir": "/root/se_mirrors_fix_20261028/csus3200_01",
+   "edits": [
+    {
+     "file": "redfish/v1/index.json",
+     "key": "CompositionService",
+     "op": "delete",
+     "sha256_after": "646faadf7f305cfbecde8ad74f10a0493bbcf2321847598bfbea518b23b5fbe3",
+     "sha256_before": "38e79efcb6400476a8b8cd4725cd94bb6f00b0c7dce68633f6c3571e44cfdede"
+    },
+    {
+     "file": "_serviceroot_noauth.json",
+     "key": "body.CompositionService",
+     "op": "delete",
+     "sha256_after": "bcdf43ff163dfe4a0c8e08b63e59f585253aeae784c61b4e45d6d4b6f217f18d",
+     "sha256_before": "adfe1b6ba26b2006226d214ab2e89ca7b4e5d35cdbaff4bae52e6e6d80c640bb"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_csus_nocomp"
+  },
+  "syn_csus_nofab": {
+   "base_dir": "/root/se_mirrors_fix_20261028/csus3200_01",
+   "edits": [
+    {
+     "file": "redfish/v1/index.json",
+     "key": "Fabrics",
+     "op": "delete",
+     "sha256_after": "3f4a1dd8be6c25894edadd34d0eedf9e262b29b3d42c96932f8f5e7f11a9182b",
+     "sha256_before": "38e79efcb6400476a8b8cd4725cd94bb6f00b0c7dce68633f6c3571e44cfdede"
+    },
+    {
+     "file": "_serviceroot_noauth.json",
+     "key": "body.Fabrics",
+     "op": "delete",
+     "sha256_after": "ce233658536afb45401091160d5db3d4a031e022ec490df29da823eca8f40abc",
+     "sha256_before": "adfe1b6ba26b2006226d214ab2e89ca7b4e5d35cdbaff4bae52e6e6d80c640bb"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_csus_nofab"
+  },
+  "syn_dell_links": {
+   "base_dir": "/root/se_mirrors_fix_20261028/mock1/DELL_R740/01",
+   "edits": [
+    {
+     "file": "redfish/v1/Systems/System.Embedded.1/EthernetInterfaces/NIC.Slot.3-1-1/index.json",
+     "key": "LinkStatus",
+     "op": "set",
+     "sha256_after": "d35dc14b35069b5333858efc6667cf00bc05fd412d3fe0fcff591274bed292f7",
+     "sha256_before": "219679399123524c5ff417eadce7017c383fec9e9cb049fc830774edf9e4cad7"
+    },
+    {
+     "file": "redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.3/NetworkPorts/NIC.Slot.3-1/index.json",
+     "key": "LinkStatus",
+     "op": "set",
+     "sha256_after": "159507c3bfa5fd068e49f485752448e57d5fe79820cdb3b0e68f92af1ef054a8",
+     "sha256_before": "713b1d2a1cf577317df64bbfab3a76ea5ae9f00ed589ab97d6dde14d1ba98640"
+    },
+    {
+     "file": "redfish/v1/Chassis/System.Embedded.1/NetworkAdapters/NIC.Slot.5/NetworkPorts/NIC.Slot.5-1/index.json",
+     "key": "LinkStatus",
+     "op": "set",
+     "sha256_after": "2927138e0459992f0c892ae64aea8131623c0343a09c5c7a1e742ee4260425c2",
+     "sha256_before": "6342f3ba1cdbf4de02f2fcc5f5dc181e7206c6377f09e5abfcec1b4b9799b68e"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_dell_links"
+  },
+  "syn_dell_primary": {
+   "base_dir": "/root/se_mirrors_fix_20261028/mock1/DELL_R740/01",
+   "edits": [
+    {
+     "file": "redfish/v1/Systems/System.Embedded.1/EthernetInterfaces/NIC.Slot.2-1-1/index.json",
+     "key": "SpeedMbps",
+     "op": "set",
+     "sha256_after": "6ffcececc1ad339261e712adbf8d5b5c7feb1235c29538b5cfb63c61bc41b21b",
+     "sha256_before": "ff839c0ab3598680f894c1f6e325c9efd26b58ff10cd5c8fd1b6a89f6c2248b2"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_dell_primary"
+  },
+  "syn_dl380_partial_link": {
+   "base_dir": "/root/se_mirrors_fix_20261028/dl380_gen12_02",
+   "edits": [
+    {
+     "file": "redfish/v1/Systems/1/Storage/DE00B000/index.json",
+     "key": "Drives",
+     "op": "list_remove",
+     "sha256_after": "b111abe56fc34b0a43e1395b33e1f127c0e654f00e2428d63c683ce1fa29a430",
+     "sha256_before": "1a5dd886119e4332d73f19eb52a5112646d3c5e9e8f389a75f17c85815f8a2a3"
+    },
+    {
+     "file": "redfish/v1/Systems/1/Storage/DE00B000/index.json",
+     "key": "Drives@odata.count",
+     "op": "set",
+     "sha256_after": "54a53e6c747face59cc338dbd9e5dd96f95c14c95202ab0d2b99935aa7ab6c0c",
+     "sha256_before": "b111abe56fc34b0a43e1395b33e1f127c0e654f00e2428d63c683ce1fa29a430"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_dl380_partial_link"
+  },
+  "syn_g12_03_on": {
+   "base_dir": "/root/se_mirrors_fix_20261028/dl380_gen12_03",
+   "edits": [
+    {
+     "file": "redfish/v1/Systems/1/index.json",
+     "key": "PowerState",
+     "op": "set",
+     "sha256_after": "374b5ffbeacbdf3d0fae3282a7bc8533bc1b4989bbbc208b93fac0e12e9cc481",
+     "sha256_before": "ca873828c1a0b8a8c78675461d38a230a8611ab9c586153cdcf1ffc7c87dcebe"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_g12_03_on"
+  },
+  "syn_g12_psub_range": {
+   "base_dir": "/root/se_mirrors_fix_20261028/dl380_gen12_01",
+   "edits": [
+    {
+     "file": "redfish/v1/Chassis/1/index.json",
+     "key": "Power",
+     "op": "delete",
+     "sha256_after": "6d35a4eaa0cb8f9b4d800ba2a5601765404badbe936222e69c590832e3afc270",
+     "sha256_before": "af43dd78366041dc6ddb792266e03ff0c9540948d9ee00f4c23e7b884cab9fad"
+    },
+    {
+     "file": "redfish/v1/Chassis/1/EnvironmentMetrics/index.json",
+     "key": "PowerWatts",
+     "op": "set",
+     "sha256_after": "9042d4ac748b7639b551c23eaf6d63240dda0d7e5da6206a575caff6b37305c0",
+     "sha256_before": "3a4fcdf4eda24ead92770d795154eee0f11deece690d7cb3190f8a7e0279c616"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_g12_psub_range"
+  },
+  "syn_r1csus01_off": {
+   "base_dir": "/root/se_mirrors_fix_20261028/mock1/HPE_CSUS3200/01",
+   "edits": [
+    {
+     "file": "redfish/v1/Systems/Partition0/index.json",
+     "key": "PowerState",
+     "op": "set",
+     "sha256_after": "7d0c37852d1cd900614ec4e76abbf7c6e9c0af23a05a9138dca8b48fa8bbb524",
+     "sha256_before": "76b03eb6aad0b22219d378e4030a3dfb83fdea162b7eb96d4981c95dad45525b"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_r1csus01_off"
+  },
+  "syn_v4_partial": {
+   "base_dir": "/root/se_mirrors_fix_20261028/sr650_v4_01",
+   "edits": [
+    {
+     "file": "redfish/v1/Systems/1/Processors/2/index.json",
+     "key": "TotalCores",
+     "op": "delete",
+     "sha256_after": "28d01e6cc7d2bb2e71a98b18c48f06cd2b60f6ec04fe7c7488c196a88dc007d2",
+     "sha256_before": "0adf202080865ea9d489673e4767fe2d4ef8877afc79bf8b28059e88ae7f9d4a"
+    },
+    {
+     "file": "redfish/v1/Systems/1/Memory/23/index.json",
+     "key": "CapacityMiB",
+     "op": "delete",
+     "sha256_after": "a417c16f42e8cafd7e213df47cf10d88db0b9eed094502df1a690243e1e495de",
+     "sha256_before": "66cc1ccb8b7ec1903d0cf175536a3df96a70191c1fc6a7f2de0d168911caec3e"
+    }
+   ],
+   "syn_dir": "/root/se_syn_20261029/syn_v4_partial"
+  }
+ },
+ "expected_sha256": "88e1b69a37682a407083524cf21c1f07e7e76eb6841a4fd7807fea59f6e3cc35",
+ "mirror_root": "/root/se_mirrors_fix_20261028",
+ "syn_root": "/root/se_syn_20261029"
+}

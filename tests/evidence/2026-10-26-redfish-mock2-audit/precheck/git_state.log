@@ -1,0 +1,18 @@
+=== fetch ===
+From https://10.100.64.156/root/server-expoter
+   27c4b393..e0a4f143  main       -> internal/main
+   144c295f..d464de4b  production -> internal/production
+=== status ===
+## main...origin/main
+=== refs ===
+feature/gathering-addon e45fde6f
+internal e0a4f143
+internal/feature/gathering-addon e45fde6f
+internal/main e0a4f143
+internal/production d464de4b
+main e0a4f143
+origin e0a4f143
+origin/feature/gathering-addon e45fde6f
+origin/main e0a4f143
+origin/production d464de4b
+production d464de4b

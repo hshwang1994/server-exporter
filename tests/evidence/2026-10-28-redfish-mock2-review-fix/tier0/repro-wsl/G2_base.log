@@ -1,0 +1,158 @@
+[repro] cwd=/home/hshwang/se-fix-20261028-base head=f92ebe6a python=/usr/bin/python3 pytest=pytest 9.0.3 powershell.exe=/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe fileMode=true
+.FF.......FF......                                                       [100%]
+=================================== FAILURES ===================================
+_________________________ test_crlf_source_is_refused __________________________
+
+repo = PosixPath('/tmp/pytest-of-hshwang/pytest-21/test_crlf_source_is_refused0/repo')
+tmp_path = PosixPath('/tmp/pytest-of-hshwang/pytest-21/test_crlf_source_is_refused0')
+
+    @_needs_ps
+    def test_crlf_source_is_refused(repo, tmp_path):
+        (repo / "cfg.ini").write_bytes(b"[defaults]\r\nforks = 7\r\n")
+        _git(repo, "commit", "-qam", "crlf")
+        rep = build(str(repo), "HEAD", str(tmp_path / "out"), str(repo / "production_manifest.yml"), live_checkers=False)
+>       assert not rep.ok and rep.class_b[0][0] == "cfg.ini" and "CR byte" in rep.class_b[0][2]
+                              ^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/unit/prodgen/test_pipeline_tmp_repo.py:114: IndexError
+________________________ test_class_b_blocks_provenance ________________________
+
+repo = PosixPath('/tmp/pytest-of-hshwang/pytest-21/test_class_b_blocks_provenance0/repo')
+tmp_path = PosixPath('/tmp/pytest-of-hshwang/pytest-21/test_class_b_blocks_provenance0')
+
+    @_needs_ps
+    def test_class_b_blocks_provenance(repo, tmp_path):
+        (repo / "app" / "tasks.yml").write_bytes(b"---\n- set_fact:\n    a: &x 1\n    b: *x\n")
+        _git(repo, "commit", "-qam", "anchor")
+        sha = _git(repo, "rev-parse", "HEAD")
+        out = tmp_path / "out"
+        rep = build(str(repo), sha, str(out), str(repo / "production_manifest.yml"), live_checkers=False)
+        assert not rep.ok and not rep.provenance_written
+>       assert (out / FAILURE_FILE).exists() and not (out / PROVENANCE_FILE).exists()
+E       AssertionError: assert (False)
+E        +  where False = exists()
+E        +    where exists = (PosixPath('/tmp/pytest-of-hshwang/pytest-21/test_class_b_blocks_provenance0/out') / '.prodgen-failure.json').exists
+
+tests/unit/prodgen/test_pipeline_tmp_repo.py:125: AssertionError
+_________________ test_full_cycle_bootstrap_restore_repromote __________________
+
+world = {'B': '74eca4e96d0b73498edfa6927c8e039c0a5d73ea', 'man': '/tmp/pytest-of-hshwang/pytest-21/test_full_cycle_bootstrap_r.../test_full_cycle_bootstrap_rest0/repo'), 'store': <scripts.ai.prodgen.gitstore.GitStore object at 0x7ad45d515fd0>, ...}
+
+    @_needs_ps
+    def test_full_cycle_bootstrap_restore_repromote(world):
+        repo, store, B, man = world["repo"], world["store"], world["B"], world["man"]
+        X = _git(repo, "rev-parse", "main")
+        # ① legacy without baseline → refused at state (dry-run shows it, real run refuses)
+        res = _promote(world, X)
+        assert not res["ok"] and res["stage"] in ("verify", "state"), res
+        assert _remote_prod(repo, "origin") == B and store.rev_parse(PROD) == B, "nothing moved"
+        # ② wrong baseline → refused
+        res = _promote(world, X, bootstrap_baseline=X)
+        assert not res["ok"]
+        # ③ bootstrap with the exact legacy sha → P1
+        res = _promote(world, X, bootstrap_baseline=B, ci_build="unit")
+        assert res["ok"], res
+        P1 = store.rev_parse(PROD)
+        assert res["commit"] == P1 and store.commit_parents(P1) == [B]
+        tr = GitStore.parse_trailers(store.commit_message(P1))
+        assert tr["Bootstrap-Baseline"] == B and tr["Bootstrap-Baseline-Tree"] == store.commit_tree_sha(B)
+        assert tr["Main-SHA"] == X and tr["Verdict"] == "COMPLETE_PASS" and "G20:PASS" in tr["Gates"] and tr["E2E-Evidence-SHA256"]
+        assert tr["CI-Stages"] == "verified"
+        assert _remote_prod(repo, "origin") == P1 and _remote_prod(repo, "internal") == P1
+        assert res["publish"]["local_updated"] and len(res["publish"]["done"]) == 2
+        assert classify_production(store, P1)["state"] == "PROVENANCE"
+        # ④ arbitrary legacy restore refused; restore to B only with --bootstrap-baseline B → R
+        with pytest.raises(ProdgenError):
+            restore(str(repo), B, dry_run=False, push_remote=BOTH)
+        with pytest.raises(ProdgenError):
+            restore(str(repo), B, dry_run=False, push_remote=BOTH, bootstrap_baseline=X)
+        done = restore(str(repo), B, dry_run=False, push_remote=BOTH, bootstrap_baseline=B)
+        assert done["ok"] and done["kind"] == "legacy_baseline"
+        R = store.rev_parse(PROD)
+        assert store.commit_tree_sha(R) == store.commit_tree_sha(B) and store.commit_parents(R) == [P1]
+        rt = GitStore.parse_trailers(store.commit_message(R))
+        assert rt["Restore-Of"] == B and rt["Restore-From"] == P1 and rt["Baseline-Recorded-By"] == P1 and rt["Bootstrap-Baseline"] == B
+        st = classify_production(store, R)
+        assert st["state"] == "RESTORED_BASELINE" and st["ok"] and st["previous_generated"] == P1 and st["previous_generated_main_sha"] == X
+        assert _remote_prod(repo, "origin") == R and _remote_prod(repo, "internal") == R
+        d = drift_check(str(repo), PROD, man)
+        assert d["mode"] == "RESTORED_BASELINE" and d["ok"]
+        # ⑤ re-promotion P2 from a descendant of X: parent R, no bootstrap flag needed
+        (repo / "cfg.ini").write_bytes(b"[defaults]\nforks = 7\n")
+        _git(repo, "commit", "-qam", "forks")
+        X2 = _git(repo, "rev-parse", "main")
+>       res2 = _promote(world, X2)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/unit/prodgen/test_promotion_cycle.py:178: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/unit/prodgen/test_promotion_cycle.py:129: in _promote
+    kw["e2e_evidence"] = _evidence(sha, world)
+                         ^^^^^^^^^^^^^^^^^^^^^
+tests/unit/prodgen/test_promotion_cycle.py:90: in _evidence
+    tree_hash = tree_hash or _tree_hash(world, main_sha)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+world = {'B': '74eca4e96d0b73498edfa6927c8e039c0a5d73ea', 'man': '/tmp/pytest-of-hshwang/pytest-21/test_full_cycle_bootstrap_r.../test_full_cycle_bootstrap_rest0/repo'), 'store': <scripts.ai.prodgen.gitstore.GitStore object at 0x7ad45d515fd0>, ...}
+sha = 'eeb0edc9140bb79e4bfc0c7aff7368b85af566cf'
+
+    def _tree_hash(world, sha: str) -> str:
+        out = world["tmp"] / f"tree_{sha[:8]}"
+        if not out.exists():
+            rep = build(str(world["repo"]), sha, str(out), world["man"], live_checkers=True)
+>           assert rep.ok, rep.class_b
+E           AssertionError: []
+E           assert False
+E            +  where False = BuildReport(main_sha='eeb0edc9140bb79e4bfc0c7aff7368b85af566cf', main_tree='a773bbbe114424864fa6c4b6da444abc4cbbb496',...rrors': ['G09 app/run.sh: git mode 100644 != manifest mode 100755']}, provenance_written=False, tree_hash='', tools={}).ok
+
+tests/unit/prodgen/test_promotion_cycle.py:84: AssertionError
+___________ test_restore_to_baseline_after_a_second_normal_promotion ___________
+
+world = {'B': 'fd86543b13d615d1b707893eeb45019fbb7e7408', 'man': '/tmp/pytest-of-hshwang/pytest-21/test_restore_to_baseline_af.../test_restore_to_baseline_after0/repo'), 'store': <scripts.ai.prodgen.gitstore.GitStore object at 0x7ad45d482a20>, ...}
+
+    @_needs_ps
+    def test_restore_to_baseline_after_a_second_normal_promotion(world):
+        """검토 C2: B → P1 → P2(normal) → restore(B) → P3. The nearest generated commit (P2) is not the one that *first* recorded
+        the baseline; the record must be found through the history (and is inherited by P2), ancestry is judged from P2's main."""
+        repo, store, B = world["repo"], world["store"], world["B"]
+        X = _git(repo, "rev-parse", "main")
+        assert _promote(world, X, bootstrap_baseline=B)["ok"]
+        P1 = store.rev_parse(PROD)
+        (repo / "cfg.ini").write_bytes(b"[defaults]\nforks = 9\n")
+        _git(repo, "commit", "-qam", "forks 9")
+        X2 = _git(repo, "rev-parse", "main")
+>       assert _promote(world, X2)["ok"]
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/unit/prodgen/test_promotion_cycle.py:201: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/unit/prodgen/test_promotion_cycle.py:129: in _promote
+    kw["e2e_evidence"] = _evidence(sha, world)
+                         ^^^^^^^^^^^^^^^^^^^^^
+tests/unit/prodgen/test_promotion_cycle.py:90: in _evidence
+    tree_hash = tree_hash or _tree_hash(world, main_sha)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+world = {'B': 'fd86543b13d615d1b707893eeb45019fbb7e7408', 'man': '/tmp/pytest-of-hshwang/pytest-21/test_restore_to_baseline_af.../test_restore_to_baseline_after0/repo'), 'store': <scripts.ai.prodgen.gitstore.GitStore object at 0x7ad45d482a20>, ...}
+sha = '047eb8822c76d6d8adbcec9b78ac2a938d37228e'
+
+    def _tree_hash(world, sha: str) -> str:
+        out = world["tmp"] / f"tree_{sha[:8]}"
+        if not out.exists():
+            rep = build(str(world["repo"]), sha, str(out), world["man"], live_checkers=True)
+>           assert rep.ok, rep.class_b
+E           AssertionError: []
+E           assert False
+E            +  where False = BuildReport(main_sha='047eb8822c76d6d8adbcec9b78ac2a938d37228e', main_tree='489abf8ca9483a2935ff85e64ce54e3ddbc9528a',...rrors': ['G09 app/run.sh: git mode 100644 != manifest mode 100755']}, provenance_written=False, tree_hash='', tools={}).ok
+
+tests/unit/prodgen/test_promotion_cycle.py:84: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/prodgen/test_pipeline_tmp_repo.py::test_crlf_source_is_refused
+FAILED tests/unit/prodgen/test_pipeline_tmp_repo.py::test_class_b_blocks_provenance
+FAILED tests/unit/prodgen/test_promotion_cycle.py::test_full_cycle_bootstrap_restore_repromote
+FAILED tests/unit/prodgen/test_promotion_cycle.py::test_restore_to_baseline_after_a_second_normal_promotion
+4 failed, 14 passed in 122.83s (0:02:02)
+rc=1

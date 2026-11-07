@@ -148,3 +148,12 @@ Rollback trigger: pytest 회귀 5건+ / 사용자 명시 보류.
 | 일시 | 승인자 | 대상 | 비고 |
 |---|---|---|---|
 | 2026-06-09 | hshwang1994 | 누락분 5종 구현 + 연결 영역 버그/개선 ("너가 판단하에 추가해야하는 것들이있다면 모두 구현해라") | 검수 → 구현 일괄 승인 |
+
+## 2026-10-27 정정 기록 (2차 Mock 실측 — 섀시 Power/Thermal 가정 · composition count)
+
+- 검수표 "`Chassis/<id>` 물리 + Power [OK]" 와 `gather_chassis_multi` 의 고정 경로(`Power`/`PowerSubsystem`/`Thermal`/`ThermalSubsystem`) 요청은 **집합 섀시(RackGroup · Rack1)에는 성립하지 않는다**
+  — 실측 CSUS 3200 RMC 7대 모두 그 두 섀시 본문에 navigation property 가 없고 요청은 404 였다(노드 섀시 r001u01 은 `PowerSubsystem`/`ThermalSubsystem` 만). 2026-10-27 부터 섀시 본문의 링크가
+  있을 때만 요청한다(링크 없음 = 404 와 같은 미지원 분류 · 요청 0). 본문을 모르면 종전 순서(C11 폴백)다.
+- `CompositionService/ResourceBlocks` 의 `Processors[]/Memory[]` 는 실 RMC 가 노출하지 않는다 — `resource_block_count` · `composition_state` · `chassis[]` · `computer_systems[]` 는 실측과 맞고
+  `processor_count/memory_count` 는 null 로 낸다(FIX 6, 종전 0 날조). `Fabrics` FlexGrid 는 실측 switch 2 · endpoint 0, `fabric_type null`.
+- C9~C14 중 C9(RB↔chassis 1:1) · C11(ThermalSubsystem 경로) 은 2차 실측으로 확인, C10(NUMAlink enum) 은 그대로 미해결. 근거: `tests/evidence/2026-10-27-redfish-mock2-impl/07-csus-chassis-fc.md`.

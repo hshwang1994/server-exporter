@@ -1,0 +1,304 @@
+[venv] /home/hshwang/venv-se-ci-20261028 python=Python 3.12.3 (source=env)
+[tier0] venv=/home/hshwang/venv-se-ci-20261028 pwsh=absent powershell.exe=absent
+[tier0] python=/home/hshwang/venv-se-ci-20261028/bin/python3 Python 3.12.3 pytest=pytest 9.2.0
+[ci_gate] python: /home/hshwang/venv-se-ci-20261028/bin/python3 3.12.3
+
+== [ci_gate] python compile (plugins / libraries / scripts)
+
+== [ci_gate] field_dictionary 검사
+================================================================================
+field_dictionary.yml VALIDATION RESULTS
+================================================================================
+
+  [OK] YAML parse: 262 keys found
+  [OK] fields section: 262 entries
+  [OK] duplicate keys: no duplicates
+  [OK] help_ko presence: all 262 have help_ko
+  [OK] help_en presence: all 262 have help_en
+  [OK] priority values: all valid (must/nice/skip)
+  [OK] channel values: all valid (redfish/os/esxi)
+  [OK] path vs schema: 2 schema files, 113 unmatched
+  [INFO] priority distribution: must=57, nice=195, skip=10
+  [INFO] channel distribution: redfish=212, os=154, esxi=148
+
+WARNINGS:
+  [WARN] diagnosis.details.notices: no match in schema examples (may be valid)
+  [WARN] hardware.asset_tag: no match in schema examples (may be valid)
+  [WARN] hardware.system_type: no match in schema examples (may be valid)
+  [WARN] hardware.part_number: no match in schema examples (may be valid)
+  [WARN] hardware.last_reset_time: no match in schema examples (may be valid)
+  [WARN] hardware.boot_progress: no match in schema examples (may be valid)
+  [WARN] hardware.tpm: no match in schema examples (may be valid)
+  [WARN] memory.slots[].capacity_mb: no match in schema examples (may be valid)
+  [WARN] memory.slots[].base_module_type: no match in schema examples (may be valid)
+  [WARN] memory.slots[].rank_count: no match in schema examples (may be valid)
+  [WARN] memory.slots[].data_width_bits: no match in schema examples (may be valid)
+  [WARN] memory.slots[].bus_width_bits: no match in schema examples (may be valid)
+  [WARN] memory.slots[].error_correction: no match in schema examples (may be valid)
+  [WARN] memory.slots[].locator: no match in schema examples (may be valid)
+  [WARN] storage.physical_disks[].wwn: no match in schema examples (may be valid)
+  [WARN] storage.physical_disks[].is_os_disk: no match in schema examples (may be valid)
+  [WARN] storage.controllers[].controller_type: no match in schema examples (may be valid)
+  [WARN] storage.controllers[].driver: no match in schema examples (may be valid)
+  [WARN] power.power_supplies[].part_number: no match in schema examples (may be valid)
+  [WARN] power.summary: no match in schema examples (may be valid)
+  [WARN] power.summary.psu_count: no match in schema examples (may be valid)
+  [WARN] power.summary.psu_active: no match in schema examples (may be valid)
+  [WARN] power.summary.redundant: no match in schema examples (may be valid)
+  [WARN] power.summary.total_capacity_w: no match in schema examples (may be valid)
+  [WARN] power.summary.capacity_unknown_count: no match in schema examples (may be valid)
+  [WARN] power.summary.critical_count: no match in schema examples (may be valid)
+  [WARN] power.summary.warning_count: no match in schema examples (may be valid)
+  [WARN] power.summary.ok_count: no match in schema examples (may be valid)
+  [WARN] power.summary.unknown_health_count: no match in schema examples (may be valid)
+  [WARN] power.summary.health_rollup: no match in schema examples (may be valid)
+  [WARN] power.summary.consumed_watts: no match in schema examples (may be valid)
+  [WARN] power.summary.consumed_capacity_pct: no match in schema examples (may be valid)
+  [WARN] thermal.temperatures[].name: no match in schema examples (may be valid)
+  [WARN] thermal.temperatures[].health: no match in schema examples (may be valid)
+  [WARN] thermal.temperatures[].state: no match in schema examples (may be valid)
+  [WARN] thermal.fans[].name: no match in schema examples (may be valid)
+  [WARN] thermal.fans[].health: no match in schema examples (may be valid)
+  [WARN] thermal.fans[].state: no match in schema examples (may be valid)
+  [WARN] thermal.temperatures[].reading_celsius: no match in schema examples (may be valid)
+  [WARN] thermal.temperatures[].upper_critical: no match in schema examples (may be valid)
+  [WARN] thermal.temperatures[].physical_context: no match in schema examples (may be valid)
+  [WARN] thermal.fans[].reading: no match in schema examples (may be valid)
+  [WARN] thermal.fans[].reading_units: no match in schema examples (may be valid)
+  [WARN] bmc.state: no match in schema examples (may be valid)
+  [WARN] bmc.power_state: no match in schema examples (may be valid)
+  [WARN] bmc.uuid: no match in schema examples (may be valid)
+  [WARN] bmc.mac_address: no match in schema examples (may be valid)
+  [WARN] bmc.dns_name: no match in schema examples (may be valid)
+  [WARN] bmc.network_hostname: no match in schema examples (may be valid)
+  [WARN] bmc.datetime: no match in schema examples (may be valid)
+  [WARN] bmc.datetime_offset: no match in schema examples (may be valid)
+  [WARN] bmc.timezone: no match in schema examples (may be valid)
+  [WARN] bmc.last_reset_time: no match in schema examples (may be valid)
+  [WARN] network.bonds[]: no match in schema examples (may be valid)
+  [WARN] network.bonds[].mode: no match in schema examples (may be valid)
+  [WARN] network.bonds[].slaves[]: no match in schema examples (may be valid)
+  [WARN] network.teams[]: no match in schema examples (may be valid)
+  [WARN] network.bridges[]: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].bond_role: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].bond_master: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].slave_state: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].bond_mode: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].active_slave: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].bond_slaves: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].addresses[].label: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].addresses[].parent_interface: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].addresses[].is_alias: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].addresses[].scope: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].addresses[].is_secondary: no match in schema examples (may be valid)
+  [WARN] network.bonds[].addresses[].label: no match in schema examples (may be valid)
+  [WARN] network.bonds[].addresses[].parent_interface: no match in schema examples (may be valid)
+  [WARN] network.bonds[].addresses[].is_alias: no match in schema examples (may be valid)
+  [WARN] network.bonds[].addresses[].scope: no match in schema examples (may be valid)
+  [WARN] network.bonds[].addresses[].is_secondary: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].vlan_id: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].vlan_parent: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].team_role: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].team_master: no match in schema examples (may be valid)
+  [WARN] storage.hbas[].iqn: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].node_guid: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].rate: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].rate_gbps: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].source: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].adapter: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].port: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].port_guid: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].link_status: no match in schema examples (may be valid)
+  [WARN] storage.infiniband[].model: no match in schema examples (may be valid)
+  [WARN] multi_node: no match in schema examples (may be valid)
+  [WARN] multi_node.enabled: no match in schema examples (may be valid)
+  [WARN] multi_node.layout: no match in schema examples (may be valid)
+  [WARN] multi_node.summary: no match in schema examples (may be valid)
+  [WARN] multi_node.composition: no match in schema examples (may be valid)
+  [WARN] multi_node.composition.resource_blocks[]: no match in schema examples (may be valid)
+  [WARN] multi_node.composition.resource_blocks[].processor_count: no match in schema examples (may be valid)
+  [WARN] multi_node.composition.resource_blocks[].memory_count: no match in schema examples (may be valid)
+  [WARN] multi_node.fabrics: no match in schema examples (may be valid)
+  [WARN] multi_node.partitions[]: no match in schema examples (may be valid)
+  [WARN] multi_node.managers[]: no match in schema examples (may be valid)
+  [WARN] multi_node.chassis[]: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.credential_scope: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.sudo: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.serial_number: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.recovery_credential_scope: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.adapter_first_pass: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.auth: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.product: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.systems_uri: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.account_service: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.multi_node_layout: no match in schema examples (may be valid)
+  [WARN] diagnosis.details.rmc_activation_check: no match in schema examples (may be valid)
+  [WARN] network.interfaces[].description: no match in schema examples (may be valid)
+  [WARN] system.runtime.ntp_servers: no match in schema examples (may be valid)
+
+Total: 10 checks, 8 passed, 0 failed, 113 warnings
+RESULT: PASS
+
+== [ci_gate] output schema drift
+output schema 정합: sections=11 fd_paths=262 fd_section_prefixes=19
+
+== [ci_gate] vendor boundary / harness consistency
+벤더 경계 통과: common/ + 3-channel gather에 vendor 이름 하드코딩 없음
+=== 하네스 일관성 검증 ===
+rules: 28, skills: 47, agents: 47, policies: 7
+
+통과: 모든 참조 정합 확인
+
+== [ci_gate] finalize corpus (결과 정리 결과를 정답지와 비교)
+[corpus] OK    01_normal                          ch=os      accepted=3 exit=0 by_origin={'output': 3, 'checkpoint': 0, 'synthetic': 0}
+[corpus] OK    02_dup_identical                   ch=os      accepted=2 exit=0 by_origin={'output': 2, 'checkpoint': 0, 'synthetic': 0}
+[corpus] OK    03_dup_conflict                    ch=os      accepted=2 exit=2 by_origin={'output': 2, 'checkpoint': 0, 'synthetic': 0}
+[corpus] OK    04_truncated_tail                  ch=esxi    accepted=2 exit=2 by_origin={'output': 1, 'checkpoint': 0, 'synthetic': 1}
+[corpus] OK    05_corrupt_middle                  ch=os      accepted=3 exit=2 by_origin={'output': 2, 'checkpoint': 0, 'synthetic': 1}
+[corpus] OK    06_checkpoint_addon_interrupted    ch=os      accepted=2 exit=0 by_origin={'output': 1, 'checkpoint': 1, 'synthetic': 0}
+[corpus] OK    07_checkpoint_addon_done           ch=redfish accepted=1 exit=0 by_origin={'output': 0, 'checkpoint': 1, 'synthetic': 0}
+[corpus] OK    08_progress_precheck_failed        ch=os      accepted=1 exit=0 by_origin={'output': 0, 'checkpoint': 0, 'synthetic': 1}
+[corpus] OK    09_auth_proven_then_lost           ch=esxi    accepted=2 exit=0 by_origin={'output': 1, 'checkpoint': 0, 'synthetic': 1}
+[corpus] OK    10_nothing_synthetic               ch=redfish accepted=2 exit=0 by_origin={'output': 0, 'checkpoint': 0, 'synthetic': 2}
+[corpus] OK    11_wrong_target_type_dropped       ch=os      accepted=1 exit=2 by_origin={'output': 0, 'checkpoint': 0, 'synthetic': 1}
+[corpus] OK    12_foreign_ip_dropped              ch=os      accepted=2 exit=2 by_origin={'output': 1, 'checkpoint': 0, 'synthetic': 1}
+[corpus] OK    13_mixed_blank_lines               ch=redfish accepted=5 exit=2 by_origin={'output': 2, 'checkpoint': 1, 'synthetic': 2}
+[corpus] OK    14_lost_without_auth               ch=os      accepted=2 exit=0 by_origin={'output': 0, 'checkpoint': 0, 'synthetic': 2}
+[corpus] OK    15_value_type_errors_isolated      ch=os      accepted=4 exit=2 by_origin={'output': 2, 'checkpoint': 1, 'synthetic': 1}
+[corpus] OK    16_non_finite_numbers              ch=redfish accepted=3 exit=2 by_origin={'output': 1, 'checkpoint': 1, 'synthetic': 1}
+[corpus] OK    17_meta_and_scalar_types           ch=esxi    accepted=3 exit=2 by_origin={'output': 1, 'checkpoint': 0, 'synthetic': 2}
+[corpus] OK    18_callback_reconciled_from_checkpoint ch=os      accepted=2 exit=0 by_origin={'output': 2, 'checkpoint': 0, 'synthetic': 0}
+[corpus] OK    19_infra_wait_expired              ch=os      accepted=3 exit=0 by_origin={'output': 1, 'checkpoint': 0, 'synthetic': 2}
+[corpus] OK    20_resume_impossible               ch=redfish accepted=3 exit=0 by_origin={'output': 1, 'checkpoint': 0, 'synthetic': 2}
+[corpus] RESULT: MATCH cases=20 mismatches=0
+
+== [ci_gate] pytest offline (unit, e2e, regression, integration -m 'not live')
+..................s.....................ss.ss.....s.ssssss.............. [  1%]
+..................s............................s........................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 11%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+.........................................s.............................. [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+............................ssssssssssssssssssssssssssssssssssssssssssss [ 77%]
+ssssssssssssssssss...................................................... [ 78%]
+..........................................................ssssssssssssss [ 79%]
+ssssssssssssssssss........sssssssssss................ssssssssssss..sssss [ 80%]
+ss...................................................................... [ 81%]
+..........................ssssssssssssssssssssssssssssssss.............. [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+...................................................................s...s [ 88%]
+...s.................................................................... [ 89%]
+......................s...s...s......................................... [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+......................xxxx..x........................................... [ 98%]
+.................s......................................ss.s.s...s...... [ 99%]
+..............................                                           [100%]
+=============================== warnings summary ===============================
+tests/unit/test_esxi_hostname_ip_guard.py: 11 warnings
+tests/unit/test_esxi_serial_npar.py: 14 warnings
+tests/unit/test_gather_identity_render.py: 3 warnings
+tests/e2e/test_section_message_contract.py: 1 warning
+  /home/hshwang/venv-se-ci-20261028/lib/python3.12/site-packages/jinja2/lexer.py:654: DeprecationWarning: invalid escape sequence '\s'
+    .decode("unicode-escape")
+
+tests/unit/test_linux_memory_parser.py: 82 warnings
+tests/unit/test_linux_memory_without_privilege.py: 4 warnings
+tests/e2e/test_section_message_contract.py: 2 warnings
+  /home/hshwang/venv-se-ci-20261028/lib/python3.12/site-packages/jinja2/lexer.py:654: DeprecationWarning: invalid escape sequence '\|'
+    .decode("unicode-escape")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+6250 passed, 183 skipped, 5 xfailed, 117 warnings in 293.52s (0:04:53)
+........................................................................ [ 13%]
+........................................................................ [ 27%]
+............................s.ss........................................ [ 40%]
+........................................................................ [ 54%]
+........................................................................ [ 68%]
+........................................................................ [ 81%]
+........................................................................ [ 95%]
+........................                                                 [100%]
+525 passed, 4 skipped, 1 deselected in 65.81s (0:01:05)
+
+== [ci_gate] ansible-playbook --syntax-check (3 채널)
+[WARNING]: Could not match supplied host pattern, ignoring: _os_failed
+[WARNING]: Could not match supplied host pattern, ignoring: _os_linux
+[WARNING]: Could not match supplied host pattern, ignoring: _os_windows
+
+playbook: os-gather/site.yml
+
+playbook: esxi-gather/site.yml
+
+playbook: redfish-gather/site.yml
+
+[ci_gate] RESULT: PASS
+ci_gate_rc=0

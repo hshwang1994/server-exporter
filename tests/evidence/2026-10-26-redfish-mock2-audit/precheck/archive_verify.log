@@ -1,0 +1,14 @@
+csus3200_01      src= 4068 ext= 4068 missing=0 extra=0 sha_diff=0 -> OK
+csus3200_02      src= 3974 ext= 3974 missing=0 extra=0 sha_diff=0 -> OK
+csus3200_03      src= 3998 ext= 3998 missing=0 extra=0 sha_diff=0 -> OK
+dl380_gen12_01   src= 3551 ext= 3551 missing=0 extra=0 sha_diff=0 -> OK
+dl380_gen12_02   src= 3009 ext= 3009 missing=0 extra=0 sha_diff=0 -> OK
+dl380_gen12_03   src= 2413 ext= 2413 missing=0 extra=0 sha_diff=0 -> OK
+dl380_gen12_04   src= 3575 ext= 3575 missing=0 extra=0 sha_diff=0 -> OK
+sr650_v4_01      src= 4506 ext= 4506 missing=0 extra=0 sha_diff=0 -> OK
+sr650_v4_02      src= 4730 ext= 4730 missing=0 extra=0 sha_diff=0 -> OK
+sr650_v4_03      src= 5684 ext= 5684 missing=0 extra=0 sha_diff=0 -> OK
+sr650_v4_04      src= 4426 ext= 4426 missing=0 extra=0 sha_diff=0 -> OK
+SHA256SUMS verify: OK
+RESULT OK
+rc=0

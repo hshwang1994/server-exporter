@@ -89,4 +89,10 @@
           )
           or (_rf_probe_result.probe_facts | default({}, true)).get('model_hint', '')
         }}
+      # 2026-10-27 (01-adapter-001): Manager.Model. 무인증 probe 에서는 data.bmc 가 비어 '' → 선택에 중립(1차 선택 불변).
+      bmc_model: >-
+        {{
+          ((_rf_probe_result.data | default({}, true)).get('bmc') | default({}, true)).get('model', '')
+          | default('', true)
+        }}
   no_log: true

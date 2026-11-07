@@ -147,8 +147,11 @@ def test_rmc_create_posts_once_without_enabled_and_is_verified(monkeypatch):
     monkeypatch.setattr(rg, "account_service_discover",
                         _as_discovery(lambda *a, **k: ({}, [], []), role_ids=["Administrator"]))
     monkeypatch.setattr(rg, "_post", fake_post)
-    # RMC 계정 리소스는 Enabled 를 노출하지 않는다 — 재조회 상태 대조가 '없는 속성' 을 틀렸다고 하면 안 된다
-    monkeypatch.setattr(rg, "_get", _get_router({"UserName": TARGET, "RoleId": "Administrator"}))
+    # 2026-10-27 (06-bmc-002, 2차 Mock 7/7 미러 실측): RMC 계정 리소스는 Enabled · Locked 를 **노출한다**(Enabled true · Locked false) 그리고
+    #   `@Redfish.WriteableProperties: ["Password"]` 를 선언한다 — 종전 "Enabled 를 노출하지 않는다" 전제는 사이트 쓰기 거부(PropertyUnknown)에서
+    #   추정한 것이었다. 생성 POST 가 Enabled 를 보내지 않는 계약은 그대로다(쓰기 거부는 실측, 노출은 미러 실측).
+    monkeypatch.setattr(rg, "_get", _get_router({"UserName": TARGET, "RoleId": "Administrator", "Enabled": True, "Locked": False,
+                                                 "AccountTypes": ["Redfish"], "@Redfish.WriteableProperties": ["Password"]}))
 
     out = _provision("hpe", adapter_id=CSUS_HINT)
 

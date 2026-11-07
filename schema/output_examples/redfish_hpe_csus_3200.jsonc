@@ -124,8 +124,8 @@
     "cpu": {                                            // Partition0 CPU summary (4-socket × Intel Xeon Platinum 8480+)
       "sockets": 4,                                     // Partition0 만 — 전체는 data.multi_node.partitions[].cpu 참조
       "cores_physical": 224,                            // 56 cores × 4 sockets
-      "logical_threads": 448,                           // HT 활성 — adapter processor_summary_logical_count: cores → per-CPU TotalThreads 합 (RMC LogicalProcessorCount 는 코어 수, 2026-10-19 A-2)
       "model": "Intel(R) Xeon(R) Platinum 8480+",
+      "manufacturer": "Intel",                           // Processor.Manufacturer 정규화 (2026-10-27 FIX 2 — Intel(R) Corporation → Intel)
       "max_speed_mhz": null,                            // mock — site 실측 시 ProcessorMaxSpeedMHz
       "architecture": null,
       "summary": {                                      // cycle 2026-05-11 F2-b 8 필드 통일
@@ -213,7 +213,6 @@
           "cpu": {                                      // partition 별 CPU summary — 4-socket × Intel Xeon Platinum 8480+
             "sockets": 4,
             "cores_physical": 224,
-            "logical_threads": 448,
             "model": "Intel(R) Xeon(R) Platinum 8480+",
             "max_speed_mhz": null,
             "architecture": null
@@ -251,7 +250,6 @@
           "cpu": {
             "sockets": 4,
             "cores_physical": 224,
-            "logical_threads": 448,
             "model": "Intel(R) Xeon(R) Platinum 8480+",
             "max_speed_mhz": null,
             "architecture": null
@@ -289,7 +287,6 @@
           "cpu": {
             "sockets": 4,
             "cores_physical": 224,
-            "logical_threads": 448,
             "model": "Intel(R) Xeon(R) Platinum 8480+",
             "max_speed_mhz": null,
             "architecture": null

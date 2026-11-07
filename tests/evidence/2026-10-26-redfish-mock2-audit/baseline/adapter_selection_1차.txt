@@ -1,0 +1,76 @@
+======================================================================
+HPE_CSUS3200/01
+  ServiceRoot.Product = 'Compute Scale-up Server 3200'  RedfishVersion='1.19.0'
+  hints           : {'model_hint': 'Compute Scale-up Server 3200'}
+  facts(vendor/model/firmware) : 'hpe' / 'Compute Scale-up Server 3200' / ''
+  [SELECT] -> redfish_hpe_csus_3200  (score=102545, file=hpe_csus_3200.yml)
+             102545  redfish_hpe_csus_3200
+             100320  redfish_hpe_ilo6
+              90320  redfish_hpe_ilo5
+              50320  redfish_hpe_ilo4
+              10120  redfish_hpe_ilo
+======================================================================
+HPE_CSUS3200/02
+  ServiceRoot.Product = 'Compute Scale-up Server 3200'  RedfishVersion='1.19.0'
+  hints           : {'model_hint': 'Compute Scale-up Server 3200'}
+  facts(vendor/model/firmware) : 'hpe' / 'Compute Scale-up Server 3200' / ''
+  [SELECT] -> redfish_hpe_csus_3200  (score=102545, file=hpe_csus_3200.yml)
+             102545  redfish_hpe_csus_3200
+             100320  redfish_hpe_ilo6
+              90320  redfish_hpe_ilo5
+              50320  redfish_hpe_ilo4
+              10120  redfish_hpe_ilo
+======================================================================
+HPE_CSUS3200/03
+  ServiceRoot.Product = 'Compute Scale-up Server 3200'  RedfishVersion='1.19.0'
+  hints           : {'model_hint': 'Compute Scale-up Server 3200'}
+  facts(vendor/model/firmware) : 'hpe' / 'Compute Scale-up Server 3200' / ''
+  [SELECT] -> redfish_hpe_csus_3200  (score=102545, file=hpe_csus_3200.yml)
+             102545  redfish_hpe_csus_3200
+             100320  redfish_hpe_ilo6
+              90320  redfish_hpe_ilo5
+              50320  redfish_hpe_ilo4
+              10120  redfish_hpe_ilo
+======================================================================
+HPE_CSUS3200/04
+  ServiceRoot.Product = 'Compute Scale-up Server 3200'  RedfishVersion='1.19.0'
+  hints           : {'model_hint': 'Compute Scale-up Server 3200'}
+  facts(vendor/model/firmware) : 'hpe' / 'Compute Scale-up Server 3200' / ''
+  [SELECT] -> redfish_hpe_csus_3200  (score=102545, file=hpe_csus_3200.yml)
+             102545  redfish_hpe_csus_3200
+             100320  redfish_hpe_ilo6
+              90320  redfish_hpe_ilo5
+              50320  redfish_hpe_ilo4
+              10120  redfish_hpe_ilo
+======================================================================
+DELL_R740/01
+  ServiceRoot.Product = 'Integrated Dell Remote Access Controller'  RedfishVersion='1.17.0'
+  hints           : {}
+  facts(vendor/model/firmware) : 'dell' / '' / ''
+  [SELECT] -> redfish_dell_idrac10  (score=120520, file=dell_idrac10.yml)
+             120520  redfish_dell_idrac10
+             100320  redfish_dell_idrac9
+              50320  redfish_dell_idrac8
+              10120  redfish_dell_idrac
+               -400  redfish_generic
+======================================================================
+HPE_DL380/01
+  ServiceRoot.Product = 'HPE ProLiant Compute DL380 Gen12'  RedfishVersion='1.22.1'
+  hints           : {'model_hint': 'HPE ProLiant Compute DL380 Gen12', 'firmware_hint': '1.20.00', 'manager_type': 'iLO 7'}
+  facts(vendor/model/firmware) : 'hpe' / 'HPE ProLiant Compute DL380 Gen12' / '1.20.00'
+  [SELECT] -> redfish_hpe_ilo7  (score=120570, file=hpe_ilo7.yml)
+             120570  redfish_hpe_ilo7
+              50345  redfish_hpe_ilo4
+              10120  redfish_hpe_ilo
+               -400  redfish_generic
+======================================================================
+Lenovo_SR650/01
+  ServiceRoot.Product = None  RedfishVersion='1.17.0'
+  hints           : {}
+  facts(vendor/model/firmware) : 'lenovo' / '' / ''
+  [SELECT] -> redfish_lenovo_xcc3  (score=120520, file=lenovo_xcc3.yml)
+             120520  redfish_lenovo_xcc3
+             100520  redfish_lenovo_xcc
+              50320  redfish_lenovo_imm2
+              10120  redfish_lenovo_bmc
+               -400  redfish_generic

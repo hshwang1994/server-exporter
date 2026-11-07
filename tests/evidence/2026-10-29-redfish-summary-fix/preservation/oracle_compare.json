@@ -1,0 +1,3720 @@
+{
+ "csus3200_01": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 32,
+   "envelope": 32,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Enabled': 32}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 1048576,
+   "envelope": 1048576,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "3200"
+   ],
+   "envelope": [
+    "3200"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 0 · links 4 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "S6GRNA0L100299",
+    "S6GRNA0L100303",
+    "S7R1NE0YB01181",
+    "S7R1NE0YB01191"
+   ],
+   "envelope": [
+    "S6GRNA0L100299",
+    "S6GRNA0L100303",
+    "S7R1NE0YB01181",
+    "S7R1NE0YB01191"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:17:28:d0:a4",
+    "51:40:2e:c0:17:28:d0:a6",
+    "51:40:2e:c0:17:28:d1:b8",
+    "51:40:2e:c0:17:28:d1:ba"
+   ],
+   "envelope": [
+    "51:40:2e:c0:17:28:d0:a4",
+    "51:40:2e:c0:17:28:d0:a6",
+    "51:40:2e:c0:17:28:d1:b8",
+    "51:40:2e:c0:17:28:d1:ba"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "PCIeCard11",
+    "PCIeCard14"
+   ],
+   "envelope": [
+    "PCIeCard11",
+    "PCIeCard14"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "down"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 8 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 5,
+   "envelope": 6,
+   "eq": false,
+   "note": "판별기 카드 전체 7(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 12,
+   "envelope": 12,
+   "eq": true,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 63,
+   "envelope": 63,
+   "eq": true,
+   "note": "판별기 전체 63 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 전체 10 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 2,
+   "envelope": 13,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 2 · Disabled∧무버전 0 · 봉투 category ['nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.77.30-20260911_061319'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": null,
+   "envelope": "Compute Scale-up Server 3200",
+   "eq": false,
+   "note": ""
+  }
+ ],
+ "csus3200_02": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 112,
+   "envelope": 112,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 16 · 상태 {'Enabled': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 524288,
+   "envelope": 524288,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "3200"
+   ],
+   "envelope": [
+    "3200"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 0 · links 4 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "S6GRNE0L100110",
+    "S6GRNE0L100111",
+    "S6GRNE0L100112",
+    "S6GRNE0L100113"
+   ],
+   "envelope": [
+    "S6GRNE0L100110",
+    "S6GRNE0L100111",
+    "S6GRNE0L100112",
+    "S6GRNE0L100113"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "FC 카드 0 · FC 전용 0"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 4 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 3,
+   "envelope": 2,
+   "eq": false,
+   "note": "판별기 카드 전체 3(FC 0) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 8,
+   "envelope": 4,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 47,
+   "envelope": 47,
+   "eq": true,
+   "note": "판별기 전체 47 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 전체 10 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 2,
+   "envelope": 9,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 2 · Disabled∧무버전 0 · 봉투 category ['nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.77.30-20260911_061319'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": null,
+   "envelope": "Compute Scale-up Server 3200",
+   "eq": false,
+   "note": ""
+  }
+ ],
+ "csus3200_03": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 16 · 상태 {'Enabled': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 524288,
+   "envelope": 524288,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "3200"
+   ],
+   "envelope": [
+    "3200"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 0 · links 4 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "S7R1NE0YB01170",
+    "S7R1NE0YB01171",
+    "S7R1NE0YB01172",
+    "S7R1NE0YB01173"
+   ],
+   "envelope": [
+    "S7R1NE0YB01170",
+    "S7R1NE0YB01171",
+    "S7R1NE0YB01172",
+    "S7R1NE0YB01173"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:18:1c:28:cc",
+    "51:40:2e:c0:18:1c:28:ce",
+    "51:40:2e:c0:18:1c:28:d4",
+    "51:40:2e:c0:18:1c:28:d6"
+   ],
+   "envelope": [
+    "51:40:2e:c0:18:1c:28:cc",
+    "51:40:2e:c0:18:1c:28:ce",
+    "51:40:2e:c0:18:1c:28:d4",
+    "51:40:2e:c0:18:1c:28:d6"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "PCIeCard11",
+    "PCIeCard14"
+   ],
+   "envelope": [
+    "PCIeCard11",
+    "PCIeCard14"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "down"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 8 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 5,
+   "envelope": 6,
+   "eq": false,
+   "note": "판별기 카드 전체 7(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 12,
+   "envelope": 12,
+   "eq": true,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 47,
+   "envelope": 47,
+   "eq": true,
+   "note": "판별기 전체 47 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 전체 10 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 2,
+   "envelope": 13,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 2 · Disabled∧무버전 0 · 봉투 category ['nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.77.30-20260911_061319'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": null,
+   "envelope": "Compute Scale-up Server 3200",
+   "eq": false,
+   "note": ""
+  }
+ ],
+ "dl380_gen12_01": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Enabled': 16, 'Absent': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 1572864,
+   "envelope": 1572864,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 present 2 · absent 6 · links 8 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "S7R1NE0YB01553",
+    "S7R1NE0YB01554"
+   ],
+   "envelope": [
+    "S7R1NE0YB01553",
+    "S7R1NE0YB01554"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:91:1f:2c",
+    "51:40:2e:c0:20:91:1f:2e",
+    "51:40:2e:c0:20:91:20:28",
+    "51:40:2e:c0:20:91:20:2a"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:91:1f:2c",
+    "51:40:2e:c0:20:91:1f:2e",
+    "51:40:2e:c0:20:91:20:28",
+    "51:40:2e:c0:20:91:20:2a"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "DE040000",
+    "DE043000"
+   ],
+   "envelope": [
+    "DE040000",
+    "DE043000"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "linkdown",
+    "linkup"
+   ],
+   "envelope": [
+    "down",
+    "up"
+   ],
+   "eq": false,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 10 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 5,
+   "envelope": 7,
+   "eq": false,
+   "note": "판별기 카드 전체 7(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 10,
+   "envelope": 14,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 ['HpeServerPowerSupply:LineInputVoltage']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 49,
+   "envelope": 49,
+   "eq": true,
+   "note": "판별기 전체 56 · Absent 7 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 25,
+   "envelope": 25,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 25 · Disabled∧무버전 0 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'nic', 'other', 'psu', 'storage_controller', 'tpm']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'iLO 7'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.24.00 Aug 01 2026'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "HPE ProLiant Compute DL380 Gen12",
+   "envelope": "HPE ProLiant Compute DL380 Gen12",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "dl380_gen12_02": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Absent': 24, 'Enabled': 8}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 262144,
+   "envelope": 262144,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 4 · links 8 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "S6GRNN0Y801909",
+    "S6GRNN0Y801910",
+    "S7R1NE0YB01615",
+    "S7R1NE0YB01713"
+   ],
+   "envelope": [
+    "S6GRNN0Y801909",
+    "S6GRNN0Y801910",
+    "S7R1NE0YB01615",
+    "S7R1NE0YB01713"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:91:1c:dc",
+    "51:40:2e:c0:20:91:1c:de",
+    "51:40:2e:c0:20:91:1c:e0",
+    "51:40:2e:c0:20:91:1c:e2"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:91:1c:dc",
+    "51:40:2e:c0:20:91:1c:de",
+    "51:40:2e:c0:20:91:1c:e0",
+    "51:40:2e:c0:20:91:1c:e2"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "DE041000",
+    "DE044000"
+   ],
+   "envelope": [
+    "DE041000",
+    "DE044000"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "linkdown"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": false,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 8 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 4,
+   "envelope": 6,
+   "eq": false,
+   "note": "판별기 카드 전체 6(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 8,
+   "envelope": 12,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 ['HpeServerPowerSupply:LineInputVoltage']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 36,
+   "envelope": 36,
+   "eq": true,
+   "note": "판별기 전체 44 · Absent 8 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 25,
+   "envelope": 25,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 25 · Disabled∧무버전 0 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'nic', 'other', 'psu', 'storage_controller', 'tpm']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'iLO 7'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.24.00 Aug 01 2026'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "HPE ProLiant Compute DL380 Gen12",
+   "envelope": "HPE ProLiant Compute DL380 Gen12",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "dl380_gen12_03": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Enabled': 16, 'None': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 524288,
+   "envelope": 524288,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "판별기 present 0 · absent 0 · links 0 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "FC 카드 0 · FC 전용 0"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 4 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 카드 전체 2(FC 0) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "봉투 port_type ['Ethernet']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 2 · 입력0 ['HpeServerPowerSupply:LineInputVoltage', 'HpeServerPowerSupply:LineInputVoltage']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 42,
+   "envelope": 42,
+   "eq": true,
+   "note": "판별기 전체 42 · Absent 0 · 비-Enabled 42"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 6"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 13,
+   "envelope": 13,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 13 · Disabled∧무버전 0 · 봉투 category ['bios', 'bmc', 'cpld', 'nic', 'other', 'tpm']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'iLO 7'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.24.00 Aug 01 2026'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "HPE ProLiant Compute DL380 Gen12",
+   "envelope": "HPE ProLiant Compute DL380 Gen12",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "dl380_gen12_04": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Absent': 24, 'Enabled': 8}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 262144,
+   "envelope": 262144,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 4 · links 8 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "S6GRNN0Y804559",
+    "S6GRNN0Y804714",
+    "S6GRNN0Y804715",
+    "S6GRNN0Y804725"
+   ],
+   "envelope": [
+    "S6GRNN0Y804559",
+    "S6GRNN0Y804714",
+    "S6GRNN0Y804715",
+    "S6GRNN0Y804725"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:90:9e:58",
+    "51:40:2e:c0:20:90:9e:5a",
+    "51:40:2e:c0:20:90:9e:d8",
+    "51:40:2e:c0:20:90:9e:da"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:90:9e:58",
+    "51:40:2e:c0:20:90:9e:5a",
+    "51:40:2e:c0:20:90:9e:d8",
+    "51:40:2e:c0:20:90:9e:da"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "DE040000",
+    "DE043000"
+   ],
+   "envelope": [
+    "DE040000",
+    "DE043000"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "linkdown",
+    "linkup"
+   ],
+   "envelope": [
+    "down",
+    "up"
+   ],
+   "eq": false,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 8 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 4,
+   "envelope": 6,
+   "eq": false,
+   "note": "판별기 카드 전체 6(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 8,
+   "envelope": 12,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 ['HpeServerPowerSupply:LineInputVoltage']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 46,
+   "envelope": 46,
+   "eq": true,
+   "note": "판별기 전체 54 · Absent 8 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 25,
+   "envelope": 25,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 25 · Disabled∧무버전 0 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'nic', 'other', 'psu', 'storage_controller', 'tpm']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'iLO 7'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.24.00 Aug 01 2026'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "HPE ProLiant Compute DL380 Gen12",
+   "envelope": "HPE ProLiant Compute DL380 Gen12",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "sr650_v4_01": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Absent': 30, 'Enabled': 2}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 131072,
+   "envelope": 131072,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 0 · links 4 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "Y620001H",
+    "Y62000AK",
+    "Y62000G6",
+    "Y62000GF"
+   ],
+   "envelope": [
+    "Y620001H",
+    "Y62000AK",
+    "Y62000G6",
+    "Y62000GF"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "FC 카드 0 · FC 전용 0"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 4,
+   "envelope": 5,
+   "eq": false,
+   "note": "판별기 System EthernetInterfaces 5 · 8옥텟 0 · HostIF류 1 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 카드 전체 2(FC 0) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "봉투 port_type ['Ethernet']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 ['PSU1:PowerInputWatts']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 전체 8 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 24,
+   "envelope": 24,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 28 · Disabled∧무버전 4 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'driver_pack', 'nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Lenovo XClarity Controller 3'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'IHX438R 2.97 20260910'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "ThinkSystem SR650 V4",
+   "envelope": "ThinkSystem SR650 V4",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "sr650_v4_02": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Absent': 30, 'Enabled': 2}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 131072,
+   "envelope": 131072,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 0 · links 4 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "Y6200017",
+    "Y62000AE",
+    "Y62000G3",
+    "Y62000GA"
+   ],
+   "envelope": [
+    "Y6200017",
+    "Y62000AE",
+    "Y62000G3",
+    "Y62000GA"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "21:00:f4:c7:aa:a4:6f:fe",
+    "21:00:f4:c7:aa:a4:6f:ff",
+    "21:00:f4:c7:aa:a4:70:1a",
+    "21:00:f4:c7:aa:a4:70:1b"
+   ],
+   "envelope": [
+    "21:00:f4:c7:aa:a4:6f:fe",
+    "21:00:f4:c7:aa:a4:6f:ff",
+    "21:00:f4:c7:aa:a4:70:1a",
+    "21:00:f4:c7:aa:a4:70:1b"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "slot5_0x4c0000",
+    "slot8_0xc90000"
+   ],
+   "envelope": [
+    "slot5_0x4c0000",
+    "slot8_0xc90000"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "linkdown"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": false,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 4,
+   "envelope": 5,
+   "eq": false,
+   "note": "판별기 System EthernetInterfaces 9 · 8옥텟 4 · HostIF류 1 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 2,
+   "envelope": 4,
+   "eq": false,
+   "note": "판별기 카드 전체 4(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 4,
+   "envelope": 8,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 ['PSU1:PowerInputWatts']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 전체 8 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 26,
+   "envelope": 26,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 30 · Disabled∧무버전 4 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'driver_pack', 'nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Lenovo XClarity Controller 3'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'IHX438R 2.97 20260910'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "ThinkSystem SR650 V4",
+   "envelope": "ThinkSystem SR650 V4",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "sr650_v4_03": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Absent': 16, 'Enabled': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 1048576,
+   "envelope": 1048576,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 present 2 · absent 0 · links 2 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "Y63000BY",
+    "Y63000CA"
+   ],
+   "envelope": [
+    "Y63000BY",
+    "Y63000CA"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "21:00:f4:c7:aa:a4:76:42",
+    "21:00:f4:c7:aa:a4:76:43",
+    "21:00:f4:c7:aa:a4:7f:ba",
+    "21:00:f4:c7:aa:a4:7f:bb"
+   ],
+   "envelope": [
+    "21:00:f4:c7:aa:a4:76:42",
+    "21:00:f4:c7:aa:a4:76:43",
+    "21:00:f4:c7:aa:a4:7f:ba",
+    "21:00:f4:c7:aa:a4:7f:bb"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "slot5_0x4c0000",
+    "slot6_0xa70000"
+   ],
+   "envelope": [
+    "slot5_0x4c0000",
+    "slot6_0xa70000"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "linkdown",
+    "linkup"
+   ],
+   "envelope": [
+    "down",
+    "up"
+   ],
+   "eq": false,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 10,
+   "envelope": 11,
+   "eq": false,
+   "note": "판별기 System EthernetInterfaces 15 · 8옥텟 4 · HostIF류 1 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 5,
+   "envelope": 7,
+   "eq": false,
+   "note": "판별기 카드 전체 7(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 10,
+   "envelope": 14,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 ['PSU1:PowerInputWatts']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 22,
+   "envelope": 22,
+   "eq": true,
+   "note": "판별기 전체 22 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 36,
+   "envelope": 36,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 40 · Disabled∧무버전 4 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'driver_pack', 'nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Lenovo XClarity Controller 3'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'IHX438R 2.97 20260910'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "ThinkSystem SR650 V4",
+   "envelope": "ThinkSystem SR650 V4",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "sr650_v4_04": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Absent': 24, 'Enabled': 8}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 262144,
+   "envelope": 262144,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 present 6 · absent 0 · links 6 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "W61000T4",
+    "W61000VZ",
+    "W610012P",
+    "W610013Z",
+    "Y63001CN",
+    "Y63001CX"
+   ],
+   "envelope": [
+    "W61000T4",
+    "W61000VZ",
+    "W610012P",
+    "W610013Z",
+    "Y63001CN",
+    "Y63001CX"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "FC 카드 0 · FC 전용 0"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 4,
+   "envelope": 5,
+   "eq": false,
+   "note": "판별기 System EthernetInterfaces 5 · 8옥텟 0 · HostIF류 1 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 카드 전체 2(FC 0) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "봉투 port_type ['Ethernet']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 ['PSU1:PowerInputWatts']"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 14,
+   "envelope": 14,
+   "eq": true,
+   "note": "판별기 전체 14 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 26,
+   "envelope": 26,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 30 · Disabled∧무버전 4 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'driver_pack', 'nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Lenovo XClarity Controller 3'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'IHX438R 2.97 20260910'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "ThinkSystem SR650 V4",
+   "envelope": "ThinkSystem SR650 V4",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "r1_DELL_R740_01": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 48,
+   "envelope": 48,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 전체 슬롯 8 · 상태 {'Enabled': 8}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 262144,
+   "envelope": 262144,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "2933"
+   ],
+   "envelope": [
+    "2933"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 0 · links 4 · simple 5 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "WFK4Z9HB",
+    "WFK4ZB44",
+    "WFK4ZB6D",
+    "WFK4ZF7P"
+   ],
+   "envelope": [
+    "WFK4Z9HB",
+    "WFK4ZB44",
+    "WFK4ZB6D",
+    "WFK4ZF7P"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "21:00:34:80:0d:6c:2a:4c",
+    "21:00:34:80:0d:6c:2a:4d",
+    "21:00:34:80:0d:6c:2b:e2",
+    "21:00:34:80:0d:6c:2b:e3"
+   ],
+   "envelope": [
+    "21:00:34:80:0d:6c:2a:4c",
+    "21:00:34:80:0d:6c:2a:4d",
+    "21:00:34:80:0d:6c:2b:e2",
+    "21:00:34:80:0d:6c:2b:e3"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "FC.Slot.1",
+    "FC.Slot.7"
+   ],
+   "envelope": [
+    "FC.Slot.1",
+    "FC.Slot.7"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "linkdown"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": false,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 12,
+   "envelope": 12,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 12 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 5,
+   "envelope": 7,
+   "eq": false,
+   "note": "판별기 카드 전체 7(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 12,
+   "envelope": 16,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 전체 4 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 62,
+   "envelope": 32,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 62 · Disabled∧무버전 0 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'diagnostic', 'drive', 'driver_pack', 'lifecycle', 'nic', 'other', 'psu', 'service_module', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '14G Monolithic'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '7.00.00.184'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "PowerEdge R740",
+   "envelope": "PowerEdge R740",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "r1_HPE_CSUS3200_01": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 32,
+   "envelope": 32,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 16 · 상태 {'Enabled': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 524288,
+   "envelope": 524288,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "2400"
+   ],
+   "envelope": [
+    "2400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "판별기 present 0 · absent 0 · links 0 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:82:c2:2c",
+    "51:40:2e:c0:20:82:c2:2e",
+    "51:40:2e:c0:20:82:c2:94",
+    "51:40:2e:c0:20:82:c2:96"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:82:c2:2c",
+    "51:40:2e:c0:20:82:c2:2e",
+    "51:40:2e:c0:20:82:c2:94",
+    "51:40:2e:c0:20:82:c2:96"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "PCIeCard10",
+    "PCIeCard15"
+   ],
+   "envelope": [
+    "PCIeCard10",
+    "PCIeCard15"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "down"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 0 · 8옥텟 0 · HostIF류 0 · 봉투 kind []"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 1,
+   "envelope": 2,
+   "eq": false,
+   "note": "판별기 카드 전체 3(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "봉투 port_type ['FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 47,
+   "envelope": 47,
+   "eq": true,
+   "note": "판별기 전체 47 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 전체 10 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 2,
+   "envelope": 6,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 2 · Disabled∧무버전 0 · 봉투 category ['other', 'psu']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.75.108-20260408_164726'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": null,
+   "envelope": "Compute Scale-up Server 3200",
+   "eq": false,
+   "note": ""
+  }
+ ],
+ "r1_HPE_CSUS3200_02": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 32,
+   "envelope": 32,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 16 · 상태 {'Enabled': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 524288,
+   "envelope": 524288,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "2400"
+   ],
+   "envelope": [
+    "2400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "판별기 present 0 · absent 0 · links 0 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:82:ec:10",
+    "51:40:2e:c0:20:82:ec:12",
+    "51:40:2e:c0:20:82:ec:4c",
+    "51:40:2e:c0:20:82:ec:4e"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:82:ec:10",
+    "51:40:2e:c0:20:82:ec:12",
+    "51:40:2e:c0:20:82:ec:4c",
+    "51:40:2e:c0:20:82:ec:4e"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "PCIeCard10",
+    "PCIeCard15"
+   ],
+   "envelope": [
+    "PCIeCard10",
+    "PCIeCard15"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "down"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 0 · 8옥텟 0 · HostIF류 0 · 봉투 kind []"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 1,
+   "envelope": 2,
+   "eq": false,
+   "note": "판별기 카드 전체 3(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "봉투 port_type ['FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 47,
+   "envelope": 47,
+   "eq": true,
+   "note": "판별기 전체 47 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 전체 10 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 2,
+   "envelope": 6,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 2 · Disabled∧무버전 0 · 봉투 category ['other', 'psu']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.75.108-20260408_164726'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": null,
+   "envelope": "Compute Scale-up Server 3200",
+   "eq": false,
+   "note": ""
+  }
+ ],
+ "r1_HPE_CSUS3200_03": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 32,
+   "envelope": 32,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Enabled': 32}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 1048576,
+   "envelope": 1048576,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "2400"
+   ],
+   "envelope": [
+    "2400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 present 2 · absent 0 · links 2 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "YFN0A0SP0T83",
+    "YFN0A0SR0T83"
+   ],
+   "envelope": [
+    "YFN0A0SP0T83",
+    "YFN0A0SR0T83"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "FC 카드 4 · FC 전용 4"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:82:eb:e8",
+    "51:40:2e:c0:20:82:eb:ea",
+    "51:40:2e:c0:20:82:ec:00",
+    "51:40:2e:c0:20:82:ec:02",
+    "51:40:2e:c0:20:82:ec:18",
+    "51:40:2e:c0:20:82:ec:1a",
+    "51:40:2e:c0:20:82:ec:64",
+    "51:40:2e:c0:20:82:ec:66"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:82:eb:e8",
+    "51:40:2e:c0:20:82:eb:ea",
+    "51:40:2e:c0:20:82:ec:00",
+    "51:40:2e:c0:20:82:ec:02",
+    "51:40:2e:c0:20:82:ec:18",
+    "51:40:2e:c0:20:82:ec:1a",
+    "51:40:2e:c0:20:82:ec:64",
+    "51:40:2e:c0:20:82:ec:66"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "PCIeCard10",
+    "PCIeCard15",
+    "PCIeCard2",
+    "PCIeCard7"
+   ],
+   "envelope": [
+    "PCIeCard10",
+    "PCIeCard15",
+    "PCIeCard2",
+    "PCIeCard7"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "down"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 8 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 5,
+   "envelope": 8,
+   "eq": false,
+   "note": "판별기 카드 전체 9(FC 4) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 12,
+   "envelope": 16,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 63,
+   "envelope": 63,
+   "eq": true,
+   "note": "판별기 전체 63 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 전체 10 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 2,
+   "envelope": 15,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 2 · Disabled∧무버전 0 · 봉투 category ['nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.75.108-20260408_164726'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": null,
+   "envelope": "Compute Scale-up Server 3200",
+   "eq": false,
+   "note": ""
+  }
+ ],
+ "r1_HPE_CSUS3200_04": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 64,
+   "envelope": 64,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 32,
+   "envelope": 32,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Enabled': 32}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 1048576,
+   "envelope": 1048576,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "2400"
+   ],
+   "envelope": [
+    "2400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 present 2 · absent 0 · links 2 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "YFN0A0CM0T83",
+    "YFN0A0D30T83"
+   ],
+   "envelope": [
+    "YFN0A0CM0T83",
+    "YFN0A0D30T83"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "FC 카드 4 · FC 전용 4"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:82:eb:cc",
+    "51:40:2e:c0:20:82:eb:ce",
+    "51:40:2e:c0:20:82:ec:54",
+    "51:40:2e:c0:20:82:ec:56",
+    "51:40:2e:c0:20:82:ec:58",
+    "51:40:2e:c0:20:82:ec:5a",
+    "51:40:2e:c0:20:82:ec:60",
+    "51:40:2e:c0:20:82:ec:62"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:82:eb:cc",
+    "51:40:2e:c0:20:82:eb:ce",
+    "51:40:2e:c0:20:82:ec:54",
+    "51:40:2e:c0:20:82:ec:56",
+    "51:40:2e:c0:20:82:ec:58",
+    "51:40:2e:c0:20:82:ec:5a",
+    "51:40:2e:c0:20:82:ec:60",
+    "51:40:2e:c0:20:82:ec:62"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "PCIeCard10",
+    "PCIeCard15",
+    "PCIeCard2",
+    "PCIeCard7"
+   ],
+   "envelope": [
+    "PCIeCard10",
+    "PCIeCard15",
+    "PCIeCard2",
+    "PCIeCard7"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "down"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 8,
+   "envelope": 8,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 8 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 5,
+   "envelope": 8,
+   "eq": false,
+   "note": "판별기 카드 전체 9(FC 4) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 12,
+   "envelope": 16,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 63,
+   "envelope": 63,
+   "eq": true,
+   "note": "판별기 전체 63 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 10,
+   "envelope": 10,
+   "eq": true,
+   "note": "판별기 전체 10 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 2,
+   "envelope": 15,
+   "eq": false,
+   "note": "판별기 FirmwareInventory 2 · Disabled∧무버전 0 · 봉투 category ['nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.75.108-20260408_164726'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": null,
+   "envelope": "Compute Scale-up Server 3200",
+   "eq": false,
+   "note": ""
+  }
+ ],
+ "r1_HPE_DL380_01": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 48,
+   "envelope": 48,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Enabled': 16, 'Absent': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 1048576,
+   "envelope": 1048576,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 present 2 · absent 6 · links 8 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "S6GRNC0YA00941",
+    "S6GRNC0YA01310"
+   ],
+   "envelope": [
+    "S6GRNC0YA00941",
+    "S6GRNC0YA01310"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "FC 카드 2 · FC 전용 2"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [
+    "51:40:2e:c0:20:8f:39:30",
+    "51:40:2e:c0:20:8f:39:32",
+    "51:40:2e:c0:20:8f:3b:dc",
+    "51:40:2e:c0:20:8f:3b:de"
+   ],
+   "envelope": [
+    "51:40:2e:c0:20:8f:39:30",
+    "51:40:2e:c0:20:8f:39:32",
+    "51:40:2e:c0:20:8f:3b:dc",
+    "51:40:2e:c0:20:8f:3b:de"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [
+    "DE041000",
+    "DE044000"
+   ],
+   "envelope": [
+    "DE041000",
+    "DE044000"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [
+    "linkdown"
+   ],
+   "envelope": [
+    "down"
+   ],
+   "eq": false,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 System EthernetInterfaces 6 · 8옥텟 0 · HostIF류 0 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 3,
+   "envelope": 5,
+   "eq": false,
+   "note": "판별기 카드 전체 5(FC 2) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 6,
+   "envelope": 10,
+   "eq": false,
+   "note": "봉투 port_type ['Ethernet', 'FibreChannel']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 43,
+   "envelope": 43,
+   "eq": true,
+   "note": "판별기 전체 52 · Absent 9 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 6,
+   "envelope": 6,
+   "eq": true,
+   "note": "판별기 전체 6 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 22,
+   "envelope": 22,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 22 · Disabled∧무버전 0 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'nic', 'other', 'psu', 'storage_controller', 'tpm']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'iLO 7'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 '1.20.00 Feb 12 2026'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "HPE ProLiant Compute DL380 Gen12",
+   "envelope": "HPE ProLiant Compute DL380 Gen12",
+   "eq": true,
+   "note": ""
+  }
+ ],
+ "r1_Lenovo_SR650_01": [
+  {
+   "item": "cpu.sockets",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.cores_total",
+   "oracle": 32,
+   "envelope": 32,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "cpu.manufacturer",
+   "oracle": [
+    "Intel(R) Corporation"
+   ],
+   "envelope": "Intel",
+   "eq": false,
+   "note": "원문→정규화 비교는 사람이"
+  },
+  {
+   "item": "memory.slots(populated)",
+   "oracle": 16,
+   "envelope": 16,
+   "eq": true,
+   "note": "판별기 전체 슬롯 32 · 상태 {'Absent': 16, 'Enabled': 16}"
+  },
+  {
+   "item": "memory.total_mb",
+   "oracle": 1048576,
+   "envelope": 1048576,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "memory.speeds",
+   "oracle": [
+    "6400"
+   ],
+   "envelope": [
+    "6400"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disks",
+   "oracle": 4,
+   "envelope": 4,
+   "eq": true,
+   "note": "판별기 present 4 · absent 0 · links 4 · simple 0 · dup {}"
+  },
+  {
+   "item": "storage.disk_serials",
+   "oracle": [
+    "0024081W0ZUH",
+    "0024081W0ZUK",
+    "S76TNA0X602703",
+    "S76TNA0X602704"
+   ],
+   "envelope": [
+    "0024081W0ZUH",
+    "0024081W0ZUK",
+    "S76TNA0X602703",
+    "S76TNA0X602704"
+   ],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.disk_wwn_count",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hbas",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": "FC 카드 0 · FC 전용 0"
+  },
+  {
+   "item": "storage.hba_wwpn",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_adapters",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "storage.hba_link_status(set)",
+   "oracle": [],
+   "envelope": [],
+   "eq": true,
+   "note": "포트 LinkStatus 원값 → 봉투 enum 매핑은 사람이"
+  },
+  {
+   "item": "network.if_eight_octet",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.if_has_wwpn",
+   "oracle": 0,
+   "envelope": 0,
+   "eq": true,
+   "note": ""
+  },
+  {
+   "item": "network.interfaces",
+   "oracle": 12,
+   "envelope": 13,
+   "eq": false,
+   "note": "판별기 System EthernetInterfaces 13 · 8옥텟 0 · HostIF류 1 · 봉투 kind ['server_nic']"
+  },
+  {
+   "item": "network.adapters",
+   "oracle": 3,
+   "envelope": 3,
+   "eq": true,
+   "note": "판별기 카드 전체 3(FC 0) · System 경로 0"
+  },
+  {
+   "item": "network.ports(eth)",
+   "oracle": 12,
+   "envelope": 12,
+   "eq": true,
+   "note": "봉투 port_type ['Ethernet']"
+  },
+  {
+   "item": "power.psu",
+   "oracle": 2,
+   "envelope": 2,
+   "eq": true,
+   "note": "판별기 Absent 0 · 입력0 []"
+  },
+  {
+   "item": "thermal.temps",
+   "oracle": 22,
+   "envelope": 22,
+   "eq": true,
+   "note": "판별기 전체 22 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "thermal.fans",
+   "oracle": 12,
+   "envelope": 12,
+   "eq": true,
+   "note": "판별기 전체 12 · Absent 0 · 비-Enabled 0"
+  },
+  {
+   "item": "firmware.count",
+   "oracle": 24,
+   "envelope": 24,
+   "eq": true,
+   "note": "판별기 FirmwareInventory 26 · Disabled∧무버전 2 · 봉투 category ['backplane', 'bios', 'bmc', 'cpld', 'drive', 'driver_pack', 'nic', 'other', 'psu', 'storage_controller']"
+  },
+  {
+   "item": "bmc.model∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'Lenovo Xclarity Controller 3'"
+  },
+  {
+   "item": "bmc.firmware∈managers",
+   "oracle": true,
+   "envelope": true,
+   "eq": true,
+   "note": "봉투 'IHX414J 1.22 20250402'"
+  },
+  {
+   "item": "hardware.model",
+   "oracle": "ThinkSystem SR650 V4",
+   "envelope": "ThinkSystem SR650 V4",
+   "eq": true,
+   "note": ""
+  }
+ ]
+}

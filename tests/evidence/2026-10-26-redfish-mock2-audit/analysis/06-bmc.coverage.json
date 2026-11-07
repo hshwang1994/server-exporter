@@ -1,0 +1,2414 @@
+{
+ "csus3200_01": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "ISSUE",
+    "evidence": "/redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW: layout 없이 재생(Tier 2 plain)하면 'iLO' — 장비 ManagerType=RackManager 를 쓰지 않음"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.FirmwareVersion = \"1.77.30-20260911_061319\" -> '1.77.30-20260911_061319'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Model = \"Compute Scale-up Server 3200, 4S XNC Base Chassis\" -> 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.ManagerType = \"RackManager\" -> 'RackManager'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no UUID; ServiceIdentification='SGHD4MGNLH' (= serial, not a UUID — dictionary text mentions it: 06-bmc-009); ServiceRoot.UUID is the service UUID"
+   },
+   "serial": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.SerialNumber = \"SGHD4MGNLH\" -> 'SGHD4MGNLH'"
+   },
+   "part_number": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.PartNumber = \"R9N70A\" -> 'R9N70A'"
+   },
+   "manufacturer": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Manufacturer = \"HPE\" -> 'HPE'"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.TimeZoneName = \"Asia/Seoul\" -> 'Asia/Seoul'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTime = \"2026-10-22T14:51:29+09:00\" -> '2026-10-22T14:51:29+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Oem.Hpe is #HpeH3ManagerRmc (no Firmware.Current) -> {ilo_version: null} (CSUS-R4 2026-06-15)"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/RMC/EthernetInterfaces/1 -> 11.65.23.24 == manifest/host (2차) ; NIC order [('1', '11.65.23.24'), ('Aux', 'MISSING'), ('Mul', None), ('Partition0', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:41:99:91"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.FQDN or HostName -> 'yicdspdb01'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/NetworkProtocol FQDN=None HostName='yicdspdb01' -> 'yicdspdb01'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [null, null, null]}, \"/redfish/v1/Managers/RMC/EthernetInterfaces/Aux (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.24 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.19.0 product='Compute Scale-up Server 3200' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "4 notices (sections: ['firmware', 'network_adapters', 'storage'])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_csus_3200 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('admin', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "csus3200_02": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "ISSUE",
+    "evidence": "/redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW: layout 없이 재생(Tier 2 plain)하면 'iLO' — 장비 ManagerType=RackManager 를 쓰지 않음"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.FirmwareVersion = \"1.77.30-20260911_061319\" -> '1.77.30-20260911_061319'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Model = \"Compute Scale-up Server 3200, 4S XNC Base Chassis\" -> 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.ManagerType = \"RackManager\" -> 'RackManager'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no UUID; ServiceIdentification='SGHD4MGJMN' (= serial, not a UUID — dictionary text mentions it: 06-bmc-009); ServiceRoot.UUID is the service UUID"
+   },
+   "serial": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.SerialNumber = \"SGHD4MGJMN\" -> 'SGHD4MGJMN'"
+   },
+   "part_number": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.PartNumber = \"R9N70A\" -> 'R9N70A'"
+   },
+   "manufacturer": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Manufacturer = \"HPE\" -> 'HPE'"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.TimeZoneName = \"Asia/Seoul\" -> 'Asia/Seoul'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTime = \"2026-10-22T14:51:28+09:00\" -> '2026-10-22T14:51:28+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Oem.Hpe is #HpeH3ManagerRmc (no Firmware.Current) -> {ilo_version: null} (CSUS-R4 2026-06-15)"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/RMC/EthernetInterfaces/1 -> 11.65.23.31 == manifest/host (2차) ; NIC order [('1', '11.65.23.31'), ('Aux', 'MISSING'), ('Mul', None), ('Partition0', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:41:97:d9"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.FQDN or HostName -> 'yicgsfabap01'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/NetworkProtocol FQDN=None HostName='yicgsfabap01' -> 'yicgsfabap01'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [null, null, null]}, \"/redfish/v1/Managers/RMC/EthernetInterfaces/Aux (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.31 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.19.0 product='Compute Scale-up Server 3200' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "2 notices (sections: ['firmware', 'storage'])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_csus_3200 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('admin', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "csus3200_03": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "ISSUE",
+    "evidence": "/redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW: layout 없이 재생(Tier 2 plain)하면 'iLO' — 장비 ManagerType=RackManager 를 쓰지 않음"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.FirmwareVersion = \"1.77.30-20260911_061319\" -> '1.77.30-20260911_061319'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Model = \"Compute Scale-up Server 3200, 4S XNC Base Chassis\" -> 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.ManagerType = \"RackManager\" -> 'RackManager'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no UUID; ServiceIdentification='SGHD4MGRSV' (= serial, not a UUID — dictionary text mentions it: 06-bmc-009); ServiceRoot.UUID is the service UUID"
+   },
+   "serial": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.SerialNumber = \"SGHD4MGRSV\" -> 'SGHD4MGRSV'"
+   },
+   "part_number": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.PartNumber = \"R9N70A\" -> 'R9N70A'"
+   },
+   "manufacturer": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Manufacturer = \"HPE\" -> 'HPE'"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.TimeZoneName = \"Asia/Seoul\" -> 'Asia/Seoul'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTime = \"2026-10-22T15:13:28+09:00\" -> '2026-10-22T15:13:28+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Oem.Hpe is #HpeH3ManagerRmc (no Firmware.Current) -> {ilo_version: null} (CSUS-R4 2026-06-15)"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/RMC/EthernetInterfaces/1 -> 11.65.23.28 == manifest/host (2차) ; NIC order [('1', '11.65.23.28'), ('Aux', 'MISSING'), ('Mul', None), ('Partition0', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:41:9d:74"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.FQDN or HostName -> 'yicgsfabdb01'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/NetworkProtocol FQDN=None HostName='yicgsfabdb01' -> 'yicgsfabdb01'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [null, null, null]}, \"/redfish/v1/Managers/RMC/EthernetInterfaces/Aux (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.28 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.19.0 product='Compute Scale-up Server 3200' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "4 notices (sections: ['firmware', 'network_adapters', 'storage'])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_csus_3200 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('admin', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "dl380_gen12_01": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'iLO' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"1.24.00 Aug 01 2026\" -> '1.24.00 Aug 01 2026'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"iLO 7\" -> 'iLO 7'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PowerState key (keys: 30) -> null is honest"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"d1be35c8-549a-59d1-8286-3e6dd2342a5f\" -> 'd1be35c8-549a-59d1-8286-3e6dd2342a5f'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 30) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 30) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 30) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no LastResetTime key (keys: 30) -> null is honest"
+   },
+   "timezone": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-003 LOW: /redfish/v1/Managers/1 has no TimeZoneName, but Oem.Hpe.Links.DateTimeService -> Managers/1/DateTime.TimeZone {Name 'Osaka, Sapporo, Tokyo, Seoul, Yakutsk', Value 'JST-9:00', UtcOffset '+09:00'} is exposed (untouched)"
+   },
+   "datetime": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-004 LOW: value '2026-10-22T06:15:43Z' is UTC ('Z') while datetime_offset='+09:00'; XCC/RMC/iDRAC embed the local offset in DateTime — vendor-dependent representation, dictionary text ambiguous (raw-faithful value)"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Hpe.Firmware.Current.VersionString -> {'ilo_version': '1.24.00 Aug 01 2026'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/1 -> 11.65.23.95 == manifest/host (2차) ; NIC order [('1', '11.65.23.95'), ('2', None), ('3', '16.1.15.1')]; 06-bmc-005 LOW: iLO virtual USB NIC 3 (16.1.15.1) sits after NIC 1 — order-dependent rule"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:8a:ba:e6"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.FQDN or HostName -> 'yicesxmgmt05'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='' HostName='yicesxmgmt05' -> 'yicesxmgmt05'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Mana (placeholders only); Oem.Hpe.IPv4.DNSServers 0.0.0.0 x3"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.95 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.1 product='HPE ProLiant Compute DL380 Gen12' systems_uri='/redfish/v1/Systems/' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_ilo7 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('infraops', 'Administrator'), ('admin', 'Administrator')]"
+   }
+  }
+ },
+ "dl380_gen12_02": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'iLO' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"1.24.00 Aug 01 2026\" -> '1.24.00 Aug 01 2026'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"iLO 7\" -> 'iLO 7'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PowerState key (keys: 30) -> null is honest"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"0afaec8b-909c-535b-ae1f-af1277732c07\" -> '0afaec8b-909c-535b-ae1f-af1277732c07'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 30) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 30) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 30) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no LastResetTime key (keys: 30) -> null is honest"
+   },
+   "timezone": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-003 LOW: /redfish/v1/Managers/1 has no TimeZoneName, but Oem.Hpe.Links.DateTimeService -> Managers/1/DateTime.TimeZone {Name 'Osaka, Sapporo, Tokyo, Seoul, Yakutsk', Value 'JST-9:00', UtcOffset '+09:00'} is exposed (untouched)"
+   },
+   "datetime": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-004 LOW: value '2026-10-22T06:27:39Z' is UTC ('Z') while datetime_offset='+09:00'; XCC/RMC/iDRAC embed the local offset in DateTime — vendor-dependent representation, dictionary text ambiguous (raw-faithful value)"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Hpe.Firmware.Current.VersionString -> {'ilo_version': '1.24.00 Aug 01 2026'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/1 -> 11.65.23.201 == manifest/host (2차) ; NIC order [('1', '11.65.23.201'), ('2', None), ('3', '16.1.15.1')]; 06-bmc-005 LOW: iLO virtual USB NIC 3 (16.1.15.1) sits after NIC 1 — order-dependent rule"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:8c:95:78"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.FQDN or HostName -> 'yicad04'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='' HostName='yicad04' -> 'yicad04'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Mana (placeholders only); Oem.Hpe.IPv4.DNSServers 0.0.0.0 x3"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.201 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.1 product='HPE ProLiant Compute DL380 Gen12' systems_uri='/redfish/v1/Systems/' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_ilo7 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('infraops', 'Administrator'), ('admin', 'Administrator')]"
+   }
+  }
+ },
+ "dl380_gen12_03": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'iLO' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"1.24.00 Aug 01 2026\" -> '1.24.00 Aug 01 2026'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"iLO 7\" -> 'iLO 7'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PowerState key (keys: 30) -> null is honest"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"2d777f1a-fca4-5b45-a2ea-f59f82770d38\" -> '2d777f1a-fca4-5b45-a2ea-f59f82770d38'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 30) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 30) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 30) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no LastResetTime key (keys: 30) -> null is honest"
+   },
+   "timezone": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-003 LOW: /redfish/v1/Managers/1 has no TimeZoneName, but Oem.Hpe.Links.DateTimeService -> Managers/1/DateTime.TimeZone {Name 'Osaka, Sapporo, Tokyo, Seoul, Yakutsk', Value 'JST-9:00', UtcOffset '+09:00'} is exposed (untouched)"
+   },
+   "datetime": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-004 LOW: value '2026-10-22T06:41:28Z' is UTC ('Z') while datetime_offset='+09:00'; XCC/RMC/iDRAC embed the local offset in DateTime — vendor-dependent representation, dictionary text ambiguous (raw-faithful value)"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Hpe.Firmware.Current.VersionString -> {'ilo_version': '1.24.00 Aug 01 2026'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/1 -> 11.65.23.55 == manifest/host (2차) ; NIC order [('1', '11.65.23.55'), ('2', None), ('3', '16.1.15.1')]; 06-bmc-005 LOW: iLO virtual USB NIC 3 (16.1.15.1) sits after NIC 1 — order-dependent rule"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:8c:98:9c"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.FQDN or HostName -> 'yicossemul03'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='' HostName='yicossemul03' -> 'yicossemul03'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Mana (placeholders only); Oem.Hpe.IPv4.DNSServers 0.0.0.0 x3"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.55 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.1 product='HPE ProLiant Compute DL380 Gen12' systems_uri='/redfish/v1/Systems/' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_ilo7 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('infraops', 'Administrator'), ('admin', 'Administrator')]"
+   }
+  }
+ },
+ "dl380_gen12_04": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'iLO' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"1.24.00 Aug 01 2026\" -> '1.24.00 Aug 01 2026'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"iLO 7\" -> 'iLO 7'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PowerState key (keys: 30) -> null is honest"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"0f8572e2-58b1-5c95-ae84-f20ffbcd064e\" -> '0f8572e2-58b1-5c95-ae84-f20ffbcd064e'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 30) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 30) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 30) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no LastResetTime key (keys: 30) -> null is honest"
+   },
+   "timezone": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-003 LOW: /redfish/v1/Managers/1 has no TimeZoneName, but Oem.Hpe.Links.DateTimeService -> Managers/1/DateTime.TimeZone {Name 'Osaka, Sapporo, Tokyo, Seoul, Yakutsk', Value 'JST-9:00', UtcOffset '+09:00'} is exposed (untouched)"
+   },
+   "datetime": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-004 LOW: value '2026-10-22T06:38:01Z' is UTC ('Z') while datetime_offset='+09:00'; XCC/RMC/iDRAC embed the local offset in DateTime — vendor-dependent representation, dictionary text ambiguous (raw-faithful value)"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Hpe.Firmware.Current.VersionString -> {'ilo_version': '1.24.00 Aug 01 2026'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/1 -> 11.65.23.52 == manifest/host (2차) ; NIC order [('1', '11.65.23.52'), ('2', None), ('3', '16.1.15.1')]; 06-bmc-005 LOW: iLO virtual USB NIC 3 (16.1.15.1) sits after NIC 1 — order-dependent rule"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:8c:b1:72"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.FQDN or HostName -> 'yicinposdb02'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='' HostName='yicinposdb02' -> 'yicinposdb02'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Mana (placeholders only); Oem.Hpe.IPv4.DNSServers 0.0.0.0 x3"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.52 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.1 product='HPE ProLiant Compute DL380 Gen12' systems_uri='/redfish/v1/Systems/' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_ilo7 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('infraops', 'Administrator'), ('admin', 'Administrator')]"
+   }
+  }
+ },
+ "r1_DELL_R740_01": {
+  "_area": {
+   "bmc": {
+    "state": "PASS",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; "
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1 Id='iDRAC.Embedded.1' ManagerType='BMC' -> label 'iDRAC' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.FirmwareVersion = \"7.00.00.184\" -> '7.00.00.184'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.Model = \"14G Monolithic\" -> '14G Monolithic'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.PowerState = \"On\" -> 'On'"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.UUID = \"3330364f-c0ca-5680-4b10-00304c4c4544\" -> '3330364f-c0ca-5680-4b10-00304c4c4544'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1 has no SerialNumber key (keys: 31) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1 has no PartNumber key (keys: 31) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1 has no Manufacturer key (keys: 31) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.LastResetTime = \"2026-06-05T04:45:55-05:00\" -> '2026-06-05T04:45:55-05:00'"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.TimeZoneName = \"CST6CDT\" -> 'CST6CDT'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.DateTime = \"2026-06-12T01:42:11-05:00\" -> '2026-06-12T01:42:11-05:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1.DateTimeLocalOffset = \"-05:00\" -> '-05:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Dell.DelliDRACCard -> ['idrac_ipmi_version', 'idrac_last_inventory_time', 'idrac_last_update_time', 'idrac_url']"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/iDRAC.Embedded.1/EthernetInterfaces/NIC.1 -> 10.173.12.159 == manifest/host (2차) ; NIC order [('NIC.1', '10.173.12.159')]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1/EthernetInterfaces/NIC.1.MACAddress lower-cased -> f4:02:70:bf:31:fe"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1/EthernetInterfaces/NIC.1.FQDN or HostName -> 'iDRAC-J0KV603'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/iDRAC.Embedded.1/NetworkProtocol FQDN='' HostName='iDRAC-J0KV603' -> 'iDRAC-J0KV603'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/iDRAC.Embedded.1/EthernetInterfaces/NIC.1\": {\"NameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\"], \"StaticNameServers\": null}} (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '10.173.12.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 10.173.12.159 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/dell — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.17.0 product='Integrated Dell Remote Access Controller' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_dell_idrac9 (first_pass redfish_dell_idrac10)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('', 'None'), ('root', 'Administrator'), ('infraops', 'Administrator'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None'), ('', 'None')]"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_01": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "ISSUE",
+    "evidence": "/redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW: layout 없이 재생(Tier 2 plain)하면 'iLO' — 장비 ManagerType=RackManager 를 쓰지 않음"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.FirmwareVersion = \"1.75.108-20260408_164726\" -> '1.75.108-20260408_164726'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Model = \"Compute Scale-up Server 3200, 4S XNC Base Chassis\" -> 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.ManagerType = \"RackManager\" -> 'RackManager'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no UUID; ServiceIdentification='SGHD3TLNDD' (= serial, not a UUID — dictionary text mentions it: 06-bmc-009); ServiceRoot.UUID is the service UUID"
+   },
+   "serial": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.SerialNumber = \"SGHD3TLNDD\" -> 'SGHD3TLNDD'"
+   },
+   "part_number": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.PartNumber = \"R9N70A\" -> 'R9N70A'"
+   },
+   "manufacturer": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Manufacturer = \"HPE\" -> 'HPE'"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.TimeZoneName = \"UTC\" -> 'UTC'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTime = \"2026-06-12T00:11:07+00:00\" -> '2026-06-12T00:11:07+00:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTimeLocalOffset = \"+00:00\" -> '+00:00'"
+   },
+   "oem": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Oem.Hpe is #HpeH3ManagerRmc (no Firmware.Current) -> {ilo_version: null} (CSUS-R4 2026-06-15)"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/RMC/EthernetInterfaces/1 -> 10.173.22.101 == manifest/host (2차) ; NIC order [('1', '10.173.22.101'), ('Aux', 'MISSING'), ('Mul', None), ('Partition0', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:41:36:92"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.FQDN or HostName -> 'RMC7CA62A413692'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/NetworkProtocol FQDN=None HostName='RMC7CA62A413692' -> 'RMC7CA62A413692'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [null, null, null]}, \"/redfish/v1/Managers/RMC/EthernetInterfaces/Aux (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '10.173.22.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 10.173.22.101 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.19.0 product='Compute Scale-up Server 3200' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "3 notices (sections: ['firmware', 'network_adapters'])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_csus_3200 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('Admin', 'Administrator'), ('infraops', 'Administrator'), ('HPEOneViewMonitor', 'Administrator')]"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_02": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "ISSUE",
+    "evidence": "/redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW: layout 없이 재생(Tier 2 plain)하면 'iLO' — 장비 ManagerType=RackManager 를 쓰지 않음"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.FirmwareVersion = \"1.75.108-20260408_164726\" -> '1.75.108-20260408_164726'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Model = \"Compute Scale-up Server 3200, 4S XNC Base Chassis\" -> 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.ManagerType = \"RackManager\" -> 'RackManager'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no UUID; ServiceIdentification='SGHD3VFL1S' (= serial, not a UUID — dictionary text mentions it: 06-bmc-009); ServiceRoot.UUID is the service UUID"
+   },
+   "serial": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.SerialNumber = \"SGHD3VFL1S\" -> 'SGHD3VFL1S'"
+   },
+   "part_number": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.PartNumber = \"R9N70A\" -> 'R9N70A'"
+   },
+   "manufacturer": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Manufacturer = \"HPE\" -> 'HPE'"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.TimeZoneName = \"UTC\" -> 'UTC'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTime = \"2026-06-12T00:21:25+00:00\" -> '2026-06-12T00:21:25+00:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTimeLocalOffset = \"+00:00\" -> '+00:00'"
+   },
+   "oem": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Oem.Hpe is #HpeH3ManagerRmc (no Firmware.Current) -> {ilo_version: null} (CSUS-R4 2026-06-15)"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/RMC/EthernetInterfaces/1 -> 10.173.22.102 == manifest/host (2차) ; NIC order [('1', '10.173.22.102'), ('Aux', 'MISSING'), ('Mul', None), ('Partition0', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:41:81:72"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.FQDN or HostName -> 'RMC7CA62A418172'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/NetworkProtocol FQDN=None HostName='RMC7CA62A418172' -> 'RMC7CA62A418172'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [null, null, null]}, \"/redfish/v1/Managers/RMC/EthernetInterfaces/Aux (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '10.173.22.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 10.173.22.102 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.19.0 product='Compute Scale-up Server 3200' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "3 notices (sections: ['firmware', 'network_adapters'])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_csus_3200 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('Admin', 'Administrator'), ('infraops', 'Administrator'), ('HPEOneViewMonitor', 'Administrator')]"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_03": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "ISSUE",
+    "evidence": "/redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW: layout 없이 재생(Tier 2 plain)하면 'iLO' — 장비 ManagerType=RackManager 를 쓰지 않음"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.FirmwareVersion = \"1.75.108-20260408_164726\" -> '1.75.108-20260408_164726'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Model = \"Compute Scale-up Server 3200, 4S XNC Base Chassis\" -> 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.ManagerType = \"RackManager\" -> 'RackManager'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no UUID; ServiceIdentification='SGHD3QHLDT' (= serial, not a UUID — dictionary text mentions it: 06-bmc-009); ServiceRoot.UUID is the service UUID"
+   },
+   "serial": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.SerialNumber = \"SGHD3QHLDT\" -> 'SGHD3QHLDT'"
+   },
+   "part_number": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.PartNumber = \"R9N70A\" -> 'R9N70A'"
+   },
+   "manufacturer": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Manufacturer = \"HPE\" -> 'HPE'"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.TimeZoneName = \"Asia/Seoul\" -> 'Asia/Seoul'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTime = \"2026-06-12T09:33:34+09:00\" -> '2026-06-12T09:33:34+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Oem.Hpe is #HpeH3ManagerRmc (no Firmware.Current) -> {ilo_version: null} (CSUS-R4 2026-06-15)"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/RMC/EthernetInterfaces/1 -> 10.173.22.80 == manifest/host (2차) ; NIC order [('1', '10.173.22.80'), ('Aux', 'MISSING'), ('Mul', None), ('Partition0', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:41:74:b8"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.FQDN or HostName -> 'M10MESDB11-RMC'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/NetworkProtocol FQDN=None HostName='M10MESDB11-RMC' -> 'M10MESDB11-RMC'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [null, null, null]}, \"/redfish/v1/Managers/RMC/EthernetInterfaces/Aux (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '10.173.22.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 10.173.22.80 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.19.0 product='Compute Scale-up Server 3200' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "6 notices (sections: ['firmware', 'network_adapters', 'storage'])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_csus_3200 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('Admin', 'Administrator'), ('HPEOneViewMonitor', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_04": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; /redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "ISSUE",
+    "evidence": "/redfish/v1/Managers/RMC Id='RMC' ManagerType='RackManager' -> label 'RMC' (vendor label / rmc_primary layout); 06-bmc-006 LOW: layout 없이 재생(Tier 2 plain)하면 'iLO' — 장비 ManagerType=RackManager 를 쓰지 않음"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.FirmwareVersion = \"1.75.108-20260408_164726\" -> '1.75.108-20260408_164726'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Model = \"Compute Scale-up Server 3200, 4S XNC Base Chassis\" -> 'Compute Scale-up Server 3200, 4S XNC Base Chassis'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.ManagerType = \"RackManager\" -> 'RackManager'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no UUID; ServiceIdentification='SGHD3QHLN3' (= serial, not a UUID — dictionary text mentions it: 06-bmc-009); ServiceRoot.UUID is the service UUID"
+   },
+   "serial": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.SerialNumber = \"SGHD3QHLN3\" -> 'SGHD3QHLN3'"
+   },
+   "part_number": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.PartNumber = \"R9N70A\" -> 'R9N70A'"
+   },
+   "manufacturer": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.Manufacturer = \"HPE\" -> 'HPE'"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/RMC has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.TimeZoneName = \"Asia/Seoul\" -> 'Asia/Seoul'"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTime = \"2026-06-12T09:38:40+09:00\" -> '2026-06-12T09:38:40+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Oem.Hpe is #HpeH3ManagerRmc (no Firmware.Current) -> {ilo_version: null} (CSUS-R4 2026-06-15)"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/RMC/EthernetInterfaces/1 -> 10.173.22.91 == manifest/host (2차) ; NIC order [('1', '10.173.22.91'), ('Aux', 'MISSING'), ('Mul', None), ('Partition0', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:41:81:36"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/EthernetInterfaces/1.FQDN or HostName -> 'M10APCDB11-RMC'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/RMC/NetworkProtocol FQDN=None HostName='M10APCDB11-RMC' -> 'M10APCDB11-RMC'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [null, null, null]}, \"/redfish/v1/Managers/RMC/EthernetInterfaces/Aux (placeholders only)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '10.173.22.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 10.173.22.91 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.19.0 product='Compute Scale-up Server 3200' systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "6 notices (sections: ['firmware', 'network_adapters', 'storage'])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_csus_3200 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('Admin', 'Administrator'), ('HPEOneViewMonitor', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "r1_HPE_DL380_01": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; 06-bmc-003 LOW, 06-bmc-004 LOW"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'iLO' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"1.20.00 Feb 12 2026\" -> '1.20.00 Feb 12 2026'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"iLO 7\" -> 'iLO 7'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"HealthRollup\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PowerState key (keys: 29) -> null is honest"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"5001b72b-c76e-5898-8d1e-d9c65ebc69a5\" -> '5001b72b-c76e-5898-8d1e-d9c65ebc69a5'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 29) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 29) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 29) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no LastResetTime key (keys: 29) -> null is honest"
+   },
+   "timezone": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-003 LOW: /redfish/v1/Managers/1 has no TimeZoneName, but Oem.Hpe.Links.DateTimeService -> Managers/1/DateTime.TimeZone {Name 'Osaka, Sapporo, Tokyo, Seoul, Yakutsk', Value 'JST-9:00', UtcOffset '+09:00'} is exposed (untouched)"
+   },
+   "datetime": {
+    "state": "ISSUE",
+    "evidence": "06-bmc-004 LOW: value '2026-06-12T00:47:18Z' is UTC ('Z') while datetime_offset='+00:00'; XCC/RMC/iDRAC embed the local offset in DateTime — vendor-dependent representation, dictionary text ambiguous (raw-faithful value)"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+00:00\" -> '+00:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Hpe.Firmware.Current.VersionString -> {'ilo_version': '1.20.00 Feb 12 2026'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/1 -> 10.173.12.149 == manifest/host (2차) ; NIC order [('1', '10.173.12.149'), ('2', None), ('3', '16.1.15.1')]; 06-bmc-005 LOW: iLO virtual USB NIC 3 (16.1.15.1) sits after NIC 1 — order-dependent rule"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.MACAddress lower-cased -> 7c:a6:2a:87:6f:e0"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/1.FQDN or HostName -> 'ILOSGHD3KHHRP'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='' HostName='ILOSGHD3KHHRP' -> 'ILOSGHD3KHHRP'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/1\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Mana (placeholders only); Oem.Hpe.IPv4.DNSServers 0.0.0.0 x3"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '10.173.12.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 10.173.12.149 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/hpe — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.1 product='HPE ProLiant Compute DL380 Gen12' systems_uri='/redfish/v1/Systems/' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "PASS",
+    "evidence": "redfish_hpe_ilo7 (first_pass None)"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('Administrator', 'Administrator'), ('infraops', 'Administrator'), ('admin', 'Administrator')]"
+   }
+  }
+ },
+ "r1_Lenovo_SR650_01": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'XCC' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"IHX414J 1.22 20250402\" -> 'IHX414J 1.22 20250402'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"Lenovo Xclarity Controller 3\" -> 'Lenovo Xclarity Controller 3'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.PowerState = \"On\" -> 'On'"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"343AFAA2-321B-11F0-911B-C4EFBB1D4346\" -> '343AFAA2-321B-11F0-911B-C4EFBB1D4346'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 32) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 32) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 32) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.LastResetTime = \"2026-06-02T07:47:06+00:00\" -> '2026-06-02T07:47:06+00:00'"
+   },
+   "timezone": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no TimeZoneName key (keys: 32) -> null is honest"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTime = \"2026-06-12T00:53:37+00:00\" -> '2026-06-12T00:53:37+00:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+00:00\" -> '+00:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Lenovo.release_name -> {'release_name': 'bhs_gp_w2w3'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/NIC -> 10.173.12.150 == manifest/host (2차) ; NIC order [('NIC', '10.173.12.150'), ('ToHost', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.MACAddress lower-cased -> c4:ef:bb:1d:43:44"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.FQDN or HostName -> 'XCC-7DGD-J902E57T'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='XCC-7DGD-J902E57T' HostName='XCC-7DGD-J902E57T' -> 'XCC-7DGD-J902E57T'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Ma (placeholders only); NetworkProtocol/Oem/Lenovo/DNS DNSEnable=false 0.0.0.0 (untouched, 2차)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '10.173.12.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 10.173.12.150 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/lenovo — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.17.0 product=None systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "ISSUE",
+    "evidence": "redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('USERID', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "sr650_v4_01": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'XCC' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"IHX438R 2.97 20260910\" -> 'IHX438R 2.97 20260910'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"Lenovo XClarity Controller 3\" -> 'Lenovo XClarity Controller 3'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.PowerState = \"On\" -> 'On'"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"F7C9A8FE-3CD6-11F1-B22A-183D2DA5CFB8\" -> 'F7C9A8FE-3CD6-11F1-B22A-183D2DA5CFB8'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 32) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 32) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 32) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.LastResetTime = \"2026-10-17T17:11:45+09:00\" -> '2026-10-17T17:11:45+09:00'"
+   },
+   "timezone": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no TimeZoneName key (keys: 32) -> null is honest"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTime = \"2026-10-22T15:48:28+09:00\" -> '2026-10-22T15:48:28+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Lenovo.release_name -> {'release_name': 'bhs_gp_25-5'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/NIC -> 11.65.23.87 == manifest/host (2차) ; NIC order [('NIC', '11.65.23.87'), ('ToHost', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.MACAddress lower-cased -> 18:3d:2d:a5:cf:b6"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.FQDN or HostName -> 'yicad01'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='yicad01' HostName='yicad01' -> 'yicad01'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Ma (placeholders only); NetworkProtocol/Oem/Lenovo/DNS DNSEnable=false 0.0.0.0 (untouched, 2차)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.87 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/lenovo — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.0 product=None systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "ISSUE",
+    "evidence": "redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('USERID', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "sr650_v4_02": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'XCC' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"IHX438R 2.97 20260910\" -> 'IHX438R 2.97 20260910'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"Lenovo XClarity Controller 3\" -> 'Lenovo XClarity Controller 3'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.PowerState = \"On\" -> 'On'"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"7105B5C4-3CD7-11F1-BFE9-183D2DA5CAD6\" -> '7105B5C4-3CD7-11F1-BFE9-183D2DA5CAD6'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 32) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 32) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 32) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.LastResetTime = \"2026-10-17T17:27:11+09:00\" -> '2026-10-17T17:27:11+09:00'"
+   },
+   "timezone": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no TimeZoneName key (keys: 32) -> null is honest"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTime = \"2026-10-22T16:05:07+09:00\" -> '2026-10-22T16:05:07+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Lenovo.release_name -> {'release_name': 'bhs_gp_25-5'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/NIC -> 11.65.23.88 == manifest/host (2차) ; NIC order [('NIC', '11.65.23.88'), ('ToHost', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.MACAddress lower-cased -> 18:3d:2d:a5:ca:d4"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.FQDN or HostName -> 'yicbringup01'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='yicbringup01' HostName='yicbringup01' -> 'yicbringup01'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Ma (placeholders only); NetworkProtocol/Oem/Lenovo/DNS DNSEnable=false 0.0.0.0 (untouched, 2차)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.88 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/lenovo — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.0 product=None systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "2 notices (sections: ['network_adapters'])"
+   },
+   "meta.adapter_id": {
+    "state": "ISSUE",
+    "evidence": "redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('USERID', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "sr650_v4_03": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'XCC' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"IHX438R 2.97 20260910\" -> 'IHX438R 2.97 20260910'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"Lenovo XClarity Controller 3\" -> 'Lenovo XClarity Controller 3'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.PowerState = \"On\" -> 'On'"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"A6313DDB-4003-11F1-8241-183D2DA5D1AC\" -> 'A6313DDB-4003-11F1-8241-183D2DA5D1AC'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 32) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 32) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 32) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.LastResetTime = \"2026-10-19T10:00:47+09:00\" -> '2026-10-19T10:00:47+09:00'"
+   },
+   "timezone": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no TimeZoneName key (keys: 32) -> null is honest"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTime = \"2026-10-22T16:10:20+09:00\" -> '2026-10-22T16:10:20+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Lenovo.release_name -> {'release_name': 'bhs_gp_25-5'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/NIC -> 11.65.23.76 == manifest/host (2차) ; NIC order [('NIC', '11.65.23.76'), ('ToHost', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.MACAddress lower-cased -> 18:3d:2d:a5:d1:aa"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.FQDN or HostName -> 'yicinfesx001'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='yicinfesx001' HostName='yicinfesx001' -> 'yicinfesx001'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Ma (placeholders only); NetworkProtocol/Oem/Lenovo/DNS DNSEnable=false 0.0.0.0 (untouched, 2차)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.76 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/lenovo — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.0 product=None systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "2 notices (sections: ['network_adapters'])"
+   },
+   "meta.adapter_id": {
+    "state": "ISSUE",
+    "evidence": "redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('USERID', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ },
+ "sr650_v4_04": {
+  "_area": {
+   "bmc": {
+    "state": "ISSUE",
+    "evidence": "20 bmc keys == raw-derived expectation; dns/gateway/bmc_ip consistent; redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   }
+  },
+  "bmc": {
+   "name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1 Id='1' ManagerType='BMC' -> label 'XCC' (vendor label / rmc_primary layout)"
+   },
+   "firmware_version": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.FirmwareVersion = \"IHX438R 2.97 20260910\" -> 'IHX438R 2.97 20260910'"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Model = \"Lenovo XClarity Controller 3\" -> 'Lenovo XClarity Controller 3'"
+   },
+   "manager_type": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.ManagerType = \"BMC\" -> 'BMC'"
+   },
+   "health": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'OK'"
+   },
+   "state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.Status = {\"Health\": \"OK\", \"State\": \"Enabled\"} -> 'Enabled'"
+   },
+   "power_state": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.PowerState = \"On\" -> 'On'"
+   },
+   "uuid": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.UUID = \"5B3C5915-3F3E-11F1-BBEA-183D2DA5EEE4\" -> '5B3C5915-3F3E-11F1-BBEA-183D2DA5EEE4'"
+   },
+   "serial": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no SerialNumber key (keys: 32) -> null is honest"
+   },
+   "part_number": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no PartNumber key (keys: 32) -> null is honest"
+   },
+   "manufacturer": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no Manufacturer key (keys: 32) -> null is honest"
+   },
+   "last_reset_time": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.LastResetTime = \"2026-10-17T16:32:40+09:00\" -> '2026-10-17T16:32:40+09:00'"
+   },
+   "timezone": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "/redfish/v1/Managers/1 has no TimeZoneName key (keys: 32) -> null is honest"
+   },
+   "datetime": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTime = \"2026-10-22T15:56:52+09:00\" -> '2026-10-22T15:56:52+09:00'"
+   },
+   "datetime_offset": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1.DateTimeLocalOffset = \"+09:00\" -> '+09:00'"
+   },
+   "oem": {
+    "state": "PASS",
+    "evidence": "Oem.Lenovo.release_name -> {'release_name': 'bhs_gp_25-5'}"
+   },
+   "ip": {
+    "state": "PASS",
+    "evidence": "first NIC with non-zero IPv4 in collection order: /redfish/v1/Managers/1/EthernetInterfaces/NIC -> 11.65.23.37 == manifest/host (2차) ; NIC order [('NIC', '11.65.23.37'), ('ToHost', None)]"
+   },
+   "mac_address": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.MACAddress lower-cased -> 18:3d:2d:a5:ee:e2"
+   },
+   "dns_name": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/EthernetInterfaces/NIC.FQDN or HostName -> 'yichtwinap09'"
+   },
+   "network_hostname": {
+    "state": "PASS",
+    "evidence": "/redfish/v1/Managers/1/NetworkProtocol FQDN='yichtwinap09' HostName='yichtwinap09' -> 'yichtwinap09'"
+   },
+   "network.dns_servers": {
+    "state": "PASS",
+    "evidence": "Tier1 [] ; raw NIC NameServers/StaticNameServers = {\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\": {\"NameServers\": [], \"StaticNameServers\": [\"0.0.0.0\", \"0.0.0.0\", \"0.0.0.0\", \"::\", \"::\", \"::\"]}, \"/redfish/v1/Ma (placeholders only); NetworkProtocol/Oem/Lenovo/DNS DNSEnable=false 0.0.0.0 (untouched, 2차)"
+   },
+   "network.default_gateways": {
+    "state": "PASS",
+    "evidence": "Tier1 [{'family': 'ipv4', 'address': '11.65.23.1'}] = BMC NIC IPv4Addresses[].Gateway (host NICs have no IPv4 on Redfish)"
+   },
+   "correlation.bmc_ip": {
+    "state": "PASS",
+    "evidence": "== bmc.ip 11.65.23.37 (build_correlation.yml:36-39); host_ip=127.0.0.1 in replay (README limit #9)"
+   },
+   "sections.bmc": {
+    "state": "PASS",
+    "evidence": "success — Manager GET 200 + EthernetInterfaces + NetworkProtocol 200 (server_access.jsonl), errors 0"
+   },
+   "diagnosis.details.auth": {
+    "state": "PASS",
+    "evidence": "auth={'attempted_count': 1, 'used_label': 'common_infraops', 'used_role': 'primary', 'fallback_used': False} (standard primary, 1 credentialed attempt; password not verified by replay -> auth_success=true is MOCK_LIMITATION)"
+   },
+   "diagnosis.details.account_service": {
+    "state": "PASS",
+    "evidence": "{} — reconcile not entered (site.yml:356 default({})); 06-bmc-007 LOW shape/doc"
+   },
+   "diagnosis.details.credential_scope": {
+    "state": "PASS",
+    "evidence": "common/redfish/standard / recovery yi/redfish/lenovo — global standard + loc x vendor (CLAUDE.md §8)"
+   },
+   "diagnosis.details.precheck": {
+    "state": "PASS",
+    "evidence": "checked_ports=[443] selected_port=443 redfish_version=1.22.0 product=None systems_uri='/redfish/v1/Systems' == raw ServiceRoot"
+   },
+   "diagnosis.details.notices": {
+    "state": "PASS",
+    "evidence": "0 notices (sections: [])"
+   },
+   "meta.adapter_id": {
+    "state": "ISSUE",
+    "evidence": "redfish_lenovo_bmc (first_pass redfish_lenovo_xcc3); 01-adapter-001 HIGH (01 보고서) — bmc 데이터 영향 0"
+   },
+   "users": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "sections.users=not_supported, data.users=[] by contract; AccountService/Accounts observed: [('USERID', 'Administrator'), ('infraops', 'Administrator')]"
+   }
+  }
+ }
+}

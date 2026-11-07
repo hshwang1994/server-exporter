@@ -1,0 +1,8 @@
+tests/e2e/test_redfish_multi_credential_auth.py              33 passed in 7.40s
+tests/regression/test_cross_channel_same_server.py           18 passed, 1 skipped in 6.22s
+tests/regression/test_redfish_coverage_audit.py              7 passed in 3.88s
+tests/unit/test_redfish_audit_2026_10_10.py                  16 passed in 1.50s
+tests/unit/test_redfish_bios_current.py                      79 passed in 1.43s
+tests/unit/test_redfish_phase3_contracts.py                  9 passed in 1.32s
+tests/unit/test_redfish_redirect_boundary.py                 18 passed in 8.38s
+tests/unit/test_sanitize_mirror.py                           20 passed in 4.78s

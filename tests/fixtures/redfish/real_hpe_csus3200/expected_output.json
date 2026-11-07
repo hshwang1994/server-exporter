@@ -188,7 +188,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu0/dimmA0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B9069",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -205,7 +205,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu2/dimmA0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B906F",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -222,7 +222,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu1/dimmA0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B9115",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -239,7 +239,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu3/dimmA0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B916C",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -256,7 +256,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu0/dimmC0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B9155",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -273,7 +273,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu2/dimmC0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B9052",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -290,7 +290,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu1/dimmC0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B905C",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -307,7 +307,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu3/dimmC0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B90E5",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -324,7 +324,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu0/dimmE0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B9070",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -341,7 +341,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu2/dimmE0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B906E",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -358,7 +358,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu1/dimmE0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B90E0",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -375,7 +375,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu3/dimmE0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B9051",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -392,7 +392,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu0/dimmG0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B9060",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -409,7 +409,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu2/dimmG0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B915E",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -426,7 +426,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu1/dimmG0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B909F",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -443,7 +443,7 @@
           "manufacturer": "SK hynix",
           "name": "rack1/chassis_u1/cpu3/dimmG0",
           "part_number": "HMCG84AEBRA107N",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x889B8F58",
           "speed_mhz": 2400,
           "type": "DDR5"
@@ -606,7 +606,7 @@
         "max_consumed_watts": null,
         "min_consumed_watts": null,
         "power_capacity_watts": null,
-        "power_consumed_watts": 591
+        "power_consumed_watts": 592
       },
       "power_supplies": [
         {
@@ -661,6 +661,7 @@
         "health": "OK",
         "id": "0",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 23040,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4100,
         "model": "Intel(R) Xeon(R) Gold 6434H Processor",
@@ -678,6 +679,7 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 23040,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4100,
         "model": "Intel(R) Xeon(R) Gold 6434H Processor",
@@ -695,6 +697,7 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 23040,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4100,
         "model": "Intel(R) Xeon(R) Gold 6434H Processor",
@@ -712,6 +715,7 @@
         "health": "OK",
         "id": "3",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 23040,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4100,
         "model": "Intel(R) Xeon(R) Gold 6434H Processor",
@@ -1291,7 +1295,7 @@
             "max_consumed_watts": null,
             "min_consumed_watts": null,
             "power_capacity_watts": null,
-            "power_consumed_watts": 591
+            "power_consumed_watts": 592
           },
           "power_supplies": [
             {
@@ -1813,9 +1817,9 @@
           ],
           "health": "OK",
           "id": "r001u01",
-          "memory_count": 0,
+          "memory_count": null,
           "name": "Compute Resource Block rack1/chassis_u1",
-          "processor_count": 0,
+          "processor_count": null,
           "resource_block_types": [
             "ComputerSystem"
           ],
@@ -1828,7 +1832,7 @@
     "errors": [],
     "fabrics": [
       {
-        "endpoint_count": 0,
+        "endpoint_count": null,
         "endpoints": [],
         "fabric_type": null,
         "health": "OK",
@@ -1961,7 +1965,6 @@
         "cpu": {
           "architecture": "x86",
           "cores_physical": 32,
-          "logical_threads": 64,
           "max_speed_mhz": 3700,
           "model": "Intel(R) Xeon(R) Gold 6434H Processor",
           "sockets": 4,
@@ -1970,7 +1973,7 @@
               {
                 "architecture": "x86",
                 "cores_per_socket": 8,
-                "manufacturer": "Intel(R) Corporation",
+                "manufacturer": "Intel",
                 "max_speed_mhz": 3700,
                 "model": "Intel(R) Xeon(R) Gold 6434H Processor",
                 "sockets": 4,
@@ -1996,7 +1999,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu0/dimmA0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B9069",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2013,7 +2016,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu2/dimmA0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B906F",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2030,7 +2033,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu1/dimmA0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B9115",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2047,7 +2050,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu3/dimmA0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B916C",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2064,7 +2067,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu0/dimmC0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B9155",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2081,7 +2084,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu2/dimmC0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B9052",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2098,7 +2101,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu1/dimmC0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B905C",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2115,7 +2118,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu3/dimmC0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B90E5",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2132,7 +2135,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu0/dimmE0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B9070",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2149,7 +2152,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu2/dimmE0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B906E",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2166,7 +2169,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu1/dimmE0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B90E0",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2183,7 +2186,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu3/dimmE0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B9051",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2200,7 +2203,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu0/dimmG0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B9060",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2217,7 +2220,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu2/dimmG0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B915E",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2234,7 +2237,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu1/dimmG0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B909F",
               "speed_mhz": 2400,
               "type": "DDR5"
@@ -2251,7 +2254,7 @@
               "manufacturer": "SK hynix",
               "name": "rack1/chassis_u1/cpu3/dimmG0",
               "part_number": "HMCG84AEBRA107N",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x889B8F58",
               "speed_mhz": 2400,
               "type": "DDR5"

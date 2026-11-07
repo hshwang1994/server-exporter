@@ -354,14 +354,15 @@ def test_gather_system_is_identical_with_or_without_link_out(monkeypatch, vendor
     assert with_link == plain
     assert calls_link == calls_plain, "요청 수·순서가 같아야 한다 (ComputerSystem 재조회 없음)"
     assert calls_link.count(SYS_PATH) == 1
-    assert link_out == {"retrieved": True, "link": BIOS}
+    # 2026-10-27 (WP3): 같은 응답의 PowerState 도 out dict 에 기록한다 (_collect_all_sections 의 전원 Off notice 용)
+    assert link_out == {"retrieved": True, "link": BIOS, "power_state": _system_body().get("PowerState")}
 
 
 def test_gather_system_without_bios_property_records_no_link(monkeypatch):
     monkeypatch.setattr(rg, "_get", _routed_get({SYS_PATH: (200, _system_body(None), None)}, []))
     link_out = {}
     rg.gather_system(IP, SYSTEM, "generic", *CREDS, bios_link_out=link_out)
-    assert link_out == {"retrieved": True, "link": None}
+    assert link_out == {"retrieved": True, "link": None, "power_state": _system_body(None).get("PowerState")}
 
 
 @pytest.mark.parametrize("response", [
@@ -578,8 +579,10 @@ def test_real_recording_baseline_is_a_full_success(real_baseline):
     base, calls = real_baseline
     assert base["status"] == "success" and base["failed_sections"] == []
     assert base["error_count"] == 0
-    # 녹화에는 Bios 본문이 없다 → 링크로 1회 조회 → replay 404 → notice (errors 불변)
-    assert base["data"]["bios"] == {"current": {"attributes": None}}
+    # 2026-10-27 (FIX 9 G-01): 녹화에 1차 전수 미러의 Bios 본문(Attributes 380개)을 넣었다 — 종전에는 본문이 없어 replay 404 → None 이었다.
+    # 링크로 1회 조회해 Key 이름순으로 담는다. 아래 실패·링크 부재 시험은 이 녹화를 변형해 None 경로를 그대로 확인한다.
+    attrs = base["data"]["bios"]["current"]["attributes"]
+    assert isinstance(attrs, dict) and len(attrs) == 380 and list(attrs) == sorted(attrs)
     assert calls.count(REAL_BIOS_PATH) == 1
 
 

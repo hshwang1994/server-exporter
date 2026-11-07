@@ -382,11 +382,9 @@ def test_memory_locator_servicelabel_when_slot_zero(monkeypatch):
 
 
 def test_memory_locator_preserves_meaningful_slot(monkeypatch):
-    """MemoryLocation.Slot 이 truthy(예: 3)면 ServiceLabel 무시 — Slot 우선순위 불변.
-
-    LOCATOR-STR (2026-06-15 cross-device 일관성): locator 계약 = field_dictionary "string|null".
-    Slot 폴백은 이제 str cast ('3') — 구 int(3)은 Lenovo(Slot=32) 에서 cross-device 타입 불일치 +
-    같은 slot id(str '32')와 불일치였음. Slot 우선순위는 그대로(ServiceLabel 무시), 타입만 str 통일.
+    """2026-10-27 (C4 02-memory-003): 순서는 DeviceLocator → Location.PartLocation.ServiceLabel → str(MemoryLocation.Slot) 이다.
+    ServiceLabel 이 있으면 Slot 번호보다 먼저 쓴다(실측 Lenovo XCC3 'DIMM 23' vs Slot 23). 종전(2026-06-15 LOCATOR-STR)에는 truthy Slot 이
+    ServiceLabel 보다 먼저였다 — 문자열 계약("string|null")은 그대로다.
     """
     _patch(monkeypatch, {
         "Systems/1/Memory": (200, {"Members": [{"@odata.id": "/redfish/v1/Systems/1/Memory/D3"}]}, None),
@@ -397,7 +395,7 @@ def test_memory_locator_preserves_meaningful_slot(monkeypatch):
             "Status": {"State": "Enabled", "Health": "OK"}}, None),
     })
     out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/1", *CREDS)
-    assert out["slots"][0]["locator"] == "3"
+    assert out["slots"][0]["locator"] == "should-not-be-used"      # 2026-10-27: ServiceLabel 이 Slot(3) 보다 먼저
 
 
 def test_memory_locator_prefers_device_locator(monkeypatch):
@@ -417,9 +415,8 @@ def test_memory_locator_prefers_device_locator(monkeypatch):
 def test_memory_locator_str_when_slot_truthy_no_devicelocator(monkeypatch):
     """LOCATOR-STR 회귀 (실 Lenovo SR650 V4 2026-06-15 실미러):
 
-    DeviceLocator 부재 + MemoryLocation.Slot=32(truthy int) → locator='32'(str), id 와 일치.
-    구 코드는 int 32 누출 → field_dictionary 계약 'string|null' 위반 + 같은 slot id(str '32') /
-    타 device(Dell 'DIMM A5' str) 와 cross-device 타입 불일치. Slot truthy 라 ServiceLabel 무시(우선순위 불변).
+    DeviceLocator 부재 + MemoryLocation.Slot=32(truthy int) → 종전 locator='32'(str). 2026-10-27 (C4 02-memory-003) 부터는
+    ServiceLabel('DIMM 32') 이 Slot 번호보다 먼저다 — 문자열 계약은 그대로, id('32') 와의 일치는 더 이상 요구하지 않는다(사람이 읽는 위치 이름).
     """
     _patch(monkeypatch, {
         "Systems/1/Memory": (200, {"Members": [{"@odata.id": "/redfish/v1/Systems/1/Memory/32"}]}, None),
@@ -430,9 +427,9 @@ def test_memory_locator_str_when_slot_truthy_no_devicelocator(monkeypatch):
             "Status": {"State": "Enabled", "Health": "OK"}}, None),
     })
     out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/1", *CREDS)
-    assert out["slots"][0]["locator"] == "32"
+    assert out["slots"][0]["locator"] == "DIMM 32"                    # 2026-10-27: ServiceLabel 우선
     assert isinstance(out["slots"][0]["locator"], str)
-    assert out["slots"][0]["id"] == "32"  # locator 가 id 와 타입 일치
+    assert out["slots"][0]["id"] == "32"
 
 
 # ── CSUS-R8: Ethernet port_type via Port.Ethernet dict ───────────────────────
@@ -500,7 +497,10 @@ def test_fc_associated_address_is_wwpn_not_wwnn(monkeypatch):
 # ── CSUS-R14: power_consumed from TelemetryService TotalPowerConsumedWatts ────
 
 def test_power_consumed_prefers_telemetry(monkeypatch):
-    """EnvironmentMetrics 부재 시 장비 권위 TelemetryService TotalPowerConsumedWatts(591) 우선 (PSU 입력합 아님)."""
+    """EnvironmentMetrics 부재 시 장비 권위 TelemetryService TotalPowerConsumedWatts 우선 (PSU 입력합 아님).
+
+    2026-10-29 (SA-17, 사용자 결정): 원천 "591.5" 는 정수 반올림(half-even)으로 592 다 — 종전 int() 절삭은 591 이었다.
+    """
     PS = "Chassis/r001u01/PowerSubsystem"; U = "/redfish/v1/" + PS
     _patch(monkeypatch, {
         PS: (200, {"PowerSupplies": {"@odata.id": U + "/PowerSupplies"}}, None),
@@ -516,7 +516,7 @@ def test_power_consumed_prefers_telemetry(monkeypatch):
             "MetricValues": [{"MetricId": "TotalPowerConsumedWatts", "MetricValue": "591.5"}]}, None),
     })
     out, errs = rg.gather_power("ip", "/redfish/v1/Chassis/r001u01", *CREDS)
-    assert out["power_control"]["power_consumed_watts"] == 591, "TelemetryService 권위값 우선(PSU 199 아님)"
+    assert out["power_control"]["power_consumed_watts"] == 592, "TelemetryService 권위값 우선(PSU 199 아님) · 591.5 → 592"
 
 
 # ── CSUS-R15: _network_meta 내부 임시키 multi_node 누설 차단 ──────────────────
@@ -689,7 +689,9 @@ def test_memory_present_capacity_unchanged(monkeypatch):
             {"@odata.id": "/redfish/v1/Systems/X/Memory/D1"},
             {"@odata.id": "/redfish/v1/Systems/X/Memory/D2"}]}, None),
         "Systems/X/Memory/D1": (200, {"Id": "D1", "CapacityMiB": 32768}, None),
-        "Systems/X/Memory/D2": (200, {"Id": "D2", "CapacityMiB": 0}, None),
+        # 2026-10-27 (WP3): Status 없음 · CapacityMiB 0 · 제조사/부품/시리얼 전부 없음 은 빈 슬롯(실측 iLO 7 전원 Off)이라 제외된다 —
+        # "실측 0 보존" 은 장비가 식별 정보를 준 DIMM 에 대한 것이므로 제조사를 둔다 (test_redfish_power_off_host.py 가 경계를 고정).
+        "Systems/X/Memory/D2": (200, {"Id": "D2", "CapacityMiB": 0, "Manufacturer": "Samsung"}, None),
     })
     out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/X", *CREDS)
     caps = {s["id"]: s["capacity_mb"] for s in out["slots"]}

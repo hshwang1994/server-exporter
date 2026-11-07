@@ -19,6 +19,41 @@
 
 ---
 
+## DRIFT-033 (2026-10-29, resolved — Summary 감사에서 드러난 사전 · 계약 문서끼리의 충돌과 구현과 어긋난 문장 묶음)
+
+- **발견 위치**(기준 `104bcaf0`): `schema/field_dictionary.yml` :695 `storage.physical_disks[]` "시스템 전체 물리 디스크" ↔ :834 · `docs/contract/03-fields.md` :616 "Storage 전체에 드라이브가 0건일 때만 섀시 `Drives` 폴백";
+  03-fields :1469-1471 "파티션 단위 요약은 계산하지 않는다" · 존재하지 않는 `memory.total_gb`; 03-fields 6.3.3 "ports = down / infiniband = unknown 으로 갈릴 수 있다"; FD :984 · :990(SA-11 단위 서술); 그룹 키 목록 공백 · `memory.free_mb` · `network.portgroups` 미등재
+- **분류**: catalog-stale(사전 · 계약) + convention-violation(문서끼리 충돌)
+- **설명**: 정의("시스템 전체")와 동작 서술("Storage 0건일 때만 폴백")이 달랐다. 감사가 SA-12 로 분류했고 정의 쪽이 맞아 동작을 고쳤다(섀시 드라이브 합집합 — 문서만 고쳐 끝내지 않음). 파티션 summary 는 실제로 계산되는데 문서는 반대로 적었다(SA-03). Starting · Training 의 ports 값이 unknown 으로 바뀌어 6.3.3 문장의 전제가 사라졌다(SA-09)
+- **영향**: 문서 · 사전만 — 키 · 타입 칸 · channel · enum · priority 불변, +2 항목은 이미 나가던 키
+- **resolved (2026-10-29)**: 사전 · 계약 `0bc68f71` + 코드 `ca5e5c54`(SA-12 합집합) · `92d03169`(SA-09) · `d18f5ca3`(SA-03). 근거 `tests/evidence/2026-10-29-redfish-summary-fix/SUMMARY_FIX_HANDOFF.md` 1절
+- **관련**: rule 13 R7 · rule 92 R2 · rule 96 R1-B, `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`
+
+## DRIFT-032 (2026-10-28, open — Lenovo XCC3 adapter 의 RedfishVersion 주석 · metadata ↔ 미러 실측)
+
+- **발견 위치**: `adapters/redfish/lenovo_xcc3.yml` 주석(:18 · :34 "RedfishVersion 1.15.0 (실측 2026-06-15)") · metadata `redfish_version: "1.17.0"` · `docs/ai/catalogs/VENDOR_ADAPTERS.md` Lenovo 표
+- **분류**: external-contract-drift
+- **설명**: 같은 장비(SN J902E57T · IHX414J 1.22)의 1차 미러 ServiceRoot 는 1.17.0, 2차 Mock 4대(IHX438R 2.97)는 1.22.0 이다 — 1.15.0 은 어느 미러에도 없다. 선택 · 점수에 쓰지 않는 값이라 동작 영향 0
+- **영향**: 주석 · 문서만(adapter 선택 · 수집 0)
+- **제안**: 2026-06-15 캡처 원본에서 1.15.0 근거를 확인한 뒤 주석 · metadata 를 펌웨어별로 정리한다. 그 전까지는 2026-10-28 drift 주석(C5 `0e3bcbb3`, `lenovo_xcc3.yml` :35-36)으로 표시
+- **상태**: open
+- **관련**: rule 96 R1 · R4, `docs/ai/catalogs/FAILURE_PATTERNS.md` 2026-10-28, NEXT_ACTIONS 2026-10-28
+
+## DRIFT-031 (2026-10-27, resolved — Redfish 계약 · 사전 · 문서가 구현과 어긋난 묶음(2차 Mock 분석 C6) + `cpu.logical_threads` 정책 변경)
+
+- **발견 위치**: `schema/field_dictionary.yml`(`cpu.manufacturer` redfish 선언 · 미발행; `storage.controllers[].driver` redfish 선언 · 미발행; `cpu.sockets/model/logical_threads` 미등재;
+  power/thermal 하위 키 8개뿐; `hardware.health` "BMC rollup" 서술; `firmware[].updateable` boolean; `multi_node.composition`/`diagnosis.details` Redfish 키 미등재) ·
+  `docs/contract/03-fields.md`("PSU 한 대 fault → Critical" · thermal "빈 {} graceful" · `data.firmware` 절 없음 · bmc_ip FAQ) · `redfish_gather.py` `_collect_all_sections` docstring ·
+  `schema/fields/common.yml`(logical_threads 를 3채널 공통으로 분류) · ADR-2026-10-18/19 의 `logical_threads` 규칙
+- **분류**: catalog-stale(사전 · 계약 · 예시) + convention-violation(선언만 있고 안 내는 키) + external-contract-drift(BMC 스레드 수 · Health 의미 — DMTF Resource.Status)
+- **설명**: 2026-09-03 OS/ESXi 전수 검수 때 사전에 redfish 채널을 넣었지만 normalize 에 구현되지 않았고, 2026-06-14 이후 power/thermal 하위 키 · 2026-06-09 composition 키가 사전에 오르지 않았다.
+  `hardware.health` 는 코드가 `Status.Health` 를 내는데 문서는 롤업을 서술했다(iLO 7 에서 PSU Critical ↔ Warning 으로 갈림). `cpu.logical_threads` 는 BMC 값으로는 HT 상태를 확정할 수 없어
+  사용자 결정(FIX 1)으로 Redfish 발행을 중단했다 — 유일한 비-Additive 변경(키 제거).
+- **영향**: 호출자 — Redfish `data.cpu.logical_threads` 소멸 · `cpu.manufacturer` 추가; 그 밖은 사전 · 문서 정정(키 변경 0). 사전 +53 항목 · 정정 10 항목, schema_version 유지.
+- **resolved (2026-10-27)**: WP8/WP9 — normalize `manufacturer`(OS/ESXi 와 같은 표) · `logical_threads` 제거(top-level · partitions) · `hardware.health` Rollup 폴백(Health 없을 때만) · adapter 플래그 삭제 ·
+  사전/계약/예시/baseline/ADR 정정 기록 · `test_field_dictionary_channel_emit.py` 에 "redfish 선언 cpu 키는 전부 발행" 검사. 근거: `tests/evidence/2026-10-27-redfish-mock2-impl/08-contract-dictionary.md` · `09-cpu-logical-threads.md`.
+- **관련**: rule 13 R7 · rule 92 R2(Additive 예외는 사용자 FIX 1) · rule 96 R1-B · R4 · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-27
+
 ## DRIFT-028 (2026-10-17, resolved — InfiniBand 판정이 "현재 모드" 가 아닌 신호를 썼다 · 존재하지 않는 Redfish 속성 참조)
 
 - **발견 위치**: `redfish-gather/library/redfish_gather.py` `_fetch_ndf_index`(`NetworkDeviceTechnology` 읽기) · `_classify_port_protocol`(`Port.InfiniBand` 블록 존재 → IB, 충돌 시 IB 우선) ·
