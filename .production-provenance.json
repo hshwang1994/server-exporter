@@ -1898,54 +1898,6 @@
    "source_blob": "1ee5030360cd4fa7a040b8e060fbd20d1d16206c",
    "source_sha256": "f325eddec4da3fb25e1cb9cb156c48e78d615b9a0a7dced5e803f0123357ed2c"
   },
-  "syjeong_test": {
-   "bytes": 125231,
-   "language": "groovy",
-   "mode": "100644",
-   "preserved": [
-    {
-     "line": 607,
-     "rule": "shell.shebang",
-     "text_sha256": "53ad80a69a847862721d6afd94894264e4cff23fef65cdff70b011ee5306312d"
-    },
-    {
-     "line": 736,
-     "rule": "shell.shebang",
-     "text_sha256": "e931301b29007e7639eaf89f6c35ed2f7fd813fb64efd866e190efc7d06226cf"
-    },
-    {
-     "line": 1903,
-     "rule": "shell.shebang",
-     "text_sha256": "125af5e65259eeadd07ef65bdec365f6922e1b9c63c9d49ddba771df77c5f679"
-    },
-    {
-     "line": 1933,
-     "rule": "shell.shebang",
-     "text_sha256": "d033129c25a0b6aa7c3e0c1009092b884c39d88ccebfc24eab11f0230c5fcf75"
-    },
-    {
-     "line": 1962,
-     "rule": "shell.shebang",
-     "text_sha256": "b6e030dbc566f0295d420509f7c36be95e3b5cab3af2ac75bce079576b4a887a"
-    },
-    {
-     "line": 1978,
-     "rule": "shell.shebang",
-     "text_sha256": "3e0ff201dbf6b7c2972a3029ac5f3d968304a42097752f9c01474713239769eb"
-    },
-    {
-     "line": 2057,
-     "rule": "shell.shebang",
-     "text_sha256": "5c82694ea345407d3186a2d6ae611cb818dbcc22ce926f334da5eb015ab914b4"
-    }
-   ],
-   "python_kind": null,
-   "removed_lines": 7,
-   "removed_trailing": 0,
-   "sha256": "bcd1286ae13155f7c1d067f23ac09ee1d0fed97929d6787b15c3d27db937fec9",
-   "source_blob": "de01b1e4659bdadc7795505811c8105a33b7c2f2",
-   "source_sha256": "8645248ba24f8d788ee8e7c53c5eae01e0d0c1f1bd435ce9506a0fdc2a4db0d9"
-  },
   "vault/cj/esxi.yml": {
    "bytes": 873,
    "language": "vault",
@@ -2700,9 +2652,9 @@
   "tests/reference/redfish/README.md",
   "tests/reference/redfish/mock2/README.md"
  ],
- "main_sha": "a38fa73cd462c30c98b42134d151a01d6fda40f9",
- "main_tree": "5454a7bc1468cc3c634910ea16448868aba2babb",
- "manifest_sha256": "30a7171a7cbefceacc288a483d90eb45695bd881acd2b3582808aebf52470afd",
+ "main_sha": "dcfe5930f0eb0e6b90f0edfcc41483164485c7ef",
+ "main_tree": "8e5fdb97c01a392e9e562d068acc646e5a6955c5",
+ "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
   "jinja_trim_blocks": "ansible",
@@ -2717,5 +2669,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "ae2549ba17e0dcd31308e434e79dcb815cffe9781dd908195193c2a2beb31427"
+ "tree_hash": "a12e2487a5e97527bd02a5aa6dff419a3c495306493d180726149f7f04785559"
 }
