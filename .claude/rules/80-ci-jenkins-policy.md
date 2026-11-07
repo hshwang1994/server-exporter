@@ -30,7 +30,7 @@ paths:
   기본값 1줄뿐이고 `tests/unit/test_jenkinsfile_portal_byid_sync.py` 가 강제한다. production 생성 대상이 아니고 jenkins-prod 에 이 파일을 쓰는 Job 은 없다
   (근거 `docs/ai/decisions/ADR-2026-10-09-portal-byid-copy.md`)
 - `syjeong_test`: 2026-11-02~03 사내 GitLab `main` 에 관리자가 직접 만든 Portal 시험 파이프라인(`clovirAnsible.run`). 2026-11-07 main 에 들여왔다가 같은 날
-  사용자 지시로 파일과 production 생성 대상 항목을 지웠다(production `7e3b2e6b` 에는 다음 승격 때까지 남는다). 같은 GitLab 커밋들이 portal 의 `target_type` 을
+  사용자 지시로 파일과 production 생성 대상 항목을 지웠다(같은 날 긴급 승격 production `09fb6625` 로 배포본에서도 지웠다). 같은 GitLab 커밋들이 portal 의 `target_type` 을
   string(기본 `''`)으로 바꾼 것은 그대로다(값 검사는 Validate 그대로). 근거 `docs/reference/decision-log.md` 2026-11-07 · 2026-11-07 (2)
 - 외부 CI 시스템 미사용 (Jenkins 단독)
 - Stage: Validate(agent 없음) / Resolve Location(agent 없음, `readTrusted`) / Gather(agent) 셋 + pipeline `post { always }` 마무리(controller:
