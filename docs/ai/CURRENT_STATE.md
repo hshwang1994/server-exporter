@@ -1,5 +1,16 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-11-09 — Serial Number 필수 규칙(시나리오 E) 3채널 확장 · Dell Service Tag 없음 데이터 보존
+
+> 정본: `docs/ai/decisions/ADR-2026-11-09-serial-required-redfish-esxi.md` · `docs/reference/decision-log.md` 2026-11-09 · `docs/contract/03-fields.md` 4절 E · `tests/evidence/2026-11-09-serial-required-redfish-esxi.md`.
+
+- **계기**: 사용자 — OS 처럼 Redfish 도 Serial Number 가 null 이면 실패로(가능 여부 · 지금 출력과 합치는 방안 질의). 답: 범위 Redfish + ESXi · Dell 함께 통일 · 공통 규칙 1개 · 기존 사유가 있으면 Serial 행 없음(3채널) · Redfish/ESXi 문장 지정 · OS sudo 문장 제안 → 계획 승인.
+- **제품 변경**: `e25e57d9` 규칙을 공통 파일 `common/tasks/normalize/require_serial.yml` 로(순수 리팩터 — OS wrapper 는 원인 판정만) · `6f93375d` 기존 사유가 있으면 Serial 행을 붙이지 않음(`details.serial_number` 만) · `f5592a0f` OS 문장 원인별(새 키 `serial_missing_sudo` — Linux + `privilege_unavailable`) · `e75f7589` ESXi · Redfish 확장(Redfish wrapper `redfish-gather/tasks/require_serial.yml` — BMC 를 실제로 읽은 결과만, ESXi 는 `site.yml` 직접 호출) · Redfish `hardware.serial` 자리표시자 → null · `22f44e20` Dell Service Tag 없음 → 모듈이 수집을 버리지 않음(notice 1건 · 대표 시리얼 null · 보드 시리얼 폴백 금지 유지).
+- **바뀌지 않은 것**: envelope 13 필드 · `failure_code`/`failure_stage` enum · schema version · Jenkinsfile · callback · vault · baseline · adapter · Redfish 요청 경로(정상 장비 요청 수 그대로).
+- **문서**: `59344d96`(계약 · 개발 문서 · REQUIREMENTS · decision-log) + 하네스 커밋(CLAUDE.md §4 · ADR · `docs/ai/contracts/serial-number.md` 31절 · NEXT_ACTIONS · PROJECT_MAP · evidence).
+- **검증**: OS 대조 741 사례(단계마다 기대한 차이만) · Tier 1 재생 21대(정상 18대 차이 0 · 사본 3대 기대 경로만) · pytest — TEST_HISTORY 2026-11-09. 실장비에서 Serial 이 없는 장비는 없다 — 누락 분기는 재생 · 시험으로만 확인.
+- **남은 것**: Portal 담당자 안내(사용자 몫 — NEXT_ACTIONS) · Serial 없는 실장비를 처음 볼 때 확인.
+
 ## 일자: 2026-11-07 — Redfish Summary 수정 main 병합 · 사내 GitLab `main` 직접 수정 9건 반영
 
 > 정본: `docs/reference/decision-log.md` 2026-11-07 · 독립 재검증 보고서 `C:\github\ClovirONE\se-final-20261107\FINAL_INDEPENDENT_REVIEW.md` · `MERGE_READINESS.md`(저장소 밖, 읽기 전용) · `tests/evidence/2026-10-29-redfish-summary-fix/`.

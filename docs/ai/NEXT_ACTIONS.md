@@ -1,5 +1,17 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Serial Number 필수 3채널 확장 · Dell 데이터 보존 (2026-11-09) — 남은 항목
+
+> 정본: `docs/ai/decisions/ADR-2026-11-09-serial-required-redfish-esxi.md` · `docs/reference/decision-log.md` 2026-11-09 ·
+> `tests/evidence/2026-11-09-serial-required-redfish-esxi.md`.
+
+- [ ] **[HIGH / 사용자 — Portal 담당자 안내]** 새 필드는 없지만 받는 모양이 바뀐다. (1) Redfish · ESXi 결과도 시나리오 E 모양(`status: failed` 인데
+      `sections.*: success` · `data` 있음)으로 올 수 있다. (2) Service Tag 가 없는 Dell 실패 결과에 이제 `data` 가 실린다(종전 `data: {}`).
+      (3) OS Serial 문장이 둘로 나뉘었다(Linux sudo 실패 / 그 밖). (4) 다른 실패 사유가 이미 있으면 Serial 행이 붙지 않는다(Grid 행 1개 감소).
+- [ ] **[MED / 실장비 — 처음 볼 때] Serial 을 주지 않는 Redfish · ESXi 장비** — 기록된 결과(Redfish 531건 · ESXi 13건)에는 없다. 누락 분기는 미러 사본 재생 ·
+      시험으로만 확인했다. 운영에서 `diagnosis.details.serial_number` 가 나온 Redfish · ESXi host 가 생기면 `capture-site-fixture` 로 원본을 남기고
+      `cause` · 문장이 맞는지 본다.
+
 ## Redfish Summary 수정 main 병합 · GitLab 9건 반영 (2026-11-07) — 남은 항목
 
 > 정본: `docs/reference/decision-log.md` 2026-11-07 · `docs/ai/CURRENT_STATE.md` 2026-11-07. main 병합(`d7cc7264`) · GitLab 9건(`aa5b55c6`) · D-01~D-03(`6ab65234`).
@@ -687,7 +699,7 @@
 
 - [ ] **DELL-ST-1 (HIGH) iDRAC7/8 실장비 fixture 캡처** — iDRAC7/8 Redfish API Guide(2.30~2.70)
       목차에 `DellServiceRoot` 가 없다. 실제로 `Oem.Dell.ServiceTag` 를 노출하지 않는 펌웨어라면
-      그 장비는 이제 **수집이 실패**한다(폴백 금지의 귀결). 12G/13G PowerEdge 1대에서
+      그 장비는 **`failed`** 다(폴백 금지의 귀결 — 2026-11-09 부터는 수집한 데이터는 실리고 Serial 필수 규칙이 실패를 낸다). 12G/13G PowerEdge 1대에서
       `curl -sk -u <user>:<pass> https://<BMC>/redfish/v1/ | jq .Oem.Dell.ServiceTag` 확인 후
       `capture-site-fixture` 로 fixture 화. 미노출이면 정책 재검토 필요(사용자 결정 사항).
 - [ ] **DELL-ST-2 (MED) Dell 모듈러(블레이드) 확인** — 보유 Dell 7대 전부 Monolithic 이라

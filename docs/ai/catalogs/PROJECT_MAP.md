@@ -20,7 +20,7 @@ server-exporter/
 ├── callback_plugins/        # json_only.py (stdout callback, OUTPUT만 JSON)
 ├── common/
 │   ├── library/             # precheck_bundle.py (4단계 진단)
-│   ├── tasks/normalize/     # init_fragments / merge_fragment / build_*.yml (10개)
+│   ├── tasks/normalize/     # init_fragments / merge_fragment / build_*.yml / require_serial.yml(Serial 필수 3채널 공통 규칙, 2026-11-09)
 │   └── vars/                # vendor_aliases.yml + supported_sections.yml
 ├── filter_plugins/          # Jinja2 필터 (diagnosis_mapper / failure_reason / vendor_normalizer / serial_normalizer 등)
 ├── lookup_plugins/          # adapter_loader.py
@@ -28,6 +28,7 @@ server-exporter/
 ├── os-gather/               # 4-Play (포트감지 → 감지실패 OUTPUT → Linux → Windows)
 ├── esxi-gather/             # 1-Play (community.vmware)
 ├── redfish-gather/          # 1-Play (precheck → detect → adapter → collect → normalize)
+│   ├── tasks/require_serial.yml     (Serial 필수 — BMC 를 실제로 읽은 결과만 공통 규칙에 넘김, 2026-11-09)
 │   └── library/redfish_gather.py    (stdlib only — vendor OEM 추출은 여기 _extract_oem_*)
 │                                    ※ tasks/vendors/{vendor}/ 는 2026-08-13 제거 (기여 0)
 ├── schema/

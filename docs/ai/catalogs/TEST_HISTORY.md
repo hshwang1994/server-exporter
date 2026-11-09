@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-09 — Serial Number 필수 3채널 확장 · Dell 데이터 보존 (main `e25e57d9` ~ `22f44e20`)
+
+> 정본: `tests/evidence/2026-11-09-serial-required-redfish-esxi.md`. 누락 분기는 실장비가 아니라 대조 · 미러 사본 재생 · 시험으로만 확인했다.
+> Windows 작업 PC · Python 3.13 / WSL Ubuntu · venv ansible-core 2.20.3 · Python 3.12.
+
+| 구분 | 결과 |
+|---|---|
+| OS 출력 대조 (흉내 playbook, 구 규칙 vs 새 규칙) | 741 사례 — 1단계 `e25e57d9` 전부 같음 · 2단계 `6f93375d` 307 사례 꼬리 Serial 행만 빠짐 · 3단계 `f5592a0f` 362 사례 문장만(sudo 90 · 일반 272, Windows · sudo 외 원인에 sudo 문장 0) · 4단계 `e75f7589` 3단계와 같음 |
+| 실제 Ansible 하네스 (no_data 7 + add-on 기준선) | 1단계 8/8 같음 · 2단계 꼬리 중복 행만 · 3단계 add-on 2대 문장만 · 4단계 ESXi · Redfish 사례 기대값(H12 `errors` 그대로 + `not_collected` · Serial 없음 `failed` 1행 `not_provided` · BMC 미독취 `success` 그대로) |
+| Tier 1 재생 21대 (mock2 11 · 1차 7 · 사본 3) | 정상 18대 before→after4 · before→after5 봉투 차이 0 · 요청 차이 0. after4→after5 20대 차이 0. 사본 nosn 11 · sys500 13 경로(전부 허용 목록). Dell 사본은 같은 재생의 정상 R740 대비 16경로만(허용 목록) · 섹션 · `data` 나머지 · 요청 집합 같음 |
+| pytest Windows | `tests/e2e tests/regression` 1104 passed · 12 skipped · 5 xfailed · `test_dell_service_tag_serial.py` 73 passed |
+| pytest WSL (`e75f7589` 추출본) | 7211 passed · 80 skipped · 5 xfailed · 74 failed — 전부 환경(PowerShell 시험 5파일 69 · git index 실행 비트 2파일 5). 같은 7파일 Windows 실제 저장소 197 passed |
+| pytest · syntax-check (HEAD `59344d96`, WSL git clone) | syntax-check 3채널 rc 0 · pytest 7296 passed · 18 skipped · 5 xfailed · 84 failed — 전부 환경: PowerShell 시험 81(WSL 미지원 — 2026-10-28 G3 와 같은 81건, Windows 통과) · `test_env_guard.py` 3(래퍼가 `REPO_ROOT` export — `env -u REPO_ROOT` 9 passed) |
+| 정적 | `verify_vendor_boundary` · `verify_harness_consistency` 통과 · `validate_field_dictionary` PASS · `output_schema_drift_check` 정합 · Jinja compile `--all --blocking` rc 0 · py_compile OK · 변경 YAML 10개 PyYAML 파싱 OK(yamllint 미설치 — 환경 제약) |
+| 훅 우회 | additive-only 만 `ADDITIVE_SKIP_NEW_CYCLE=1` — `e75f7589`(`build_status.yml` 시나리오 E 주석 · `field_dictionary.yml` help/channel) · `22f44e20`(`field_dictionary.yml` help). envelope 키 · 항목 변화 0. `--no-verify` 0 |
+| 미실행 | Serial 을 주지 않는 실제 Redfish · ESXi 장비 · Service Tag 미노출 실제 Dell |
+
 ## 2026-11-07 (2) — `syjeong_test` 삭제 (main · 생성 대상) · 긴급 승격 production `09fb6625`
 
 > 정본: `docs/reference/decision-log.md` 2026-11-07 (2). 사용자 지시로 CI · main Job 매트릭스 · 전체 pytest 는 돌리지 않았다. Windows 작업 PC · Python 3.13.

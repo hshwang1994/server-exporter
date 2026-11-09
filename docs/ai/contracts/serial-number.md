@@ -1216,9 +1216,14 @@ entry 도 추가·삭제 0 (rule 13 R5 / rule 96 R1-B Additive).
 
 즉 19절이 기록한 Dell 채널 간 불일치가 이번 교정으로 해소됐다.
 
-### 29-5. Service Tag 를 못 얻은 경우 — 실패 처리
+### 29-5. Service Tag 를 못 얻은 경우
 
-`ServiceRoot.Oem.Dell.ServiceTag` 가 없거나 무효면 **다른 값으로 대체하지 않고 수집을 실패**시킨다.
+> [MOD] 2026-11-09 — **실패 판정을 모듈에서 채널 공통 필수 식별자 규칙으로 옮겼다 (31절).** 아래의 "수집을 실패시킨다" ·
+> "system 섹션 미확보 차단" 은 2026-08-11 ~ 2026-11-08 의 동작이다. 지금은 대표 시리얼이 `null` 이고 사유는 `diagnosis.details.notices`
+> 1건이며, 수집한 섹션 · `data` 는 보존되고, host 의 `failed` 는 `common/tasks/normalize/require_serial.yml` 이 낸다(Redfish Serial 문장).
+> 다른 값으로 대체하지 않는 것 · 무효 판정값 · 인증 ServiceRoot 재조회 1회는 그대로다.
+
+`ServiceRoot.Oem.Dell.ServiceTag` 가 없거나 무효면 **다른 값으로 대체하지 않고 수집을 실패**시킨다 (2026-11-09 까지).
 Dell 서버 시리얼은 필수값이므로 `null` 인 채로 success/partial 을 내보내지 않는다.
 
 무효 판정값은 이 프로젝트가 이미 정의해 둔 식별자 센티널의 합집합을 그대로 쓴다 (새로 정의하지 않음):
@@ -1242,6 +1247,7 @@ Dell 서버 시리얼은 필수값이므로 `null` 인 채로 success/partial �
 
 **system 섹션 미확보 차단**: Service Tag 는 정상인데 `GET Systems/{id}` 가 실패하면 대표 시리얼을
 실을 자리가 없다. 이 경우 `partial` + `hardware.serial=null` 로 내보내지 않고 실패로 끝낸다.
+(2026-11-09 부터는 수집을 버리지 않는다 — 다른 섹션은 그대로이고 host 는 31절 규칙으로 `failed`, `cause: not_collected` 다.)
 
 ### 29-6. 다른 벤더 — 이번 작업에서 변경 없음
 
@@ -1400,3 +1406,43 @@ System Serial 이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다.
 model 패턴은 2026-06-15 사이트 실 4노드 Redfish 미러 캡처의 표기를 그대로 쓴다. 사이트 DMI
 표기가 다르면 조건 2가 미매치라 **정규화가 일어나지 않는다** — 무해한 no-op 이고, 실측 후
 패턴을 Additive 로 확장하면 된다 (`docs/ai/NEXT_ACTIONS.md` CSUS-OS-1).
+
+## 31. Serial Number 필수를 3채널로 · Dell 실패 판정 이관 (2026-11-09)
+
+> 정본: `common/tasks/normalize/require_serial.yml` · `docs/contract/03-fields.md` 4절 E · `docs/ai/decisions/ADR-2026-11-09-serial-required-redfish-esxi.md`.
+
+### 31-1. 무엇을 왜
+
+사용자 요청(2026-11-09): OS 처럼 Redfish 도 Serial Number 가 null 이면 실패로. 사용자 결정 — 범위 Redfish + ESXi, 공통 규칙 1개,
+다른 실패 사유가 있으면 Serial 행을 붙이지 않음(3채널), Dell 도 함께 통일, Redfish · ESXi 문장 지정, OS 는 Linux sudo 실패에만 sudo 안내.
+
+### 31-2. 채널별 대표 시리얼과 null 이 되는 경우
+
+| 채널 | 대표 시리얼 원천 | null 이 되는 경우 |
+|---|---|---|
+| OS Linux | DMI `product_serial`(sudo 필요) | sudo 실패 · 읽기 실패 · 자리표시자 · 미제공 |
+| OS Windows | `ansible_product_serial` / `Win32_BIOS.SerialNumber` | facts 실패 · 자리표시자 · 미제공 |
+| ESXi | vSphere host facts `ansible_product_serial` | 자리표시자(`NA` 등) · 미제공 · facts 실패 |
+| Redfish (Dell 외) | Systems 첫 member `SerialNumber` → `dmi_sentinel_null` → `normalize_os_serial` | 키 없음 · 빈 값 · 자리표시자(2026-11-09 부터 — 종전에는 값으로 남음) · System GET 실패 |
+| Redfish Dell | `ServiceRoot.Oem.Dell.ServiceTag` (29절) | 태그 없음 · 무효 · system 섹션 없음(실을 자리가 없음) |
+
+### 31-3. 규칙
+
+- 발동: 위 값이 null AND `failure_stage` ∈ {null, gather} AND 채널 대상 조건. Redfish 대상 조건은 "BMC 를 실제로 읽었다"
+  (`_rf_collect_ok` 또는 `diagnosis.auth_success: true`) — 계정 요청 전에 멈춘 rescue(`gather_internal`)는 제외한다.
+- 다른 실패 사유 없음 → `gather` / `GATHER_FAILED` / 채널 Serial 문장, `errors[0]` 에 그 문장의 행(기존 섹션 행은 뒤에).
+- 다른 실패 사유 있음 → 사유 · stage · code · `errors[]` 그대로, `status: failed` 와 `diagnosis.details.serial_number` 만.
+- 원인: OS 6값, ESXi · Redfish 2값(`hardware` 섹션 success → `not_provided`, 아니면 `not_collected`).
+
+### 31-4. Dell 모듈 변경 (`redfish_gather.py` main)
+
+- resolver 가 사유를 돌려주면 `_notice('system', 사유)` 1건 — 종전의 `_err` + `_exit(failed, data={})` 를 지웠다.
+- 수집 뒤 system 섹션이 있으면 `system['serial'] = _forced_serial`(못 얻었으면 None). 없으면 아무것도 하지 않는다 — 종전의 중복 오류 · `_exit` 를 지웠다.
+- 그대로: resolver 순서, 인증 ServiceRoot 재조회 1회(정상 경로 추가 GET 0), 보드 시리얼 · SKU · ChassisServiceTag · NodeID 폴백 금지.
+- `tests/integration/emulator_harness.py` `run_gather` 도 같게 바꿨다(main 1:1 흉내).
+
+### 31-5. 검증 · 한계
+
+- OS 대조 741 사례(리팩터 · 중복 제거 · 문장 3단계), Tier 1 재생 21대(정상 18대 차이 0 · 사본 3대 기대 경로만), 단위 · 통합 시험 —
+  수치와 명령은 `tests/evidence/2026-11-09-serial-required-redfish-esxi.md`.
+- **한계**: Serial 을 주지 않는 실제 Redfish · ESXi 장비와 Service Tag 가 없는 실제 Dell 은 없다. 누락 분기는 미러 사본 재생과 시험으로만 확인했다.
