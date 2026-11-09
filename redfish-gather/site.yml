@@ -237,6 +237,10 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_output.yml"
 
+        - name: "redfish | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/redfish-gather/tasks/require_serial.yml"
+
         - name: "redfish | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
@@ -434,6 +438,10 @@
         - name: "redfish | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        - name: "redfish | rescue | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/redfish-gather/tasks/require_serial.yml"
 
         - name: "redfish | rescue | inject schema_version"
           ansible.builtin.set_fact:

@@ -180,6 +180,12 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_output.yml"
 
+        - name: "esxi | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+          vars:
+            _rs_channel: esxi
+
         - name: "esxi | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
@@ -262,6 +268,12 @@
         - name: "esxi | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        - name: "esxi | rescue | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+          vars:
+            _rs_channel: esxi
 
         - name: "esxi | rescue | inject schema_version"
           ansible.builtin.set_fact:

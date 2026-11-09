@@ -6897,13 +6897,7 @@ def main():
         _forced_serial, _serial_err = _serial_resolver(
             service_root, refetch=_reauth_service_root)
         if _serial_err is not None:
-            all_errors.append(_err('system', _serial_err))
-            _exit(
-                changed=False, status='failed', vendor=vendor,
-                collected=[], failed_sections=['all'], unsupported_sections=[],
-                errors=all_errors, data={}, probe_facts=probe_facts,
-                multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
-            )
+            _notice('system', _serial_err)
 
     aux = {}
     result_data = _collect_all_sections(
@@ -6920,16 +6914,6 @@ def main():
         _sys_section = result_data.get('system')
         if isinstance(_sys_section, dict) and _sys_section:
             _sys_section['serial'] = _forced_serial
-        else:
-            all_errors.append(_err(
-                'system',
-                '서버 대표 시리얼을 결과에 실을 수 없습니다 — system 섹션 수집 실패'))
-            _exit(
-                changed=False, status='failed', vendor=vendor,
-                collected=[], failed_sections=['all'], unsupported_sections=[],
-                errors=all_errors, data={}, probe_facts=probe_facts,
-                multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
-            )
 
     multi_node = _collect_multi_node_topology(
         bmc_ip, vendor, service_root,

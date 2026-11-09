@@ -1,0 +1,54 @@
+---
+
+- name: "normalize | require_serial | observe"
+  ansible.builtin.set_fact:
+    _rs_serial: >-
+      {%- set o = _output if (_output is defined and _output is mapping) else {} -%}
+      {%- set co = o.correlation if ((o.correlation | default(none)) is mapping) else {} -%}
+      {%- set d = o.data if ((o.data | default(none)) is mapping) else {} -%}
+      {%- set hw = d.hardware if ((d.hardware | default(none)) is mapping) else {} -%}
+      {%- set sy = d.system if ((d.system | default(none)) is mapping) else {} -%}
+      {%- set v = (co.serial_number | default(none, true)) or (hw.serial | default(none, true)) or (sy.serial_number | default(none, true)) -%}
+      {{ ((v | default('', true)) | string) | dmi_sentinel_null('serial') }}
+  no_log: true
+
+- name: "normalize | require_serial | enforce (scenario E)"
+  vars:
+    _rs_diag: "{{ _output.diagnosis if ((_output.diagnosis | default(none)) is mapping) else {} }}"
+    _rs_stage: "{{ _rs_diag.failure_stage | default(none) }}"
+    _rs_has_reason: "{{ ((_rs_diag.failure_reason | default('', true)) | string | trim | length) > 0 }}"
+    _rs_reason: >-
+      {{ (_rs_diag.failure_reason | string | trim) if (_rs_has_reason | bool)
+         else (_fr_catalog | failure_reason(_rs_reason_key | default('serial_missing', true), _rs_channel,
+                                            _cred_location | default(se_location | default('')))) }}
+    _rs_secs: "{{ _output.sections if ((_output.sections | default(none)) is mapping) else {} }}"
+    _rs_cause_eff: >-
+      {{ (_rs_cause | string | trim) if (((_rs_cause | default('', true)) | string | trim | length) > 0)
+         else ('not_provided' if ((_rs_secs.hardware | default('')) == 'success') else 'not_collected') }}
+    _rs_error:
+      section: "{{ _rs_error_section | default(_rs_channel ~ '_gather') }}"
+      message: "{{ _rs_reason }}"
+      detail: "{{ 'field=serial_number; mandatory=true; cause=' ~ _rs_cause_eff ~ (_rs_detail_extra | default('')) }}"
+    _rs_errors_cur: "{{ (_output.errors | default([])) if ((_output.errors | default([])) is not string) else [] }}"
+  ansible.builtin.set_fact:
+    _output: >-
+      {{ _output
+         | combine({
+             'status': 'failed',
+             'diagnosis': (_rs_diag | combine({
+                 'failure_stage':  (_rs_stage if (_rs_has_reason | bool) else 'gather'),
+                 'failure_code':   ((_rs_diag.failure_code | default(none)) if (_rs_has_reason | bool) else 'GATHER_FAILED'),
+                 'failure_reason': _rs_reason,
+                 'details': ((_rs_diag.details if ((_rs_diag.details | default(none)) is mapping) else {})
+                             | combine({'serial_number': {'present': false, 'cause': _rs_cause_eff,
+                                                          'sudo': (_rs_sudo | default(none, true))}}))
+               }))
+           })
+         | combine({} if (_rs_has_reason | bool)
+                   else {'errors': (([_rs_error] + (_rs_errors_cur | list)) | normalize_errors)}) }}
+  when:
+    - _output is defined
+    - _output is mapping
+    - (_rs_eligible | default(true)) | bool
+    - (_rs_serial | default(none)) is none
+    - (_rs_stage | default(none)) in [none, 'gather']

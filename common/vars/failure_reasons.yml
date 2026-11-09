@@ -60,7 +60,11 @@ _fr_catalog:
   gather_internal:
     default: "개더링 프로젝트에서 정보 수집 중 오류가 발생했습니다."
   serial_missing:
-    os: "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요."
+    os: "서버의 Serial Number를 확인하지 못했습니다. Vault에 등록된 OS 계정의 권한과 서버의 Serial Number 제공 여부를 확인하세요."
+    esxi: "서버의 Serial Number를 확인하지 못했습니다. ESXi에서 해당 정보를 정상적으로 제공하는지 확인하세요."
+    redfish: "서버의 Serial Number를 확인하지 못했습니다. BMC에서 Serial Number가 정상적으로 제공되는지 확인하세요."
+  serial_missing_sudo:
+    os: "서버의 Serial Number를 확인하지 못했습니다. OS 수집 계정에 sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가 맞는지 확인하세요."
 
   output_build_failed:
     default: "개더링 프로젝트에서 수집 결과를 만들지 못했습니다."
@@ -79,7 +83,7 @@ _fr_code_keys:
   AUTH_PROBE_FAILED:          [auth_unconfirmed, auth_rejected, loc_vault_no_account,
                                project_vault_no_account]
   GATHER_FAILED:              [gather_after_auth, gather_connection_lost, gather_no_data,
-                               gather_internal, serial_missing]
+                               gather_internal, serial_missing, serial_missing_sudo]
   OUTPUT_BUILD_FAILED:        [output_build_failed, infra_unavailable]
 
 _fr_errors_truncated: "표시하지 않은 오류가 더 있습니다."

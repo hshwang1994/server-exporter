@@ -1,0 +1,10 @@
+---
+
+- name: "redfish | require_serial"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+  vars:
+    _rs_channel: redfish
+    _rs_eligible: >-
+      {{ (_rf_collect_ok | default(false) | bool)
+         or ((((_output | default({})).diagnosis | default({})).auth_success | default(none)) is sameas true) }}

@@ -2,15 +2,7 @@
 
 - name: "os | normalize | require_serial | observe"
   ansible.builtin.set_fact:
-    _rs_serial: >-
-      {%- set o = _output if (_output is defined and _output is mapping) else {} -%}
-      {%- set co = o.correlation if ((o.correlation | default(none)) is mapping) else {} -%}
-      {%- set d = o.data if ((o.data | default(none)) is mapping) else {} -%}
-      {%- set hw = d.hardware if ((d.hardware | default(none)) is mapping) else {} -%}
-      {%- set sy = d.system if ((d.system | default(none)) is mapping) else {} -%}
-      {%- set v = (co.serial_number | default(none, true)) or (hw.serial | default(none, true)) or (sy.serial_number | default(none, true)) -%}
-      {{ ((v | default('', true)) | string) | dmi_sentinel_null('serial') }}
-    _rs_evidence: >-
+    _rs_os_evidence: >-
       {%- set diags = ((_l_id_diagnostics | default([])) | select('mapping') | list)
                     + ((_w_id_diagnostics | default([])) | select('mapping') | list) -%}
       {%- set hits = diags | selectattr('detail', 'defined') | map(attribute='detail') | map('string')
@@ -22,15 +14,15 @@
       {%- else -%}
         {{ none }}
       {%- endif -%}
-    _rs_sudo: >-
+    _rs_os_sudo: >-
       {{ ((_l_sudo_mode | default('', true)) | string | trim | lower) if ((_os_type | default('')) == 'linux') else '' }}
   no_log: true
 
 - name: "os | normalize | require_serial | derive cause"
   ansible.builtin.set_fact:
-    _rs_cause: >-
-      {%- set c = _rs_evidence | default(none) -%}
-      {%- set s = _rs_sudo | default('') -%}
+    _rs_os_cause: >-
+      {%- set c = _rs_os_evidence | default(none) -%}
+      {%- set s = _rs_os_sudo | default('') -%}
       {%- if c is none -%}not_collected
       {%- elif c == 'facts_failed' -%}facts_failed
       {%- elif c == 'identifier_not_available' -%}not_provided
@@ -40,39 +32,17 @@
       {%- endif -%}
   no_log: true
 
-- name: "os | normalize | require_serial | enforce (scenario E)"
+- name: "os | normalize | require_serial | enforce"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
   vars:
-    _rs_diag: "{{ _output.diagnosis if ((_output.diagnosis | default(none)) is mapping) else {} }}"
-    _rs_stage: "{{ _rs_diag.failure_stage | default(none) }}"
-    _rs_has_reason: "{{ ((_rs_diag.failure_reason | default('', true)) | string | trim | length) > 0 }}"
-    _rs_reason: >-
-      {{ (_rs_diag.failure_reason | string | trim) if (_rs_has_reason | bool)
-         else (_fr_catalog | failure_reason('serial_missing', 'os', _cred_location | default(se_location | default('')))) }}
-    _rs_error:
-      section: "{{ (_os_type | default('os')) ~ '_gather' }}"
-      message: "{{ _rs_reason }}"
-      detail: >-
-        {{ 'field=serial_number; mandatory=true; cause=' ~ _rs_cause
-           ~ (('; evidence=' ~ _rs_evidence) if ((_rs_evidence | default(none)) is not none) else '')
-           ~ (('; sudo=' ~ _rs_sudo) if (_rs_sudo | default('')) else '') }}
-    _rs_errors_cur: "{{ (_output.errors | default([])) if ((_output.errors | default([])) is not string) else [] }}"
-  ansible.builtin.set_fact:
-    _output: >-
-      {{ _output | combine({
-           'status': 'failed',
-           'diagnosis': (_rs_diag | combine({
-               'failure_stage':  (_rs_stage if (_rs_has_reason | bool) else 'gather'),
-               'failure_code':   ((_rs_diag.failure_code | default(none)) if (_rs_has_reason | bool) else 'GATHER_FAILED'),
-               'failure_reason': _rs_reason,
-               'details': ((_rs_diag.details if ((_rs_diag.details | default(none)) is mapping) else {})
-                           | combine({'serial_number': {'present': false, 'cause': _rs_cause,
-                                                        'sudo': (_rs_sudo if (_rs_sudo | default('')) else none)}}))
-             })),
-           'errors': ((([_rs_error] + (_rs_errors_cur | list)) if not (_rs_has_reason | bool)
-                       else ((_rs_errors_cur | list) + [_rs_error])) | normalize_errors)
-         }) }}
-  when:
-    - _output is defined
-    - _output is mapping
-    - (_rs_serial | default(none)) is none
-    - (_rs_stage | default(none)) in [none, 'gather']
+    _rs_channel: os
+    _rs_error_section: "{{ (_os_type | default('os')) ~ '_gather' }}"
+    _rs_cause: "{{ _rs_os_cause }}"
+    _rs_sudo: "{{ _rs_os_sudo }}"
+    _rs_reason_key: >-
+      {{ 'serial_missing_sudo' if (((_os_type | default('')) == 'linux') and (_rs_os_cause == 'privilege_unavailable'))
+         else 'serial_missing' }}
+    _rs_detail_extra: >-
+      {{ (('; evidence=' ~ _rs_os_evidence) if ((_rs_os_evidence | default(none)) is not none) else '')
+         ~ (('; sudo=' ~ _rs_os_sudo) if (_rs_os_sudo | default('')) else '') }}
