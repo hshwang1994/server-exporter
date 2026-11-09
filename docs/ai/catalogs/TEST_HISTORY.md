@@ -1,5 +1,23 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-09 (2) — 정규 승격 production `2de33bb1` (main `e4e7d5d1`) · 승격 체인 도구 `scripts/ai/longrun`
+
+> 정본: `docs/reference/live-validation.md` 2026-11-09 · `docs/reference/decision-log.md` 2026-11-09 승격 기록 · `docs/ai/decisions/ADR-2026-11-09-promotion-visibility-and-detached-runs.md`.
+> 수집 코드는 `22f44e20` 과 같다. 실장비 검증은 main Job 매트릭스와 production canary 다. Windows 작업 PC · Python 3.13.
+
+| 구분 | 결과 |
+|---|---|
+| main Job 매트릭스 | #732~#742 — 11 시나리오 모두 기대 결과, checkout `e4e7d5d1`(E2E-A2 는 fail-closed 라 checkout 없음 · tip 관측 전후 `e4e7d5d1`). T5 #742 는 시작 표지 +10초 stop(HTTP 302) · `outcome=aborted` · 보충 6/6 |
+| 직전 매트릭스 대비 | #720~#731 과 host 별 비교(status · sections · errors · correlation · `hardware.serial` · diagnosis · details 의 serial_number/notices/account_service · 키) — 10 시나리오 같음, S2 `10.100.64.132` 의 `errors[0].detail` 만 다름(5986 시간 초과 → 루트 없음, 장비 쪽). success 결과 30건 모두 Serial 있음 · `details.serial_number` 0건 |
+| CI #68 | Prodgen Drift 에서 `could not read Username` — GitHub 저장소 비공개(2026-11-07 #66 과 같다). AI 가 중단(ABORTED), Harness 빌드 0 |
+| CI #69 | 사용자가 저장소를 공개로 바꾼 뒤 같은 SHA · 같은 입력 — **SUCCESS 4060 s** · 필수 단계 전부 PASS(PROMOTE not_run) · 집계 **COMPLETE_PASS** · G14 pytest 6379 passed · 210 skipped · 52 deselected · 5 xfailed · E2E 증거 88건(Harness 77 #2906~#2982 + 매트릭스 11) · `evidence_sha256 60de47b4` |
+| 승격 | `promote --sha e4e7d5d1`(CI #69 산출물 3개 · `--push-remote origin,internal`) rc 0 · 1445 s → **`2de33bb1`**(parent `09fb6625` · 198 파일 · class B 0 · tree hash `1954ecb2` — `ff56b5eb` dry-run 과 같다 · Gates-Rerun G11~G15 · G18~G20 · CI-Stages verified). GitHub `production` = GitLab `main` = 로컬 · GitLab heads 1 · force 0 |
+| canary | production Job #326 ESXi 6 · #327 Redfish 7 · #328 OS 11 · #329 Windows 1 — **4/4 SUCCESS**(92 · 396 · 125 · 138 s), checkout `2de33bb1` · Portal HTTP 200 · 접수 == 결과 · errors 0 · 13키 · Serial 25/25. 같은 코드의 main 결과(#740 · #741 · #734 · #735)와 직전 production 결과(#325 · #322 · #323 · #324) 모두와 같다(8/8 `[SAME]`) |
+| 체인 실행 방식 | CI 단계부터 분리 프로세스(pid 46196, 13:30~15:15) + journal + 파일 감시. Monitor 가 만료되면 같은 감시 명령으로 다시 걸었다(읽은 위치에서 이어 읽음). 셸 정리로 끊긴 실행 0 |
+| `tests/unit/test_longrun.py` | 18 passed(1.1 s) — 분리 실행 · 감시 이어받기 · journal 이어받기 · 봉투 비교 · 계획 검증 14 + TLS 고정 4(모든 curl 호출 `--cacert` · `-k` 0 · TLS 실패 이름 · 지문이 같을 때만 저장 · 인증서 없으면 네트워크 전 멈춤). py_compile OK |
+| TLS 고정 실측 | `pin-cert` 실제 jenkins-prod — 기대 지문 없음 rc 2(저장 0) · 다른 지문 rc 4(저장 0) · 같은 지문 rc 0(openssl `-showcerts` 로 받은 PEM 과 같음). 지문 `B0:9E:…:A3:16` = 2026-11-07 기록. 고정 인증서로 `promote-chain --plan-only`(다음 계획 `next_plan.json`) PASS — POST 0 · push 0. `-k` 없는 일반 curl 은 rc 60(검증 실패)로 확인 |
+| 미실행 · 관찰 | 이번 매트릭스 · CI · canary 투입은 `curl -k` 였다(FAILURE_PATTERNS 2026-11-09). Serial 을 주지 않는 실제 Redfish · ESXi 장비 · Service Tag 미노출 실제 Dell 은 여전히 없다(재생 · 시험으로만 확인) |
+
 ## 2026-11-09 — Serial Number 필수 3채널 확장 · Dell 데이터 보존 (main `e25e57d9` ~ `22f44e20`)
 
 > 정본: `tests/evidence/2026-11-09-serial-required-redfish-esxi.md`. 누락 분기는 실장비가 아니라 대조 · 미러 사본 재생 · 시험으로만 확인했다.
@@ -16,7 +34,7 @@
 | 정적 | `verify_vendor_boundary` · `verify_harness_consistency` 통과 · `validate_field_dictionary` PASS · `output_schema_drift_check` 정합 · Jinja compile `--all --blocking` rc 0 · py_compile OK · 변경 YAML 10개 PyYAML 파싱 OK(yamllint 미설치 — 환경 제약) |
 | 훅 우회 | additive-only 만 `ADDITIVE_SKIP_NEW_CYCLE=1` — `e75f7589`(`build_status.yml` 시나리오 E 주석 · `field_dictionary.yml` help/channel) · `22f44e20`(`field_dictionary.yml` help). envelope 키 · 항목 변화 0. `--no-verify` 0 |
 | 승격 미리보기 | `prodgen promote --sha ff56b5eb --dry-run --skip-live` rc 0(257 s) — build ok · 198 파일 · class B 0 · tree hash `1954ecb2` · G01~G10 · G16~G18 · G20 PASS · G11~G15 · G19 SKIP(오프라인) → PARTIAL(설계대로) · PROVENANCE · parent `09fb6625` · 객체 · ref · push 0 |
-| 미실행 | main Job 매트릭스 · CI · 실 승격 · production canary — 매트릭스 투입(Jenkins 빌드 POST)을 이 세션의 자동 모드 분류기가 막았다(사용자 실행 대기, NEXT_ACTIONS 2026-11-09). Serial 을 주지 않는 실제 Redfish · ESXi 장비 · Service Tag 미노출 실제 Dell |
+| 미실행 | main Job 매트릭스 · CI · 실 승격 · production canary — 매트릭스 투입(Jenkins 빌드 POST)을 이 세션의 자동 모드 분류기가 막았다. → 사용자 승인 뒤 같은 날 실행(위 2026-11-09 (2)). Serial 을 주지 않는 실제 Redfish · ESXi 장비 · Service Tag 미노출 실제 Dell 은 없다 |
 
 ## 2026-11-07 (2) — `syjeong_test` 삭제 (main · 생성 대상) · 긴급 승격 production `09fb6625`
 

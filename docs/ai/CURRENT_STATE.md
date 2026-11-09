@@ -9,7 +9,10 @@
 - **바뀌지 않은 것**: envelope 13 필드 · `failure_code`/`failure_stage` enum · schema version · Jenkinsfile · callback · vault · baseline · adapter · Redfish 요청 경로(정상 장비 요청 수 그대로).
 - **문서**: `59344d96`(계약 · 개발 문서 · REQUIREMENTS · decision-log) + 하네스 커밋(CLAUDE.md §4 · ADR · `docs/ai/contracts/serial-number.md` 31절 · NEXT_ACTIONS · PROJECT_MAP · evidence).
 - **검증**: OS 대조 741 사례(단계마다 기대한 차이만) · Tier 1 재생 21대(정상 18대 차이 0 · 사본 3대 기대 경로만) · pytest — TEST_HISTORY 2026-11-09. 실장비에서 Serial 이 없는 장비는 없다 — 누락 분기는 재생 · 시험으로만 확인.
-- **남은 것**: Portal 담당자 안내(사용자 몫 — NEXT_ACTIONS) · Serial 없는 실장비를 처음 볼 때 확인.
+- **승격 (사용자 승인 "승격 승인합니다.")**: main `e4e7d5d1` → **production `2de33bb1`**(정규 — 매트릭스 #732~#742 · CI #69 COMPLETE_PASS · canary #326~#329 4/4 SUCCESS · 직전 결과와 host 별로 같음). GitHub `production` = GitLab `main` = 로컬 · force 0. CI #68 은 저장소 비공개로 멈췄고, 사용자가 공개로 바꾼 뒤 #69 를 넣었다. 2026-11-07 긴급 승격 `09fb6625` 의 정규 재승격도 이것으로 닫혔다. 상세 TEST_HISTORY 2026-11-09 (2) · live-validation.
+- **하네스 (사용자 지시 — 공개 요청 · 원복 안내 · 메모리에 끊기지 않는 실행)**: `0d14e4fa` rule 80 R7(승격 체인 전 공개 확인 · 사용자에게 공개 요청 · 끝나면 비공개 원복 안내) · R8(분리 실행 · journal · 이어받기 · 파일 감시) · rule 93 R2 · rule 24 R5 · R9 · ADR 신규 · `scripts/ai/longrun/` 도구 · 시험.
+  승격 뒤 보강: 도구의 Jenkins TLS 를 고정 인증서(`--cacert`, `pin-cert` 가 지문 대조 뒤 저장)로 바꿨다. 이번 승격의 임시 스크립트가 `-k` 였다(FAILURE_PATTERNS 2026-11-09). 다음 승격 계획 `~/.se_longrun/promote-e4e7d5d1/next_plan.json`.
+- **남은 것**: Portal 담당자 안내(사용자 몫 — NEXT_ACTIONS) · Serial 없는 실장비를 처음 볼 때 확인 · GitHub 저장소 비공개 원복(사용자 몫) · prodgen 의 Jenkins 읽기 `-sk`(NEXT_ACTIONS).
 
 ## 일자: 2026-11-07 — Redfish Summary 수정 main 병합 · 사내 GitLab `main` 직접 수정 9건 반영
 
