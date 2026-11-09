@@ -1,7 +1,8 @@
 """status 시나리오 E — OS 채널 필수 식별자(Serial Number) 누락은 failed (2026-10-13 사용자 정책).
 
-정본: os-gather/tasks/normalize/require_serial.yml (조립된 _output 후처리). build_status.yml 의 섹션 기반 판정(A/B/C/D)은 그대로이고,
-E 는 그 위에 OS 채널에서만 얹힌다 — 다른 섹션의 수집 값(data) · sections · hostname · meta · correlation 은 보존한다.
+정본: common/tasks/normalize/require_serial.yml (판정 · 봉투 수정) + os-gather/tasks/normalize/require_serial.yml (OS 원인 판정 wrapper).
+조립된 _output 의 후처리다. build_status.yml 의 섹션 기반 판정(A/B/C/D)은 그대로이고,
+E 는 그 위에 얹힌다 — 다른 섹션의 수집 값(data) · sections · hostname · meta · correlation 은 보존한다.
 
 무엇을 고정하나
   - Serial 이 있으면 아무것도 바꾸지 않는다. 빈 문자열 · 자리표시자는 누락이다.
@@ -30,6 +31,7 @@ from failure_reason import failure_reason  # noqa: E402
 from tests.unit.linux_raw_harness import ansible_env, load_tasks, render_tree  # noqa: E402
 
 RULE = REPO / "os-gather" / "tasks" / "normalize" / "require_serial.yml"
+CORE = REPO / "common" / "tasks" / "normalize" / "require_serial.yml"
 FR = yaml.safe_load((REPO / "common" / "vars" / "failure_reasons.yml").read_text(encoding="utf-8"))
 CATALOG = FR["_fr_catalog"]
 SENTENCE = CATALOG["serial_missing"]["os"]
@@ -52,18 +54,23 @@ def _env():
     return env
 
 
-def run_rule(ctx: dict[str, Any]) -> dict[str, Any]:
-    """require_serial.yml 을 적힌 순서대로 흉내 낸다 (task vars → when → set_fact)."""
-    env = _env()
-    ctx = dict(ctx)
-    ctx.setdefault("_fr_catalog", CATALOG)
-    for task in load_tasks(RULE):
+_REPO_ROOT_TPL = "{{ lookup('env','REPO_ROOT') }}"
+
+
+def _run_tasks(env, path: Path, ctx: dict[str, Any], params: dict[str, Any]) -> None:
+    """태스크 파일을 적힌 순서대로 흉내 낸다 (task vars → when → set_fact / include_tasks).
+
+    include_tasks 의 vars 는 include 인자다 — 포함된 파일 안에서 set_fact 보다 우선한다(Ansible 변수 우선순위). 그래서 인자는
+    매 태스크 문맥의 맨 위에 다시 얹는다. 경로의 REPO_ROOT 는 저장소 경로로 바꾼다.
+    """
+    for task in load_tasks(path):
         local = dict(ctx)
         for key, value in (task.get("vars") or {}).items():
             try:
-                local[key] = render_tree(env, value, local)
+                local[key] = render_tree(env, value, {**local, **params})
             except Exception:  # noqa: BLE001 — Ansible 은 task vars 를 참조될 때 렌더한다; 못 그리는 var 는 없는 것과 같다
                 pass
+        local.update(params)
         conds = task.get("when")
         ok = True
         for cond in (conds if isinstance(conds, list) else ([conds] if conds is not None else [])):
@@ -74,7 +81,22 @@ def run_rule(ctx: dict[str, Any]) -> dict[str, Any]:
                 break
         if not ok:
             continue
+        if "ansible.builtin.include_tasks" in task:
+            inc = task["ansible.builtin.include_tasks"]
+            target = (inc.get("file") if isinstance(inc, dict) else inc).replace(_REPO_ROOT_TPL, str(REPO))
+            inner = dict(params)
+            inner.update({k: local[k] for k in (task.get("vars") or {}) if k in local})
+            _run_tasks(env, Path(target), ctx, inner)
+            continue
         ctx.update({k: render_tree(env, v, local) for k, v in task["ansible.builtin.set_fact"].items()})
+
+
+def run_rule(ctx: dict[str, Any], rule: Path = RULE, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """채널 규칙 파일(기본 OS wrapper)을 흉내 낸다 — 공통 규칙 include 까지 따라간다."""
+    env = _env()
+    ctx = dict(ctx)
+    ctx.setdefault("_fr_catalog", CATALOG)
+    _run_tasks(env, rule, ctx, dict(params or {}))
     return ctx
 
 
@@ -220,6 +242,22 @@ def test_build_output_includes_the_rule_from_repo_root_not_playbook_dir():
     assert len(rule) == 1, targets
     assert "lookup('env','REPO_ROOT')" in rule[0]
     assert not [t for t in targets if "playbook_dir" in t], targets
+
+
+# 공통 규칙의 입력 이름 — wrapper 도 공통 규칙도 이 이름을 set_fact 하지 않는다 (include 인자가 set_fact 보다 우선해 가려진다)
+CORE_INPUTS = {"_rs_channel", "_rs_error_section", "_rs_cause", "_rs_detail_extra", "_rs_sudo"}
+
+
+def test_os_wrapper_includes_the_common_rule_from_repo_root():
+    tasks = yaml.safe_load(RULE.read_text(encoding="utf-8"))
+    incs = [t for t in tasks if isinstance(t, dict) and "ansible.builtin.include_tasks" in t]
+    assert len(incs) == 1
+    assert incs[0]["ansible.builtin.include_tasks"]["file"] == \
+        "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+    assert incs[0]["vars"]["_rs_channel"] == "os"
+    for path in (RULE, CORE):
+        for t in yaml.safe_load(path.read_text(encoding="utf-8")):
+            assert not (set(t.get("ansible.builtin.set_fact") or {}) & CORE_INPUTS), (path.name, t.get("name"))
 
 
 # ── fixture (synthetic) ────────────────────────────────────────────────────────────────────────────

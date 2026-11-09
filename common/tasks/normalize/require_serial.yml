@@ -1,0 +1,71 @@
+---
+# common/tasks/normalize/require_serial.yml
+#
+# 필수 식별자 규칙 (status 시나리오 E, 2026-10-13 사용자 정책):
+#   조립이 끝난 _output 의 Serial Number 가 null 이면 그 host 는 status=failed 다. sections / data / hostname / meta / correlation 은
+#   그대로 둔다 — 이미 수집한 값은 보존한다. 인증 단계(auth) · 사전 점검 실패 봉투는 건드리지 않는다 (대상 내부에 접근한 적이
+#   없는데 Serial 을 "확인하지 못했다" 고 말하지 않는다).
+#
+# 채널 wrapper 가 include 한다 — 원인 판정만 채널마다 다르고 판정 · 봉투 수정은 여기 하나다.
+#   os : os-gather/tasks/normalize/require_serial.yml
+#
+# 입력 (include vars — 이 파일은 아래 이름을 set_fact 하지 않는다. include 인자가 set_fact 보다 우선해 덮어쓴 값이 보이지 않는다):
+#   _rs_channel       : 문장 카탈로그 채널 (os | esxi | redfish) — 필수
+#   _rs_error_section : 대표 오류의 section (기본 '<_rs_channel>_gather')
+#   _rs_cause         : diagnosis.details.serial_number.cause — 필수
+#   _rs_detail_extra  : 대표 오류 detail 의 꼬리 (기본 '') — OS 의 evidence / sudo
+#   _rs_sudo          : diagnosis.details.serial_number.sudo (기본 null)
+#   그 밖: _output(조립된 봉투), _fr_catalog, (있으면) _cred_location / se_location
+# 출력: _output — status · diagnosis.failure_* · diagnosis.details.serial_number · errors[]
+# 호출 위치: CHECKPOINT 와 schema_version 주입보다 앞이어야 한다 — 콜백 · Layer A 가 CHECKPOINT 의 status 를 그대로 복원한다.
+#
+# 경로별 결과:
+#   failure_reason 이 비어 있음(정상 경로)  → stage=gather, code=GATHER_FAILED, reason=serial_missing 문장, 대표 오류를 errors[0] 에 둔다
+#   failure_reason 이 이미 있음(rescue / H12) → 문장 · errors[0] 은 그대로, status 만 failed 로 확정하고 Serial 오류 1건을 뒤에 붙인다
+#   failure_stage 가 auth 등 gather 이전       → 아무것도 하지 않는다
+
+- name: "normalize | require_serial | observe"
+  ansible.builtin.set_fact:
+    _rs_serial: >-
+      {%- set o = _output if (_output is defined and _output is mapping) else {} -%}
+      {%- set co = o.correlation if ((o.correlation | default(none)) is mapping) else {} -%}
+      {%- set d = o.data if ((o.data | default(none)) is mapping) else {} -%}
+      {%- set hw = d.hardware if ((d.hardware | default(none)) is mapping) else {} -%}
+      {%- set sy = d.system if ((d.system | default(none)) is mapping) else {} -%}
+      {%- set v = (co.serial_number | default(none, true)) or (hw.serial | default(none, true)) or (sy.serial_number | default(none, true)) -%}
+      {{ ((v | default('', true)) | string) | dmi_sentinel_null('serial') }}
+  no_log: true
+
+- name: "normalize | require_serial | enforce (scenario E)"
+  vars:
+    _rs_diag: "{{ _output.diagnosis if ((_output.diagnosis | default(none)) is mapping) else {} }}"
+    _rs_stage: "{{ _rs_diag.failure_stage | default(none) }}"
+    _rs_has_reason: "{{ ((_rs_diag.failure_reason | default('', true)) | string | trim | length) > 0 }}"
+    _rs_reason: >-
+      {{ (_rs_diag.failure_reason | string | trim) if (_rs_has_reason | bool)
+         else (_fr_catalog | failure_reason('serial_missing', _rs_channel, _cred_location | default(se_location | default('')))) }}
+    _rs_error:
+      section: "{{ _rs_error_section | default(_rs_channel ~ '_gather') }}"
+      message: "{{ _rs_reason }}"
+      detail: "{{ 'field=serial_number; mandatory=true; cause=' ~ _rs_cause ~ (_rs_detail_extra | default('')) }}"
+    _rs_errors_cur: "{{ (_output.errors | default([])) if ((_output.errors | default([])) is not string) else [] }}"
+  ansible.builtin.set_fact:
+    _output: >-
+      {{ _output | combine({
+           'status': 'failed',
+           'diagnosis': (_rs_diag | combine({
+               'failure_stage':  (_rs_stage if (_rs_has_reason | bool) else 'gather'),
+               'failure_code':   ((_rs_diag.failure_code | default(none)) if (_rs_has_reason | bool) else 'GATHER_FAILED'),
+               'failure_reason': _rs_reason,
+               'details': ((_rs_diag.details if ((_rs_diag.details | default(none)) is mapping) else {})
+                           | combine({'serial_number': {'present': false, 'cause': _rs_cause,
+                                                        'sudo': (_rs_sudo | default(none, true))}}))
+             })),
+           'errors': ((([_rs_error] + (_rs_errors_cur | list)) if not (_rs_has_reason | bool)
+                       else ((_rs_errors_cur | list) + [_rs_error])) | normalize_errors)
+         }) }}
+  when:
+    - _output is defined
+    - _output is mapping
+    - (_rs_serial | default(none)) is none
+    - (_rs_stage | default(none)) in [none, 'gather']
