@@ -40,7 +40,7 @@
 | `PROTOCOL_CHECK_FAILED` | 포트는 열렸는데 기대한 응답이 아니다 |
 | `AUTH_PROBE_FAILED` | 자격증명이 거부됐다 |
 | `CREDENTIAL_SET_UNAVAILABLE` | vault 파일이 없거나 못 열었다 |
-| `GATHER_FAILED` | 수집 중 실패, 또는 OS 채널에서 필수 식별자인 Serial Number 를 수집하지 못함 |
+| `GATHER_FAILED` | 수집 중 실패, 또는 필수 식별자인 Serial Number 를 수집하지 못함 (3채널) |
 | `OUTPUT_BUILD_FAILED` | 봉투 조립 실패, 또는 실행 기반이 돌아오지 않아 수집을 마치지 못함 |
 
 `TARGET_UNREACHABLE`은 2026-09-03에 추가됐습니다. 그 전에는 `TCP_CONNECT_FAILED` 하나가 "아무 응답 없음"과 "관리 포트만 응답 없음"을 겸했습니다. `TCP_CONNECT_FAILED`와 `stage: reachable`로 분기하던 호출자는 `TARGET_UNREACHABLE`을 받도록 고쳐야 합니다.
@@ -59,7 +59,10 @@
 | 인증 실패, 원인 미확정 (OS) | 해당 위치(ic)의 Vault 계정으로 대상 OS에 로그인하지 못했습니다. |
 | 인증 거부 확인 (Redfish) | 대상 Redfish 계정과 개더링 표준 계정이 다르거나 권한이 없습니다. |
 | 인증 후 수집 실패 (ESXi) | 대상 ESXi에는 로그인했지만 정보를 가져오지 못했습니다. |
-| Serial Number 미수집 (OS) | OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요. |
+| Serial Number 미수집 (Redfish) | 서버의 Serial Number를 확인하지 못했습니다. BMC에서 Serial Number가 정상적으로 제공되는지 확인하세요. |
+| Serial Number 미수집 (ESXi) | 서버의 Serial Number를 확인하지 못했습니다. ESXi에서 해당 정보를 정상적으로 제공하는지 확인하세요. |
+| Serial Number 미수집 (Linux, sudo 권한을 얻지 못함) | 서버의 Serial Number를 확인하지 못했습니다. OS 수집 계정에 sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가 맞는지 확인하세요. |
+| Serial Number 미수집 (OS, 그 밖) | 서버의 Serial Number를 확인하지 못했습니다. Vault에 등록된 OS 계정의 권한과 서버의 Serial Number 제공 여부를 확인하세요. |
 
 문장의 원칙입니다.
 
@@ -68,11 +71,17 @@
 - "계정이 다르거나 권한이 없다"는 확인된 경우에만 씁니다. 지금 확인할 수 있는 것은 Redfish 표준 계정 전원의 401뿐입니다. OS와 ESXi는 거부 사실이 오류 문자열로만 와서 확정하지 않습니다.
 - Redfish 표준 계정은 위치와 무관한 전역 vault입니다. 그래서 Redfish 문장은 "해당 위치의 Vault"가 아니라 "개더링 표준 계정"이라고 씁니다.
 
-## OS 채널의 Serial Number 와 sudo
+## Serial Number 필수와 Linux sudo
 
-OS 채널(Linux, Windows)에서 Serial Number 는 필수입니다(2026-10-13). 인증은 됐는데 `correlation.serial_number` 가 `null` 이면 그 서버는 `status: failed`,
-`failure_stage: gather`, `failure_code: GATHER_FAILED` 이고 문장은 위 표의 "Serial Number 미수집" 입니다. 다른 섹션의 값은 `data` 에 그대로 남습니다.
-원인은 `diagnosis.details.serial_number.cause` 로 가릅니다.
+Serial Number 는 3채널 모두 필수입니다(OS 2026-10-13, ESXi · Redfish 2026-11-09). 대상 내부를 실제로 읽었는데 `correlation.serial_number` 가
+`null` 이면(빈 값 · `N/A` 같은 자리표시자 포함) 그 서버는 `status: failed` 입니다. 다른 섹션의 값은 `data` 에 그대로 남습니다. 사전 점검 · 인증 단계에서
+끝난 서버와, Redfish 에서 계정 요청을 보내기 전에 멈춘 서버에는 적용하지 않습니다.
+
+- 다른 실패 사유가 없으면 `failure_stage: gather`, `failure_code: GATHER_FAILED` 이고 문장은 위 표의 "Serial Number 미수집" 중 하나입니다. `errors[0]` 도 같은 문장입니다.
+- 다른 실패 사유가 이미 있으면(성공 섹션 0개 · 수집 중 예외) 그 사유와 `errors[]` 가 그대로 남고 Serial 원인은 `diagnosis.details.serial_number` 에만
+  기록됩니다. 같은 실패가 Portal 에 두 줄로 보이지 않게 하기 위해서입니다(2026-11-09).
+
+원인은 `diagnosis.details.serial_number.cause` 로 가릅니다. OS 채널은 아래와 같습니다.
 
 | `cause` | 뜻 | 할 일 |
 |---|---|---|
@@ -81,6 +90,21 @@ OS 채널(Linux, Windows)에서 Serial Number 는 필수입니다(2026-10-13). �
 | `not_provided` | 서버가 Serial Number 를 제공하지 않거나 자리표시자(`To Be Filled By O.E.M.` 등)다 | 장비/가상화 설정 |
 | `facts_failed` | Windows 에서 facts 수집 자체가 실패했다 | 대상 상태와 수집 로그 |
 | `not_collected` | 식별자 단계가 돌지 않았다(그 전에 예외) | `errors[0]` 의 원인 |
+| `unknown` | 식별자 진단은 남았는데 원인 값을 읽지 못했다 | 수집 로그 |
+
+Linux 에서 원인이 `privilege_unavailable` 이면 문장은 sudo 안내("…sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가
+맞는지…")입니다. Windows 는 sudo 가 없어 같은 원인이어도 일반 문장입니다.
+
+ESXi · Redfish 의 원인은 두 가지입니다.
+
+| `cause` | 뜻 | 할 일 |
+|---|---|---|
+| `not_provided` | `hardware` 섹션은 수집됐는데 Serial Number 가 없거나 자리표시자다 | 장비가 Serial Number 를 내보내는지 확인한다(Redfish 는 BMC 의 System 정보, ESXi 는 호스트 하드웨어 정보) |
+| `not_collected` | `hardware` 섹션 자체를 읽지 못했다 | `errors[]` 의 섹션 오류 |
+
+Dell 의 Redfish Serial Number 는 Service Tag(`ServiceRoot.Oem.Dell.ServiceTag`)입니다. Service Tag 가 없거나 무효면 보드 시리얼로 대신하지 않고 `null` 로 두므로
+위 규칙에 따라 `failed` 이고 원인은 `not_provided` 입니다. 수집한 섹션은 그대로 남고, Service Tag 사유는 `diagnosis.details.notices` 에 1건 남을 뿐 `errors[]` 에
+행을 더하지 않습니다(2026-11-09. 종전에는 수집 전체가 실패해 `data` 가 비었습니다).
 
 Linux 의 sudo 확인 순서는 root 로그인 → NOPASSWD 확인(비밀번호 제출 없음) → 로그인 비밀번호 → vault `sudo_passwords` 순서입니다. 같은 값은 한 번만 보내고,
 정책 거부(sudoers 에 없음)나 sudo 사용 불가가 관측되면 바로 멈춥니다. 비밀번호 거부는 대상의 잠금 정책(`pam_faillock`/`pam_tally2` 의 `deny`, `even_deny_root`)

@@ -159,7 +159,8 @@
 | `e25e57d9` | 규칙을 공통 파일로 이동(순수 리팩터) | OS 대조 741 사례 — 전부 같음 |
 | `6f93375d` | 기존 사유가 있으면 Serial 행 중복 없음 | OS 대조 — 307 사례에서 꼬리 중복 행만 빠지고 나머지 같음 |
 | `f5592a0f` | OS 문장 원인별 | OS 대조 — Serial 이 대표 사유인 362 사례(sudo 문장 90 · 일반 문장 272)의 문장만 다르고 기대 문장과 같음 |
-| `feat: Redfish/ESXi Serial 누락 시 실패 처리` | Redfish · ESXi 확장 · Redfish 자리표시자 | Tier 1 재생 21대 — 정상 미러 18대(mock2 11 · 1차 7)는 봉투 · 요청 차이 0. 사본 3대(SerialNumber 삭제 · System 500 · Dell Service Tag 삭제)는 기대한 경로만 바뀜(C1 · C2 · 결정 6 이전의 Dell). OS 대조는 앞 커밋과 같음 |
+| `e75f7589` | Redfish · ESXi 확장 · Redfish 자리표시자 | Tier 1 재생 21대 — 정상 미러 18대(mock2 11 · 1차 7)는 봉투 · 요청 차이 0. 사본 3대(SerialNumber 삭제 · System 500 · Dell Service Tag 삭제)는 기대한 경로만 바뀜(C1 · C2 · 결정 6 이전의 Dell). OS 대조는 앞 커밋과 같음 |
+| `22f44e20` | Dell Service Tag 없음 → 데이터 보존(결정 6) | Tier 1 재생 21대 — 정상 18대는 변경 전 대비 차이 0, 앞 커밋 대비 20대(Dell 사본 제외) 차이 0. Dell 사본은 같은 재생의 정상 R740 과 16경로만 다름(status · 대표 사유 · Serial 행 1개 · notice 1건 · `details.serial_number` · 시리얼 2곳 null) — 섹션 · `data` 나머지 · 요청 집합은 같음 |
 
 ### 대안 (Considered)
 

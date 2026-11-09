@@ -164,7 +164,7 @@ Runner 노드에는 실행 위치 라벨(`common/vars/locations.yml`의 `agent_l
 | Redfish | `hardware.serial`, `hardware.uuid` | `ComputerSystem` | BMC 계정 |
 
 - 매칭은 `system_uuid`(또는 `hardware.uuid`)를 먼저 쓰고 `serial_number`를 보조로 씁니다. `hosting_type`이 `virtual`인 OS 결과는 물리 Redfish 결과와 맞추지 않습니다.
-- OS 채널에서 **Serial Number 는 필수**입니다(2026-10-13). `correlation.serial_number` 가 `null` 이면 그 서버는 `status: failed`(`failure_code: GATHER_FAILED`)이고 원인은 `diagnosis.details.serial_number.cause` 에 남습니다. 다른 섹션의 값과 `sections` 는 그대로입니다. UUID 를 못 읽는 것은 종전처럼 실패가 아닙니다 — 필드가 `null`이고 `errors[]`의 `detail`에 `cause=insufficient_privilege`(권한 부족) 또는 `cause=identifier_not_available`(출처가 값을 주지 않음)이 남습니다.
+- **Serial Number 는 필수**입니다(OS 2026-10-13, ESXi · Redfish 2026-11-09). `correlation.serial_number` 가 `null` 이면 그 서버는 `status: failed`(`failure_code: GATHER_FAILED`)이고 원인은 `diagnosis.details.serial_number.cause` 에 남습니다. 다른 섹션의 값과 `sections` 는 그대로입니다. UUID 를 못 읽는 것은 종전처럼 실패가 아닙니다 — 필드가 `null`이고 `errors[]`의 `detail`에 `cause=insufficient_privilege`(권한 부족) 또는 `cause=identifier_not_available`(출처가 값을 주지 않음)이 남습니다.
 - 제조사 자리표시자(`To Be Filled By O.E.M.` 등)와 SMBIOS 공장 기본 UUID는 `null`로 정리합니다.
 
 자세한 수집 경로는 [docs/develop/05-field-mapping.md](docs/develop/05-field-mapping.md)에 있습니다.

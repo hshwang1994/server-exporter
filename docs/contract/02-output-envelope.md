@@ -52,7 +52,7 @@ Portal은 `callbackUrl`에 `/api/jenkins/gather/<target_type>` 경로를 붙인 
 - 성공이 하나도 없으면 `failed`
 - 그 밖에는 `partial`
 
-예외는 하나입니다(2026-10-13). OS 채널에서 Serial Number 를 수집하지 못한 서버는 섹션이 모두 `success` 여도 `failed` 입니다 — [03-fields.md](03-fields.md) 4절의 시나리오 E.
+예외는 하나입니다(OS 2026-10-13, ESXi · Redfish 2026-11-09). Serial Number 를 수집하지 못한 서버는 섹션이 모두 `success` 여도 `failed` 입니다 — [03-fields.md](03-fields.md) 4절의 시나리오 E.
 
 `errors`는 판정에 쓰지 않습니다. `status`가 `success`인데 `errors`에 항목이 있을 수 있습니다. 예를 들어 Linux에서 메모리 총량을 `dmidecode`로 못 읽어 OS가 보는 값으로 대체했다면, 메모리 섹션은 정상 수집된 것이니 `success`지만 "물리 장착량이 아니라 OS 인식량이다"라는 안내가 `errors`에 남습니다.
 

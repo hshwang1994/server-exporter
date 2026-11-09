@@ -125,12 +125,12 @@
 | Linux | sudo 확인(`try_sudo.yml`: root → NOPASSWD → 로그인 비밀번호 → vault `sudo_passwords`) 뒤 setup fact → DMI direct-read(become) → 특권 raw `/sys/class/dmi/id/product_serial` | sudo 를 얻지 못하면 특권 태스크를 건너뛰고 serial 은 null → 호스트 `failed` (2026-10-13, 아래) |
 | Windows | setup fact `ansible_product_serial`(ansible.windows: SMBIOS raw table, 실패 시 `Win32_BIOS` CIM) + `gather_hardware.yml` 의 `Win32_BIOS.SerialNumber` | NA/센티널 → null 정규화. 관리자 권한 불필요 |
 | ESXi | vmware_host_facts / normalize 결과 기준으로 수집 | 수집 경로와 정합성은 별도 관리 |
-| Redfish | Systems/{id} SerialNumber, UUID | normalize_standard.yml에서 매핑 |
+| Redfish | Systems/{id} SerialNumber, UUID | normalize_standard.yml에서 매핑. 자리표시자는 null(2026-11-09), serial 이 null 이면 호스트 `failed` |
 
 **Linux sudo 와 식별자 (2026-10-13):**
 - `tasks/linux/try_sudo.yml` 이 SSH 인증 뒤 한 번 sudo 를 확인한다 — root 로그인이면 생략, NOPASSWD 면 비밀번호 제출 없이 통과, 아니면 로그인 비밀번호 → vault `sudo_passwords` 순서로 후보를 보낸다(같은 값은 1회, 정책 거부/sudo 불가는 즉시 중단, 비밀번호 거부는 대상 잠금 정책에서 계산한 예산 안에서만).
 - 통과하면 특권 raw(`product_serial` · `product_uuid` · dmidecode)와 방화벽 조회가 become 으로 돈다. 통과하지 못하면 그 4개 태스크를 건너뛰어 추가 PAM 실패가 없고, serial/uuid 는 null, `errors[]` 에 `cause=insufficient_privilege` 가 남는다.
-- **Serial Number 는 필수다.** null 이면 `os-gather/tasks/normalize/require_serial.yml` 이 `status: failed` 로 확정한다(시나리오 E — `docs/contract/03-fields.md` 4절). UUID 는 종전처럼 non-fatal 이다.
+- **Serial Number 는 필수다** (3채널 — ESXi · Redfish 는 2026-11-09 부터). null 이면 공통 규칙 `common/tasks/normalize/require_serial.yml` 이 `status: failed` 로 확정한다(시나리오 E — `docs/contract/03-fields.md` 4절). Linux 가 sudo 권한을 얻지 못한 경우는 문장이 sudo 안내다. UUID 는 종전처럼 non-fatal 이다.
 
 ### nPartition 시리얼 접미사 정규화 (OS · Redfish · ESXi 세 채널)
 

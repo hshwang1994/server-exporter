@@ -115,7 +115,7 @@ merge가 다 끝나면 누적 변수로 봉투의 각 필드를 만듭니다.
 
 `errors`가 있다고 곧바로 `failed`가 되지는 않습니다. `status`는 섹션을 채웠는가, `errors`는 채우는 과정에서 알아둘 일이 있었는가입니다([../contract/02-output-envelope.md](../contract/02-output-envelope.md)).
 
-예외 하나(2026-10-13): OS 채널은 조립이 끝난 뒤 `os-gather/tasks/normalize/require_serial.yml` 이 Serial Number 를 확인하고, 없으면 섹션과 무관하게 `failed` 로 확정합니다(시나리오 E — [../contract/03-fields.md](../contract/03-fields.md) 4절). 이 파일의 판정은 바뀌지 않습니다.
+예외 하나(OS 2026-10-13, ESXi · Redfish 2026-11-09): 조립이 끝난 뒤 공통 규칙 `common/tasks/normalize/require_serial.yml` 이 Serial Number 를 확인하고, 없으면 섹션과 무관하게 `failed` 로 확정합니다(시나리오 E — [../contract/03-fields.md](../contract/03-fields.md) 4절). 채널은 원인 판정과 대상 조건만 넘깁니다(OS `os-gather/tasks/normalize/require_serial.yml`, Redfish `redfish-gather/tasks/require_serial.yml`, ESXi 는 `esxi-gather/site.yml` 이 직접 부름). 이 파일의 판정은 바뀌지 않습니다.
 
 ### 5.3 `build_errors.yml`
 
@@ -131,7 +131,7 @@ merge가 다 끝나면 누적 변수로 봉투의 각 필드를 만듭니다.
 
 ### 5.6 `build_output.yml`
 
-위 결과를 봉투 12개 필드로 조립하고, 각 채널의 `site.yml`이 마지막에 `schema_version`을 붙여 13개가 됩니다. 조립 직전에 두 가지를 보정합니다. 정상 경로로 `status=failed`가 됐는데 사유가 비어 있으면(성공 섹션 0개) `gather` / `GATHER_FAILED` / "수집된 정보가 없다" 문장을 채우고, 그 뒤 `errors[0]`이 그 문장이 아니면 대표 오류를 앞에 둡니다(예외 경로의 `build_failed_output.yml`과 같은 규칙, 2026-10-13). OS 채널은 그 사이에 `os-gather/tasks/normalize/require_serial.yml`(Serial Number 필수 규칙, `CHECKPOINT` 앞)이 한 번 더 돕니다. `hostname`은 `data.system.hostname`, `data.system.fqdn`, `data.bmc.network_hostname` 순으로 찾고 셋 다 없으면 `null`입니다. IP로 대체하지 않습니다.
+위 결과를 봉투 12개 필드로 조립하고, 각 채널의 `site.yml`이 마지막에 `schema_version`을 붙여 13개가 됩니다. 조립 직전에 두 가지를 보정합니다. 정상 경로로 `status=failed`가 됐는데 사유가 비어 있으면(성공 섹션 0개) `gather` / `GATHER_FAILED` / "수집된 정보가 없다" 문장을 채우고, 그 뒤 `errors[0]`이 그 문장이 아니면 대표 오류를 앞에 둡니다(예외 경로의 `build_failed_output.yml`과 같은 규칙, 2026-10-13). 그다음 3채널 모두 Serial Number 필수 규칙(`common/tasks/normalize/require_serial.yml`, `schema_version` 주입과 `CHECKPOINT` 앞)이 한 번 더 돕니다 — 사유가 이미 있으면 그 사유와 `errors[]` 는 그대로 두고 Serial 원인만 `diagnosis.details.serial_number` 에 남깁니다. `hostname`은 `data.system.hostname`, `data.system.fqdn`, `data.bmc.network_hostname` 순으로 찾고 셋 다 없으면 `null`입니다. IP로 대체하지 않습니다.
 
 ## 6. 이렇게 만든 이유
 
