@@ -25,7 +25,7 @@
     "auth_success": true,
     "failure_stage": "gather",
     "failure_code": "GATHER_FAILED",
-    "failure_reason": "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요.",
+    "failure_reason": "서버의 Serial Number를 확인하지 못했습니다. OS 수집 계정에 sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가 맞는지 확인하세요.",
     "details": {
       "channel": "os",
       "adapter_candidate": "linux_ubuntu",
@@ -69,7 +69,7 @@
   "errors": [
     {
       "section": "linux_gather",
-      "message": "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요.",
+      "message": "서버의 Serial Number를 확인하지 못했습니다. OS 수집 계정에 sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가 맞는지 확인하세요.",
       "detail": "field=serial_number; mandatory=true; cause=privilege_unavailable; evidence=insufficient_privilege; sudo=denied"
     },
     {

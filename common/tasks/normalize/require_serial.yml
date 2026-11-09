@@ -15,6 +15,7 @@
 #   _rs_cause         : diagnosis.details.serial_number.cause — 필수
 #   _rs_detail_extra  : 대표 오류 detail 의 꼬리 (기본 '') — OS 의 evidence / sudo
 #   _rs_sudo          : diagnosis.details.serial_number.sudo (기본 null)
+#   _rs_reason_key    : 문장 카탈로그 키 (기본 'serial_missing') — OS 는 원인에 따라 'serial_missing_sudo' 를 넘긴다
 #   그 밖: _output(조립된 봉투), _fr_catalog, (있으면) _cred_location / se_location
 # 출력: _output — status · diagnosis.failure_* · diagnosis.details.serial_number · errors[]
 # 호출 위치: CHECKPOINT 와 schema_version 주입보다 앞이어야 한다 — 콜백 · Layer A 가 CHECKPOINT 의 status 를 그대로 복원한다.
@@ -46,7 +47,8 @@
     _rs_has_reason: "{{ ((_rs_diag.failure_reason | default('', true)) | string | trim | length) > 0 }}"
     _rs_reason: >-
       {{ (_rs_diag.failure_reason | string | trim) if (_rs_has_reason | bool)
-         else (_fr_catalog | failure_reason('serial_missing', _rs_channel, _cred_location | default(se_location | default('')))) }}
+         else (_fr_catalog | failure_reason(_rs_reason_key | default('serial_missing', true), _rs_channel,
+                                            _cred_location | default(se_location | default('')))) }}
     _rs_error:
       section: "{{ _rs_error_section | default(_rs_channel ~ '_gather') }}"
       message: "{{ _rs_reason }}"

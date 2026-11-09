@@ -6,7 +6,8 @@ E 는 그 위에 얹힌다 — 다른 섹션의 수집 값(data) · sections · 
 
 무엇을 고정하나
   - Serial 이 있으면 아무것도 바꾸지 않는다. 빈 문자열 · 자리표시자는 누락이다.
-  - 정상 경로(failure_reason 없음): status=failed, stage=gather, code=GATHER_FAILED, 문장=serial_missing(카탈로그), errors[0] 이 같은 문장.
+  - 정상 경로(failure_reason 없음): status=failed, stage=gather, code=GATHER_FAILED, errors[0] 이 대표 문장과 같은 문장.
+    OS 문장은 원인으로 고른다 (2026-11-09 사용자 결정): Linux + privilege_unavailable → serial_missing_sudo, 그 밖 → serial_missing.
   - rescue / H12 경로(failure_reason 있음): 문장 · stage · code · errors[] 는 그대로, status 만 failed. Serial 원인은
     diagnosis.details.serial_number 에만 남는다 — 같은 문장의 행을 하나 더 붙이지 않는다 (2026-11-09 사용자 결정 4).
   - 인증 단계(auth) · 사전 점검 실패 봉투는 건드리지 않는다.
@@ -35,7 +36,8 @@ RULE = REPO / "os-gather" / "tasks" / "normalize" / "require_serial.yml"
 CORE = REPO / "common" / "tasks" / "normalize" / "require_serial.yml"
 FR = yaml.safe_load((REPO / "common" / "vars" / "failure_reasons.yml").read_text(encoding="utf-8"))
 CATALOG = FR["_fr_catalog"]
-SENTENCE = CATALOG["serial_missing"]["os"]
+SENTENCE = CATALOG["serial_missing"]["os"]            # OS 일반 문장
+SENTENCE_SUDO = CATALOG["serial_missing_sudo"]["os"]  # Linux 가 sudo 권한을 얻지 못함
 FIXTURE = REPO / "tests" / "fixtures" / "outputs" / "status_failed_serial_missing.json"
 
 ENVELOPE_FIELDS = ("target_type", "collection_method", "ip", "hostname", "vendor", "status", "sections",
@@ -150,10 +152,10 @@ def test_normal_path_sets_failure_fields_and_representative_error_first():
                     "_cred_location": "git"})["_output"]
     assert out["status"] == "failed"
     diag = out["diagnosis"]
-    assert (diag["failure_stage"], diag["failure_code"], diag["failure_reason"]) == ("gather", "GATHER_FAILED", SENTENCE)
+    assert (diag["failure_stage"], diag["failure_code"], diag["failure_reason"]) == ("gather", "GATHER_FAILED", SENTENCE_SUDO)
     assert diag["auth_success"] is True and diag["details"]["hostname_source"] == "system" and diag["details"]["auth"] == {"attempted_count": 1}
     assert diag["details"]["serial_number"] == {"present": False, "cause": "privilege_unavailable", "sudo": "denied"}
-    assert out["errors"][0]["message"] == SENTENCE and out["errors"][0]["section"] == "linux_gather"
+    assert out["errors"][0]["message"] == SENTENCE_SUDO and out["errors"][0]["section"] == "linux_gather"
     assert out["errors"][0]["detail"] == "field=serial_number; mandatory=true; cause=privilege_unavailable; evidence=insufficient_privilege; sudo=denied"
     assert out["errors"][1:] == normalize_errors(DIAG_PRIV), "기존 섹션 오류는 뒤에 그대로"
     base = envelope(None, errors=DIAG_PRIV)
@@ -190,6 +192,58 @@ def test_no_diagnostics_at_all_means_not_collected():
     out = run_rule({"_output": envelope(None), "_os_type": "linux"})["_output"]
     assert out["diagnosis"]["details"]["serial_number"] == {"present": False, "cause": "not_collected", "sudo": None}
     assert out["errors"][0]["detail"] == "field=serial_number; mandatory=true; cause=not_collected"
+
+
+# ── OS 문장 선택 (2026-11-09 사용자 결정 7) ──────────────────────────────────────────────────────────
+DIAG_UUID_ONLY = [{"section": "system", "message": "x.", "detail": "field=system_uuid; cause=insufficient_privilege"}]
+
+
+@pytest.mark.parametrize("os_type,diags,sudo,cause,sentence", [
+    # sudo 권한을 얻지 못했다 — Linux 에서만 sudo 안내가 맞다
+    ("linux", DIAG_PRIV, "denied", "privilege_unavailable", SENTENCE_SUDO),
+    ("linux", DIAG_PRIV, "rejected", "privilege_unavailable", SENTENCE_SUDO),
+    ("linux", DIAG_PRIV, "unavailable", "privilege_unavailable", SENTENCE_SUDO),
+    ("linux", DIAG_PRIV, "", "privilege_unavailable", SENTENCE_SUDO),
+    # sudo 는 됐다 / 대상이 주지 않았다 / 단계가 돌지 않았다 / 토큰 미상 — sudo 안내는 틀리다
+    ("linux", DIAG_PRIV, "root", "read_failed", SENTENCE),
+    ("linux", DIAG_PRIV, "nopasswd", "read_failed", SENTENCE),
+    ("linux", DIAG_PRIV, "password", "read_failed", SENTENCE),
+    ("linux", DIAG_ABSENT, "denied", "not_provided", SENTENCE),
+    ("linux", None, "denied", "not_collected", SENTENCE),
+    ("linux", DIAG_UUID_ONLY, "denied", "unknown", SENTENCE),
+    # Windows 에는 sudo 가 없다 — 권한 토큰이어도 일반 문장
+    ("windows", DIAG_PRIV, "denied", "privilege_unavailable", SENTENCE),
+    ("windows", DIAG_FACTS, "", "facts_failed", SENTENCE),
+    ("windows", DIAG_ABSENT, "", "not_provided", SENTENCE),
+])
+def test_os_sentence_follows_the_cause(os_type, diags, sudo, cause, sentence):
+    ctx = {"_output": envelope(None, os_type=os_type, errors=diags or []), "_os_type": os_type, "_l_sudo_mode": sudo}
+    if diags is not None:
+        ctx["_l_id_diagnostics" if os_type == "linux" else "_w_id_diagnostics"] = diags
+    out = run_rule(ctx)["_output"]
+    assert out["diagnosis"]["details"]["serial_number"]["cause"] == cause
+    assert out["diagnosis"]["failure_reason"] == sentence == out["errors"][0]["message"]
+    other = SENTENCE if sentence == SENTENCE_SUDO else SENTENCE_SUDO
+    assert other not in [e["message"] for e in out["errors"]]
+
+
+@pytest.mark.parametrize("os_type", ["LINUX", "", None])
+def test_sudo_sentence_needs_os_type_exactly_linux(os_type):
+    """sudo 결과는 _os_type == 'linux' 일 때만 읽는다 — 원인 판정과 문장 선택이 같은 조건을 쓴다."""
+    ctx = {"_output": envelope(None, errors=DIAG_PRIV), "_l_id_diagnostics": DIAG_PRIV, "_l_sudo_mode": "denied"}
+    if os_type is not None:
+        ctx["_os_type"] = os_type
+    out = run_rule(ctx)["_output"]
+    assert out["diagnosis"]["failure_reason"] == SENTENCE
+
+
+@pytest.mark.parametrize("build", ["rescue_partial", "h12"])
+def test_existing_reason_keeps_both_os_sentences_out(build):
+    reason, env = {"rescue_partial": _rescue_partial, "h12": _h12}[build]()
+    out = run_rule({"_output": env, "_os_type": "linux", "_l_id_diagnostics": DIAG_PRIV, "_l_sudo_mode": "denied"})["_output"]
+    messages = [e["message"] for e in out["errors"]] + [out["diagnosis"]["failure_reason"]]
+    assert SENTENCE not in messages and SENTENCE_SUDO not in messages
+    assert out["diagnosis"]["details"]["serial_number"]["cause"] == "privilege_unavailable"
 
 
 # ── rescue / H12 경로 (기존 사유 있음 — 결정 4: 행을 붙이지 않는다) ──────────────────────────────────────
@@ -276,7 +330,7 @@ def test_build_output_includes_the_rule_from_repo_root_not_playbook_dir():
 
 
 # 공통 규칙의 입력 이름 — wrapper 도 공통 규칙도 이 이름을 set_fact 하지 않는다 (include 인자가 set_fact 보다 우선해 가려진다)
-CORE_INPUTS = {"_rs_channel", "_rs_error_section", "_rs_cause", "_rs_detail_extra", "_rs_sudo"}
+CORE_INPUTS = {"_rs_channel", "_rs_error_section", "_rs_cause", "_rs_detail_extra", "_rs_sudo", "_rs_reason_key"}
 
 
 def test_os_wrapper_includes_the_common_rule_from_repo_root():
@@ -310,8 +364,9 @@ def test_fixture_documents_scenario_e():
     assert _section_only_status(env["sections"]) == "success", "섹션만 보면 success — E 는 섹션 규칙 위에 얹힌 유일한 예외다"
     assert env["correlation"]["serial_number"] is None
     assert env["diagnosis"]["failure_code"] == "GATHER_FAILED" and env["diagnosis"]["failure_stage"] == "gather"
-    assert env["diagnosis"]["failure_reason"] == SENTENCE == env["errors"][0]["message"]
-    assert env["diagnosis"]["details"]["serial_number"]["present"] is False
+    # Linux · sudo 를 얻지 못함(denied) → sudo 문장 (2026-11-09 사용자 결정 7)
+    assert env["diagnosis"]["details"]["serial_number"] == {"present": False, "cause": "privilege_unavailable", "sudo": "denied"}
+    assert env["diagnosis"]["failure_reason"] == SENTENCE_SUDO == env["errors"][0]["message"]
     assert env["diagnosis"]["details"]["sudo"]["mode"] in {"denied", "rejected", "unavailable"}
     assert all(e["message"] for e in env["errors"])
     assert env["data"]["cpu"] is not None, "다른 섹션 데이터는 보존된다"
