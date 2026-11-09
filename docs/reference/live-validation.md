@@ -469,6 +469,64 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-11-09 Serial Number 필수 3채널 · Dell Service Tag 누락 시 데이터 보존 — main `e4e7d5d1` 매트릭스 #732~#742 · CI #69 · production `2de33bb1` · canary (실장비)
+
+main `e4e7d5d1` 로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다. 수집 코드는 `22f44e20` 과 같고, 뒤의 커밋 3개는 문서 · 하네스다.
+결정 근거는 [decision-log.md](decision-log.md) 2026-11-09 이다. 매트릭스 · CI · canary 의 투입과 대기, 결과 비교는 작업 PC 의 분리 프로세스가 Jenkins API 로 했다(자격은 파일로 전달).
+이번 실행의 Jenkins 호출은 TLS 인증서 검증을 끈 curl(`-k`)이었다. 2026-11-07 은 고정한 인증서로 검증했다. 투입 도구는 이 기록 뒤 고정 인증서만 쓰게 고쳤고, 기록용 콘솔 확인부터 그 방식으로 읽었다.
+
+### main `e4e7d5d1` 매트릭스 (main Job #732~#742, checkout 전부 == `e4e7d5d1` — #720~#731 과 같은 파라미터, eventUuid 만 새 값)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #732 | SUCCESS | 74 s · 3/3 success · errors 0 |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #733 | SUCCESS | 106 s · success 2 · `TARGET_UNREACHABLE` 3 — TEST-NET 2 와 `10.100.64.132`(#721 에 이어 도달 불가. 이번에는 5986 도 "호스트로 갈 루트가 없음" · ICMP 무응답) |
+| S3 Linux 11 | #734 | SUCCESS | 133 s · 11/11 success · errors 0 |
+| S4 Windows 1 | #735 | SUCCESS | 142 s · `system.version 2022-21H2` |
+| T2 TEST-NET 2 | #736 | SUCCESS | 80 s · 2/2 `TARGET_UNREACHABLE` |
+| T5 사용자 중단 (6대) | #742 | ABORTED | `정보 수집을 시작합니다` 관측 +10초 API stop · `[수집] 중단됨:` · `outcome=aborted` · 접수 6 = 보충 6 · `callback_body.json` 보존 · 52 s |
+| T6 Callback 거부 주소 | #737 | UNSTABLE | 111 s |
+| E2E-A loc=cj | #738 | UNSTABLE | TEST-NET 2 · 112 s |
+| E2E-A2 loc=chj | #739 | FAILURE | fail-closed(등록되지 않은 Location) · 20 s · tip 관측 `e4e7d5d1` 전후 동일(`ls-remote` origin) |
+| E2E-D ESXi 6 | #740 | SUCCESS | 88 s · 6/6 success · errors 0 |
+| E2E-E Redfish 7 | #741 | SUCCESS | 413 s · 7/7 success · errors 0 · 표준 계정 인증 7/7 · `diagnosis.details.account_service` 빈 값 7/7(Account Write 0) |
+
+직전 매트릭스(#720~#731)와 host 별로 비교했다. 비교한 값은 status · sections · errors · correlation · `hardware.serial` · diagnosis(details 제외) · details 의 serial_number · notices · account_service · 키 목록 · 봉투 키다.
+
+- 10개 시나리오는 같았다.
+- S2 는 `10.100.64.132` 1대의 `errors[0].detail` 만 다르다. 5986 의 응답이 "연결 시간 초과" 에서 "호스트로 갈 루트가 없음" 으로 바뀌었다. 사용자 문장(`message`)과 status · 실패 코드는 같다. 장비 쪽 상태로 판단했다.
+- success 결과 30건(ESXi 6 · Redfish 7 · Linux 14 · Windows 1 · 혼합 배치의 실호스트 2 — 시나리오 사이에 같은 host 가 있다)은 모두 Serial 이 있다.
+  `diagnosis.details.serial_number` 가 나온 host 는 0이다. 실장비에서는 이번 변경으로 상태가 바뀐 host 가 없다.
+  누락 분기는 미러 사본 재생과 시험으로만 확인했다([decision-log.md](decision-log.md) 2026-11-09 실행 기록).
+
+### CI · 승격
+
+- CI `clovirone-cicd/clovirone-server-gather-ci` #68(`PROMOTE=false`, E2E 입력 매트릭스 11건 + tip 관측)은 Prodgen Drift 에서 `could not read Username` 로 실패했다.
+  GitHub 저장소가 다시 비공개였다(2026-11-07 CI #66 과 같다). 빌드를 멈췄고(ABORTED), Harness 빌드는 0건이었다. 사용자가 저장소를 공개로 바꿨다.
+- CI #69(같은 SHA · 같은 입력): **SUCCESS** 68분 · 필수 단계 전부 PASS(PROMOTE 미실행) · 집계 **COMPLETE_PASS**(G01~G20)
+  - G14 pytest 6379 passed · 210 skipped · 52 deselected · 5 xfailed
+  - E2E 증거 88건 통과(Harness 77 #2906~#2982 + 매트릭스 11)
+- 작업 PC prodgen `promote --sha e4e7d5d1`(CI #69 산출물 3개) → **production `2de33bb1`**(2026-11-09T06:02Z, 24분)
+  - parent `09fb6625` · 198 파일 · tree hash `1954ecb2`
+  - Gates-Rerun G11~G15 · G18~G20 PASS · CI-Stages verified
+  - GitHub `production` · GitLab `main` · 로컬 일치 · GitLab 브랜치 1개 · force 0
+  - 직전 production 대비 바뀐 파일은 9개다. 런타임 8개(공통 규칙 `require_serial.yml` 신규 · OS 와 Redfish wrapper · 두 `site.yml` · 문장 카탈로그 · Redfish 정규화 1줄 · `redfish_gather.py` 의 Dell 분기)와 provenance 1개다.
+  - 긴급 승격 `09fb6625`(2026-11-07, `Verdict: PARTIAL`)의 정규 재승격도 이것으로 채웠다.
+
+### production `2de33bb1` canary (production Job #326~#329, 2026-11-09)
+
+직전 canary(#321 · #322 · #323 · #324)와 같은 파라미터로 차례로 돌렸다(eventUuid 만 새 값).
+
+| 빌드 | 채널 | 결과 | 확인 (checkout 전부 `2de33bb1` · Portal HTTP 200 · 결과 수 == 접수 수 · errors 0 · 13키) |
+|---|---|---|---|
+| #326 | ESXi 6 | SUCCESS 92초 | 6/6 success · Serial 6/6 |
+| #327 | Redfish 7 | SUCCESS 396초 | 7/7 success · Serial 7/7(Dell 5 는 Service Tag) · `diagnosis.details.account_service` 빈 값 7/7(Account Write 0) · notices 는 #322 와 같다 |
+| #328 | OS 11 | SUCCESS 125초 | 11/11 success · Serial 11/11 |
+| #329 | Windows 1 (.120) | SUCCESS 138초 | 1/1 success · `system.version 2022-21H2` |
+
+네 건 모두 같은 코드의 main 결과(#740 · #741 · #734 · #735)와 같았다. 직전 production 결과(#325 · #322 · #323 · #324)와도 같았다.
+비교한 값은 위 매트릭스 비교와 같다. 다음 승격의 비교 기준은 매트릭스 #732~#742 · CI #69 · canary #326~#329 다.
+
 ## 2026-11-07 Redfish Summary 정합성 수정 · 사내 GitLab `main` 직접 수정 9건 — main `a38fa73c` 매트릭스 #720~#731 · CI #67 · production `7e3b2e6b` · canary (실장비)
 
 main `a38fa73c`(`fix/redfish-mock2-summary-20261028` `31f2db21` 의 merge commit `d7cc7264` · 사내 GitLab `main` 직접 수정 9건 `aa5b55c6` · 문서 정정)로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다.

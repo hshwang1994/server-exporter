@@ -48,7 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
-| 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장 · 공통 규칙 1개 · 기존 사유가 있으면 Serial 행 중복 없음 · OS 문장 원인별 · Dell Service Tag 누락 시 데이터 보존 |
+| 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장 · 공통 규칙 1개 · 기존 사유가 있으면 Serial 행 중복 없음 · OS 문장 원인별 · Dell Service Tag 누락 시 데이터 보존 · 정규 승격 production `2de33bb1` |
 | 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) · 긴급 승격 production `09fb6625` |
 | 2026-11-07 — Redfish Summary 수정 main 병합(merge commit) · 사내 GitLab `main` 직접 수정 9건 반영(`target_type` string · `syjeong_test` 생성 대상) |
 | 2026-11-02 — 사내 GitLab 을 고객사 형태로(`main` 하나 = GitHub production) · jenkins-prod 는 GitHub · dual push 폐기 |
@@ -161,6 +161,19 @@
 | `f5592a0f` | OS 문장 원인별 | OS 대조 — Serial 이 대표 사유인 362 사례(sudo 문장 90 · 일반 문장 272)의 문장만 다르고 기대 문장과 같음 |
 | `e75f7589` | Redfish · ESXi 확장 · Redfish 자리표시자 | Tier 1 재생 21대 — 정상 미러 18대(mock2 11 · 1차 7)는 봉투 · 요청 차이 0. 사본 3대(SerialNumber 삭제 · System 500 · Dell Service Tag 삭제)는 기대한 경로만 바뀜(C1 · C2 · 결정 6 이전의 Dell). OS 대조는 앞 커밋과 같음 |
 | `22f44e20` | Dell Service Tag 없음 → 데이터 보존(결정 6) | Tier 1 재생 21대 — 정상 18대는 변경 전 대비 차이 0, 앞 커밋 대비 20대(Dell 사본 제외) 차이 0. Dell 사본은 같은 재생의 정상 R740 과 16경로만 다름(status · 대표 사유 · Serial 행 1개 · notice 1건 · `details.serial_number` · 시리얼 2곳 null) — 섹션 · `data` 나머지 · 요청 집합은 같음 |
+
+### 승격 기록 (2026-11-09)
+
+사용자 승인("승격 승인합니다.") 뒤 main `e4e7d5d1`(수집 코드는 `22f44e20` 과 같다)로 정규 절차를 돌렸다. 상세는 [live-validation.md](live-validation.md) 2026-11-09 다.
+
+| 단계 | 결과 |
+|---|---|
+| main Job 매트릭스 | #732~#742, 11/11 기대대로 · checkout `e4e7d5d1`. 직전 #720~#731 대비 10개 시나리오 같음, S2 는 도달 불가 장비 1대의 기술 근거(`detail`)만 다름(장비 쪽 상태) |
+| CI | #68 은 저장소 비공개로 Prodgen Drift 실패 — 빌드를 멈췄다. 사용자가 공개로 바꾼 뒤 #69 SUCCESS · COMPLETE_PASS |
+| 승격 | `promote --sha e4e7d5d1` → production `2de33bb1`(parent `09fb6625`, gate G01~G20 PASS · class B 0 · 198파일). GitHub `production` = 사내 GitLab `main` = `2de33bb1`, force 없음. 2026-11-07 긴급 승격 `09fb6625` 의 정규 재승격이기도 하다 |
+| canary | production Job #326~#329(ESXi 6 · Redfish 7 · OS 11 · Windows 1) 4/4 SUCCESS · checkout `2de33bb1` · Portal HTTP 200 · 같은 코드의 main 결과와 직전 production 결과 모두와 같다 |
+
+실장비 결과에서 Serial 이 없는 host 는 0이다. 그래서 새 실패 분기는 실장비에서 나오지 않았고, 미러 사본 재생과 시험으로만 확인됐다.
 
 ### 대안 (Considered)
 
