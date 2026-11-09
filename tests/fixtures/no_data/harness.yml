@@ -18,11 +18,11 @@
     _ip: "{{ ansible_host | default(inventory_hostname) }}"
     harness_case: no_data
     _hc_cases:
-      # 성공 섹션 0개 + 섹션 오류 2건 (Linux) — 대표 오류가 앞, 섹션 오류 보존, require_serial 이 뒤에 Serial 오류 1건
+      # 성공 섹션 0개 + 섹션 오류 2건 (Linux) — 대표 오류가 앞, 섹션 오류 보존. require_serial 은 원인을 details 에만 남긴다 (행 추가 없음)
       no_data:   {channel: os, os_type: linux, failed: [system, cpu], collected: [], errors: 2, serial: null}
       # 성공 섹션 0개 + 섹션 오류 0건 — 대표 오류만
       no_errors: {channel: os, os_type: linux, failed: [system, cpu], collected: [], errors: 0, serial: null}
-      # 섹션 오류 12건 — 상한 10 + 절단 표시, 그 뒤 Serial 오류
+      # 섹션 오류 12건 — 상한 10 + 절단 표시 (Serial 행은 붙지 않는다)
       many:      {channel: os, os_type: linux, failed: [system, cpu], collected: [], errors: 12, serial: null}
       # Windows 채널 표시
       windows:   {channel: os, os_type: windows, failed: [system, cpu], collected: [], errors: 1, serial: null}

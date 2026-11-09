@@ -7,7 +7,8 @@ E 는 그 위에 얹힌다 — 다른 섹션의 수집 값(data) · sections · 
 무엇을 고정하나
   - Serial 이 있으면 아무것도 바꾸지 않는다. 빈 문자열 · 자리표시자는 누락이다.
   - 정상 경로(failure_reason 없음): status=failed, stage=gather, code=GATHER_FAILED, 문장=serial_missing(카탈로그), errors[0] 이 같은 문장.
-  - rescue / H12 경로(failure_reason 있음): 문장 · errors[0] 은 그대로, status 만 failed, Serial 오류는 뒤에 붙는다.
+  - rescue / H12 경로(failure_reason 있음): 문장 · stage · code · errors[] 는 그대로, status 만 failed. Serial 원인은
+    diagnosis.details.serial_number 에만 남는다 — 같은 문장의 행을 하나 더 붙이지 않는다 (2026-11-09 사용자 결정 4).
   - 인증 단계(auth) · 사전 점검 실패 봉투는 건드리지 않는다.
   - 원인(details.serial_number.cause)은 식별자 진단 fragment 의 토큰과 sudo 결과로만 정한다.
 """
@@ -191,24 +192,54 @@ def test_no_diagnostics_at_all_means_not_collected():
     assert out["errors"][0]["detail"] == "field=serial_number; mandatory=true; cause=not_collected"
 
 
-# ── rescue / H12 경로 ──────────────────────────────────────────────────────────────────────────────
-def test_rescue_partial_becomes_failed_but_keeps_its_reason_and_first_error():
+# ── rescue / H12 경로 (기존 사유 있음 — 결정 4: 행을 붙이지 않는다) ──────────────────────────────────────
+def _rescue_partial():
     reason = CATALOG["gather_after_auth"]["os"]
-    rescue_errors = [{"section": "linux_gather", "message": reason, "detail": "[task: x] boom"}]
-    env = envelope(None, status="partial", stage="gather", code="GATHER_FAILED", reason=reason, errors=rescue_errors)
+    errors = [{"section": "linux_gather", "message": reason, "detail": "[task: x] boom"}] + DIAG_PRIV
+    return reason, envelope(None, status="partial", stage="gather", code="GATHER_FAILED", reason=reason, errors=errors)
+
+
+def _h12():
+    reason = CATALOG["gather_no_data"]["default"]
+    errors = [{"section": "linux_gather", "message": reason, "detail": "success_sections=0; supported=system,cpu; failed=system,cpu"},
+              {"section": "cpu", "message": "CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.", "detail": "e0"}]
+    env = envelope(None, status="failed", stage="gather", code="GATHER_FAILED", reason=reason, errors=errors)
+    env["sections"] = {k: ("failed" if v == "success" else v) for k, v in env["sections"].items()}
+    return reason, env
+
+
+def test_rescue_partial_becomes_failed_but_keeps_its_reason_and_errors():
+    reason, env = _rescue_partial()
     out = run_rule({"_output": env, "_os_type": "linux", "_l_id_diagnostics": DIAG_PRIV, "_l_sudo_mode": "rejected"})["_output"]
     assert out["status"] == "failed"
-    assert out["diagnosis"]["failure_reason"] == reason and out["diagnosis"]["failure_code"] == "GATHER_FAILED"
-    assert out["errors"][0] == normalize_errors(rescue_errors)[0]
-    assert out["errors"][-1]["message"] == reason and "cause=privilege_unavailable" in out["errors"][-1]["detail"]
-    assert out["diagnosis"]["details"]["serial_number"]["cause"] == "privilege_unavailable"
+    diag = out["diagnosis"]
+    assert (diag["failure_stage"], diag["failure_code"], diag["failure_reason"]) == ("gather", "GATHER_FAILED", reason)
+    assert out["errors"] == env["errors"], "기존 행 그대로 — Serial 행을 붙이지 않는다"
+    assert diag["details"]["serial_number"] == {"present": False, "cause": "privilege_unavailable", "sudo": "rejected"}
 
 
-def test_h12_gather_no_data_keeps_its_sentence():
-    reason = CATALOG["gather_no_data"]["default"]
-    env = envelope(None, status="failed", stage="gather", code="GATHER_FAILED", reason=reason)
+def test_h12_gather_no_data_keeps_its_sentence_and_errors():
+    reason, env = _h12()
     out = run_rule({"_output": env, "_os_type": "linux"})["_output"]
-    assert out["diagnosis"]["failure_reason"] == reason and out["errors"][-1]["message"] == reason
+    assert out["status"] == "failed"
+    assert out["diagnosis"]["failure_reason"] == reason
+    assert out["errors"] == env["errors"]
+    assert out["diagnosis"]["details"]["serial_number"] == {"present": False, "cause": "not_collected", "sudo": None}
+
+
+@pytest.mark.parametrize("build", [_rescue_partial, _h12], ids=["rescue_partial", "h12"])
+def test_existing_reason_is_never_repeated_and_nothing_else_moves(build):
+    """사용자 지적(2026-11-09): 기존 오류와 Serial 누락이 겹칠 때 같은 문장이 두 줄이 되거나 원인을 다르게 전하지 않는다."""
+    reason, env = build()
+    out = run_rule({"_output": env, "_os_type": "linux", "_l_id_diagnostics": DIAG_PRIV, "_l_sudo_mode": "denied"})["_output"]
+    assert [e["message"] for e in out["errors"]].count(reason) == 1
+    assert out["errors"][0]["message"] == out["diagnosis"]["failure_reason"] == reason
+    assert not [e for e in out["errors"] if "mandatory=true" in str(e.get("detail"))]
+    for key in ("sections", "data", "hostname", "meta", "correlation", "ip", "vendor", "target_type", "collection_method"):
+        assert out[key] == env[key], key
+    before = {k: v for k, v in env["diagnosis"]["details"].items()}
+    after = {k: v for k, v in out["diagnosis"]["details"].items() if k != "serial_number"}
+    assert after == before, "details 는 serial_number 하나만 더해진다"
 
 
 @pytest.mark.parametrize("stage,code,key", [

@@ -21,7 +21,10 @@
 #
 # 경로별 결과:
 #   failure_reason 이 비어 있음(정상 경로)  → stage=gather, code=GATHER_FAILED, reason=serial_missing 문장, 대표 오류를 errors[0] 에 둔다
-#   failure_reason 이 이미 있음(rescue / H12) → 문장 · errors[0] 은 그대로, status 만 failed 로 확정하고 Serial 오류 1건을 뒤에 붙인다
+#                                              (기존 섹션 오류는 그 뒤에 그대로)
+#   failure_reason 이 이미 있음(rescue / H12) → 문장 · stage · code · errors[] 는 그대로, status 만 failed 로 확정한다.
+#                                              Serial 원인은 diagnosis.details.serial_number 에만 남긴다 — 대표 문장과 같은 문장의 행을
+#                                              하나 더 붙이면 Portal Grid 에 같은 문장이 두 줄 보인다 (2026-11-09 사용자 결정, 종전에는 뒤에 붙였다)
 #   failure_stage 가 auth 등 gather 이전       → 아무것도 하지 않는다
 
 - name: "normalize | require_serial | observe"
@@ -51,19 +54,20 @@
     _rs_errors_cur: "{{ (_output.errors | default([])) if ((_output.errors | default([])) is not string) else [] }}"
   ansible.builtin.set_fact:
     _output: >-
-      {{ _output | combine({
-           'status': 'failed',
-           'diagnosis': (_rs_diag | combine({
-               'failure_stage':  (_rs_stage if (_rs_has_reason | bool) else 'gather'),
-               'failure_code':   ((_rs_diag.failure_code | default(none)) if (_rs_has_reason | bool) else 'GATHER_FAILED'),
-               'failure_reason': _rs_reason,
-               'details': ((_rs_diag.details if ((_rs_diag.details | default(none)) is mapping) else {})
-                           | combine({'serial_number': {'present': false, 'cause': _rs_cause,
-                                                        'sudo': (_rs_sudo | default(none, true))}}))
-             })),
-           'errors': ((([_rs_error] + (_rs_errors_cur | list)) if not (_rs_has_reason | bool)
-                       else ((_rs_errors_cur | list) + [_rs_error])) | normalize_errors)
-         }) }}
+      {{ _output
+         | combine({
+             'status': 'failed',
+             'diagnosis': (_rs_diag | combine({
+                 'failure_stage':  (_rs_stage if (_rs_has_reason | bool) else 'gather'),
+                 'failure_code':   ((_rs_diag.failure_code | default(none)) if (_rs_has_reason | bool) else 'GATHER_FAILED'),
+                 'failure_reason': _rs_reason,
+                 'details': ((_rs_diag.details if ((_rs_diag.details | default(none)) is mapping) else {})
+                             | combine({'serial_number': {'present': false, 'cause': _rs_cause,
+                                                          'sudo': (_rs_sudo | default(none, true))}}))
+               }))
+           })
+         | combine({} if (_rs_has_reason | bool)
+                   else {'errors': (([_rs_error] + (_rs_errors_cur | list)) | normalize_errors)}) }}
   when:
     - _output is defined
     - _output is mapping
