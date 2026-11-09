@@ -73,6 +73,10 @@
   - **순수 게더링 코드 변경 시 production 승격** — `python -m scripts.ai.prodgen promote --sha <main sha>` (2026-10-03 부터; 종전 `promote_to_production.sh` shim 은 2026-10-11 삭제)
     (runtime-only tree 생성 · gate · GitHub `production` 과 사내 GitLab `main` 에 같은 커밋). **사용자 승인 불요** (2026-06-30 사용자 명시
     "production 에 넣는건 자동이여야 한다"). 완료 보고(R9)에 production 승격 여부 명시.
+  - 승격 체인(매트릭스 → CI → promote → canary)은 rule 80 R7 · R8 을 따른다 (2026-11-09 사용자 지시).
+    - 시작 전 GitHub 저장소 공개 확인 — 비공개면 사용자에게 공개 전환을 요청한다.
+    - `python -m scripts.ai.longrun promote-chain --detach` 로 분리 실행하고 파일로 감시한다.
+    - 끝나면, 비공개였을 경우 다시 비공개로 바꾸라고 안내한다.
 - **Forbidden**: force push / `--all` / 다른 브랜치 push (rule 93 R1) / 순수 코드 변경 후 production 승격 누락
 - **Why**: 사용자 명시 (2026-05-01) — 작업 끝나면 자율 commit + push. (2026-11-02) GitHub 는 개발 · 배포, 사내 GitLab 은 production 만 받는 고객사 형태
 - **재검토**: force push 사고 발생 시 강화
@@ -125,6 +129,7 @@
 
   ## [INFO] AI 환경 외 남은 것
   - [사용자/팀 몫]
+  - (승격 체인 때 GitHub 저장소를 비공개 → 공개로 바꿨다면) 다시 비공개로 바꾸기 — rule 80 R7
   ```
 - **Allowed**: 작업이 작은 경우 (1 commit 미만) 간소화
 - **Forbidden**: 체크리스트 6/6 표기 없이 종결어 사용

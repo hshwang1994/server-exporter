@@ -88,6 +88,12 @@ origin 에는 `refs/heads/production`, internal 에는 `refs/heads/main` 으로 
   - plumbing 커밋은 pre-commit 훅을 거치지 않으므로 `--no-verify` 예외는 더 이상 필요 없다. force push 는 여전히 금지 (R1). 되돌림은 `prodgen restore`(append).
   - 대상 ref (2026-11-02): GitHub `origin` 은 `production`, 사내 GitLab `internal` 은 `main` 에 같은 커밋을 올린다. 두 원격 중 하나라도 빠진
     실 승격 · 복구는 거부된다 (deploy policy). 승격 뒤 확인: `git ls-remote origin refs/heads/production` == `git ls-remote internal refs/heads/main`.
+  - 체인 실행 (2026-11-09 사용자 지시):
+    - 시작 전에 GitHub 저장소를 자격 없이 읽을 수 있는지 본다. 비공개면 **사용자에게 공개 전환을 요청**하고 기다린다.
+    - 끝나면, 시작할 때 비공개였을 경우 **다시 비공개로 바꾸라고 안내**한다 (rule 80 R7).
+    - 매트릭스 · CI · canary 대기와 promote 는 분리 실행으로 돌리고 파일로 감시한다:
+      `python -m scripts.ai.longrun promote-chain --sha <SHA> --plan <계획> --detach` (rule 80 R8).
+      백그라운드 셸에 묶으면 메모리 압박 때 함께 정리된다.
 
 ### R3. 현재 브랜치 확인 의무
 

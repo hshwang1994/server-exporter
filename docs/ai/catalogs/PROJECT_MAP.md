@@ -70,6 +70,8 @@ server-exporter/
 │       │   check_project_map_drift / check_gap_against_main /
 │       │   verify_harness_consistency / verify_vendor_boundary /
 │       │   scan_suspicious_patterns)
+│       ├── prodgen/ (production 생성 · 검증 G01~G20 · 승격 · 복구)
+│       ├── longrun/ (장시간 실행 — 분리 실행 · 빌드 기록 · 이어받기 · 파일 감시 · 승격 체인, 2026-11-09 · rule 80 R8)
 │       └── hooks/ (21 Python hooks + install-git-hooks.sh)
 └── .claude/
     ├── settings.json                         (hooks 등록 — cycle-011에서 보안 deny 38건 제거)

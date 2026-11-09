@@ -1357,3 +1357,29 @@
 - 수정: 설정 복구(공개). 비공개로 운영하려면 두 단계를 Prodgen Promote 처럼 `withCredentials([usernamePassword(credentialsId: 'hshwang token', …)])` + `scripts/ai/prodgen/git_askpass.sh` 로 감싸야 한다 — `docs/ai/NEXT_ACTIONS.md` 2026-11-07
 - 재발 방지: 저장소 공개 범위를 바꾸기 전에 CI 셸 단계의 자격 없는 원격 접근(`git fetch` · `ls-remote`)을 확인한다
 - 관련 rule: rule 80 R1-C, rule 96 R4
+
+---
+
+## 2026-11-09 — 승격 체인이 CI 대기 중 백그라운드 셸 정리로 끊겼고, 다시 넣은 CI #68 은 저장소 비공개로 실패했다 (재발 2건)
+
+- 카테고리: execution-environment (메모리 압박 · 셸 수명) · environment-drift (저장소 공개 범위) — 제품 결함 아님
+- 발견 위치: 작업 PC 승격 체인(main 매트릭스 #732~#742 → CI) · `clovirone-cicd/clovirone-server-gather-ci` #68
+- 증상:
+  - (1) 체인을 Claude Code 백그라운드 셸로 돌렸다. CI 를 기다리는 동안 시스템 여유 메모리가 약 4 GB / 32 GB 로 떨어졌고, Claude Code 가 그 셸을 정리해 체인이 끝났다.
+    대기 자체는 가벼운 폴링이었다(메모리를 많이 쓴 프로세스는 확인하지 않았다)
+  - (2) CI #68 은 Prodgen Drift 에서 `fatal: could not read Username for 'https://github.com'` 로 실패했다(2026-11-07 CI #66 과 같다).
+    저장소가 다시 비공개였다. AI 가 빌드를 멈췄고(ABORTED) Harness 빌드는 0건이었다
+- 원인:
+  - (1) 수십 분짜리 대기를 셸 수명에 묶었다. 2026-10-15 · 2026-10-28 전체 시험 중단과 같은 구조다. 빌드 번호를 투입 직후 남기지 않아,
+    다시 시작할 때 진행 중 빌드를 이어받을 수 없었다
+  - (2) 체인 시작 전에 저장소 공개 여부를 확인하는 절차가 없었다. 2026-11-07 의 재발 방지는 "공개 범위를 바꾸기 전 확인" 이었는데,
+    공개 범위는 사용자가 평소 비공개로 두는 운영 선택이었다
+- 영향: 승격 지연(CI 1회 · 체인 재시작 1회). Jenkins 쪽 중복 빌드 0, 원격 변경 0, 제품 영향 0
+- 수정:
+  - 체인을 분리 프로세스 + 빌드 기록(journal) + 이어받기 + 파일 감시로 바꿨다. 이번 승격의 CI 단계부터 그 방식으로 다시 돌렸다
+  - 사용자가 저장소를 공개로 바꾼 뒤 같은 SHA 로 CI #69 를 넣었다
+  - 도구를 `scripts/ai/longrun/` 으로 옮기고(시험 `tests/unit/test_longrun.py`), rule 80 R7(공개 확인 · 사용자 요청 · 원복 안내) · R8(분리 실행)을 만들었다
+- 재발 방지:
+  - 수십 분 넘는 대기 · 무거운 로컬 실행은 `python -m scripts.ai.longrun` 으로 분리 실행하고 Monitor 는 `watch` 로 건다
+  - 승격 체인 preflight 가 CI 와 같은 방식으로 저장소를 읽어 보고, 비공개면 시작하지 않는다. 사용자에게 공개 전환을 요청하고, 끝나면 원복을 안내한다
+- 관련 rule: rule 80 R7 · R8, rule 93 R2 예외 2, rule 24 R9 · ADR-2026-11-09-promotion-visibility-and-detached-runs

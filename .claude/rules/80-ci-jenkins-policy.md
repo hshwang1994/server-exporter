@@ -8,6 +8,7 @@ paths:
   - "scripts/addon_checkout.sh"
   - "scripts/ai/ci_gate.sh"
   - "scripts/ai/prodgen/**"
+  - "scripts/ai/longrun/**"
   - "ansible.cfg"
   - "jenkins/**"
   - "docs/operate/**"
@@ -155,18 +156,57 @@ paths:
 - 첫 cron 실행 결과 모니터링
 - Jenkins 빌드 시간 / 성공률 baseline 대비
 
+### R7. 승격 체인 전 GitHub 저장소 공개 확인 (2026-11-09 사용자 지시)
+
+- **Default**: 승격 체인(main Job 매트릭스 → CI → `prodgen promote` → production canary)을 시작하기 전에 GitHub 저장소를 자격 없이 읽을 수
+  있는지 본다. `python -m scripts.ai.longrun promote-chain` 의 preflight 가 CI 와 같은 방식(자격 없는 `git ls-remote <SCM 주소>`)으로 확인한다.
+  - 비공개면 체인을 시작하지 않는다. **사용자에게 공개 전환을 요청**하고, 바뀐 뒤 같은 명령으로 다시 시작한다.
+  - 체인이 끝나면(성공 · 중단 모두), 시작할 때 비공개였다면 완료 보고에 **"GitHub 저장소를 다시 비공개로 바꾸세요"** 를 적는다(rule 24 R9).
+    preflight 가 비공개를 본 적이 있으면 `state.json` · `summary.json` 의 `repo_was_private` 가 true 다.
+- **Why**: `Jenkinsfile_ci` 의 Prodgen Drift(`git fetch origin production`) · Prodgen Verify(G20 `ls-remote`)는 자격 없이 GitHub 를 읽는다.
+  비공개면 CI 가 FAILURE 로 끝나 승격 증거가 나오지 않는다(2026-11-07 CI #66 · 2026-11-09 CI #68). 사용자는 평소 저장소를 비공개로 둔다.
+- **Forbidden**: 비공개 상태에서 CI 를 넣기, AI 가 저장소 공개 범위를 직접 바꾸기(사용자 몫), 체인이 끝난 뒤 원복 안내 빠뜨리기.
+- **재검토**: 두 단계를 자격으로 감싸면(`docs/ai/NEXT_ACTIONS.md` 2026-11-07 MED 항목) 이 확인과 요청은 필요 없다 — 그때 R7 을 지운다.
+
+### R8. 장시간 실행 — 분리 실행 · 빌드 기록 · 이어받기 · 파일 감시 (2026-11-09 사용자 지시)
+
+- **Default**: 수십 분 넘게 기다리는 일은 Claude Code 백그라운드 셸(`run_in_background`)에 묶지 않고 **분리 프로세스**로 띄운다.
+  대상은 승격 체인의 main Job 매트릭스 · CI · canary 대기, 그리고 전체 pytest · WSL gate 같은 무거운 로컬 실행이다.
+  - 승격 체인: `python -m scripts.ai.longrun promote-chain --sha <SHA> --plan <계획 파일> --detach`
+    (계획 파일은 직전 승격 작업 폴더의 `next_plan.json` — 형식은 `scripts/ai/longrun/chain.py` 머리말. 없으면 직전 승격 기록
+    `docs/reference/live-validation.md` 의 빌드 번호로 만든다. 시나리오 기대 결과는 prodgen 계약에서 온다. 먼저 `--plan-only` 로 읽기 전용 점검을 한다 — POST · push 0)
+  - 그 밖의 긴 명령: `python -m scripts.ai.longrun start --work <폴더> -- <명령…>`
+  - 감시: Monitor 로 `python -m scripts.ai.longrun watch --work <폴더>`(기본 패턴은 승격 체인 줄 — 다른 명령은 `--pattern <정규식>` 이나 `--all`).
+    읽은 위치를 파일에 남기므로 감시가 끊기면 같은 명령으로 다시 건다(빠짐 · 중복 없음). 상태는 `status --work <폴더>`. 승격 체인 작업 폴더 기본값은 `~/.se_longrun/promote-<sha8>` 이다(세션이 바뀌어도 남는다).
+  - 다시 실행은 이어 돌리기다. 기대대로 끝난 빌드는 그대로 두고, journal(`runs_*.jsonl.started`)에만 있는 진행 중 빌드는 새로 넣지 않고 기다린다.
+    투입 시점 관측이 증거인 E2E-A2(tip 관측) · T5(시작 표지 + 10초 중단)는 이어받지 않고 새로 넣는다.
+- **Allowed**: 몇 분 안에 끝나는 명령은 전경 실행.
+- **Forbidden**:
+  - 긴 대기를 백그라운드 셸로 잡기
+  - 셸이 정리된 뒤 진행 상태를 확인하지 않고 처음부터 다시 넣기(빌드 중복 투입)
+  - 같은 작업 폴더로 실행을 둘 띄우기(`pid.txt` 가 막는다)
+  - 분리 실행 중 무거운 로컬 실행 겹치기 — 특히 promote 단계(G14 · G15 · G19 를 이 PC 에서 돌린다)와 다른 pytest · WSL gate
+  - 사용자 설정의 백그라운드 셸 정리 옵션을 AI 가 바꾸기(사용자 몫)
+- **Why**: 시스템 메모리가 부족해지면 Claude Code 가 백그라운드 셸을 정리하고, 그 셸이 잡고 있던 실행도 함께 끝난다.
+  2026-10-15 · 2026-10-28 전체 시험과 2026-11-09 승격 체인의 CI 대기가 이렇게 끊겼다(`docs/ai/catalogs/FAILURE_PATTERNS.md`).
+  근거 `docs/ai/decisions/ADR-2026-11-09-promotion-visibility-and-detached-runs.md`, 검증 `tests/unit/test_longrun.py`.
+
 ## 금지 패턴
 
 - Stage 일부 skip — R1 / venv 절대경로 하드코딩 — R1-A
 - AI 임의 cron 변경 — R2
 - agent에서 Ingest / Callback 실행 — R3
 - 빌드 실패 후 분석 없이 재시도 반복 — R4
+- 저장소 비공개 상태에서 CI 투입 · 원복 안내 누락 — R7
+- 긴 대기를 백그라운드 셸로 잡기 · 셸 정리 뒤 처음부터 다시 넣기 — R8
 
 ## 리뷰 포인트
 
 - [ ] Jenkinsfile 변경이 R1 Stage 구조 유지, venv 절대경로 0건 (R1-A)
 - [ ] cron 변경 사용자 승인
 - [ ] agent-master 망 분리 준수
+- [ ] 승격 체인 전 저장소 공개 확인 · 끝난 뒤 원복 안내 (R7)
+- [ ] 장시간 실행은 분리 실행 + 파일 감시 (R8)
 
 ## 관련
 
