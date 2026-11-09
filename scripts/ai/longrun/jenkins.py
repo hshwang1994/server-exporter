@@ -2,15 +2,22 @@
 
 - crumb 은 웹 세션에 묶인다 — crumb 을 받은 쿠키 jar 로 POST 해야 한다(jar 는 작업 폴더, 끝나면 drop()).
 - 자격은 netrc 파일 경로로만 curl 에 넘긴다. 이 모듈은 그 파일을 열지 않는다.
-- `-k` 는 prodgen 의 Jenkins 읽기와 같다(사내 인증서).
+- TLS 는 고정한 Jenkins 인증서(`--cacert`)로만 검증한다. `-k`(검증 끔)는 쓰지 않는다 — 자격을 실어 보내기 때문이다.
+  인증서는 `python -m scripts.ai.longrun pin-cert` 가 지문을 대조한 뒤에만 저장한다(rule 80 R8).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import ssl
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
+
+# curl 이 TLS 검증 단계에서 멈췄을 때의 종료 코드 (curl 문서: 35 연결 · 51 · 60 인증서 · 77 CA 파일 · 58 · 83 · 90 · 91)
+TLS_FAIL_RC = {35, 51, 58, 60, 77, 83, 90, 91}
 
 
 class JenkinsError(RuntimeError):
@@ -18,24 +25,29 @@ class JenkinsError(RuntimeError):
 
 
 class Jenkins:
-    def __init__(self, url: str, netrc: Path, jar: Path | None = None, curl: str = "curl"):
+    def __init__(self, url: str, netrc: Path, jar: Path | None = None, *, cacert: Path, curl: str = "curl"):
         self.url = url.rstrip("/")
         self.netrc = str(netrc)
         self.jar = jar
+        self.cacert = Path(cacert)
         self.curl_bin = curl
         self.crumb_header: str | None = None
+        self.last_rc = 0
 
     # ------------------------------------------------------------------ 기본
     def job_url(self, job: str) -> str:
         return self.url + "".join(f"/job/{p}" for p in job.split("/"))
 
+    def _base(self, timeout: int) -> list[str]:
+        return [self.curl_bin, "-sg", "--cacert", str(self.cacert), "--netrc-file", self.netrc, "--max-time", str(timeout)]
+
     def request(self, args: list[str], timeout: int = 120) -> tuple[int, str, str]:
         """(http_code, body, headers)."""
         jar = ["-c", str(self.jar), "-b", str(self.jar)] if self.jar else []
         post = ["-H", self.crumb_header] if (self.crumb_header and "POST" in args) else []
-        cmd = [self.curl_bin, "-skg", "--netrc-file", self.netrc, "--max-time", str(timeout), "-D", "-",
-               "-w", "\n%{http_code}", *jar, *post, *args]
+        cmd = [*self._base(timeout), "-D", "-", "-w", "\n%{http_code}", *jar, *post, *args]
         p = subprocess.run(cmd, capture_output=True)
+        self.last_rc = p.returncode
         out = p.stdout.decode("utf-8", "replace")
         body, _, code = out.rpartition("\n")
         hdr_end = body.find("\r\n\r\n")
@@ -48,13 +60,15 @@ class Jenkins:
     def get_json(self, url: str, timeout: int = 120):
         code, body, _ = self.request([url], timeout)
         if code != 200:
-            raise JenkinsError(f"GET {url} -> HTTP {code}")
+            hint = (" - TLS 검증 실패: 고정한 인증서와 서버 인증서가 다르거나 인증서 파일이 없다. 지문을 사용자와 확인한 뒤 pin-cert 로 다시 받는다"
+                    if code == 0 and self.last_rc in TLS_FAIL_RC else "")
+            raise JenkinsError(f"GET {url} -> HTTP {code} (curl rc {self.last_rc}){hint}")
         return json.loads(body)
 
     def download(self, url: str, out: Path, timeout: int = 300) -> int:
         """바이트 그대로 저장(증거 파일의 digest 를 바꾸지 않는다). HTTP 코드를 돌려준다."""
-        p = subprocess.run([self.curl_bin, "-skg", "--netrc-file", self.netrc, "--max-time", str(timeout), "-o", str(out),
-                            "-w", "%{http_code}", url], capture_output=True)
+        p = subprocess.run([*self._base(timeout), "-o", str(out), "-w", "%{http_code}", url], capture_output=True)
+        self.last_rc = p.returncode
         try:
             return int(p.stdout.decode("ascii", "replace").strip()[-3:])
         except ValueError:
@@ -126,6 +140,36 @@ class Jenkins:
 
 def params_of(build_json: dict) -> dict:
     return {p["name"]: p.get("value") for a in build_json.get("actions", []) if a and "parameters" in a for p in a["parameters"]}
+
+
+# ---------------------------------------------------------------------- 인증서 고정
+def fingerprint(pem: str) -> str:
+    """openssl `x509 -fingerprint -sha256` 과 같은 표기 (DER 의 SHA-256, 대문자 · 콜론)."""
+    h = hashlib.sha256(ssl.PEM_cert_to_DER_cert(pem)).hexdigest().upper()
+    return ":".join(h[i:i + 2] for i in range(0, len(h), 2))
+
+
+def _norm_fp(fp: str) -> str:
+    return re.sub(r"[^0-9A-F]", "", fp.upper())
+
+
+def pin_cert(url: str, out: Path, expect_sha256: str | None, *, fetch=ssl.get_server_certificate, timeout: float = 20.0) -> tuple[int, str]:
+    """서버가 보여 주는 인증서를 받아 지문을 대조하고, 같을 때만 `out` 에 쓴다. (rc, 지문).
+
+    rc 0 저장 · 2 기대 지문 없음(출력만 — 사용자와 확인한 뒤 --expect-sha256 으로 다시) · 4 지문 다름(저장하지 않는다).
+    받는 연결은 검증 없이 열리지만(처음 받는 것이므로), 저장 여부는 지문 대조가 정한다.
+    """
+    u = urlsplit(url)
+    pem = fetch((u.hostname, u.port or 443), timeout=timeout)
+    fp = fingerprint(pem)
+    if not expect_sha256:
+        return 2, fp
+    if _norm_fp(fp) != _norm_fp(expect_sha256):
+        return 4, fp
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(pem, encoding="ascii")
+    return 0, fp
 
 
 def checkout_sha(build_json: dict) -> str | None:

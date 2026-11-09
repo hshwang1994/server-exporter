@@ -11,8 +11,9 @@
   4. 파일 감시   — `watch`: 로그의 새 줄만 읽고 읽은 위치를 `watch_offset.txt` 에 남긴다. 감시(Monitor)가 끊겨도 다시 걸면
                    빠짐 · 중복 없이 이어진다. 감시가 죽어도 실행은 계속된다.
 
-명령: `python -m scripts.ai.longrun {start,watch,status,promote-chain}` (저장소 루트에서). 정본 규칙: `.claude/rules/80-ci-jenkins-policy.md` R7 · R8.
+명령: `python -m scripts.ai.longrun {start,watch,status,promote-chain,pin-cert}` (저장소 루트에서). 정본 규칙: `.claude/rules/80-ci-jenkins-policy.md` R7 · R8.
 자격 파일(netrc · vault 비밀번호)은 경로만 자식 프로세스(curl · prodgen)에 넘긴다. 이 패키지는 그 내용을 읽지도 출력하지도 않는다.
+Jenkins TLS 는 고정한 인증서(`DEFAULT_CACERT`, `pin-cert` 가 지문 대조 뒤 저장)로 검증한다 — `-k` 는 쓰지 않는다.
 """
 from __future__ import annotations
 
@@ -20,3 +21,4 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_HOME = Path.home() / ".se_longrun"
+DEFAULT_CACERT = DEFAULT_HOME / "jenkins_chain.pem"

@@ -180,6 +180,11 @@ paths:
     읽은 위치를 파일에 남기므로 감시가 끊기면 같은 명령으로 다시 건다(빠짐 · 중복 없음). 상태는 `status --work <폴더>`. 승격 체인 작업 폴더 기본값은 `~/.se_longrun/promote-<sha8>` 이다(세션이 바뀌어도 남는다).
   - 다시 실행은 이어 돌리기다. 기대대로 끝난 빌드는 그대로 두고, journal(`runs_*.jsonl.started`)에만 있는 진행 중 빌드는 새로 넣지 않고 기다린다.
     투입 시점 관측이 증거인 E2E-A2(tip 관측) · T5(시작 표지 + 10초 중단)는 이어받지 않고 새로 넣는다.
+  - Jenkins TLS 는 고정한 인증서(`~/.se_longrun/jenkins_chain.pem`, curl `--cacert`)로만 검증한다. 파일이 없으면 preflight 가 네트워크 확인 전에 멈춘다.
+    - 받기: `python -m scripts.ai.longrun pin-cert --url <jenkins_url> --expect-sha256 <지문>` — 지문이 같을 때만 저장한다(없으면 지문만 출력).
+    - jenkins-prod 지문(2026-11-07 · 2026-11-09 확인, 자체 서명, 만료 2028-12-24):
+      `B0:9E:BD:07:FD:27:8B:0A:67:0D:C1:25:BE:3F:EB:E6:47:56:B0:40:37:52:40:B3:97:F7:94:89:A7:79:A3:16`
+    - 지문이 다르면 저장하지 않고 인증서 교체인지 사용자에게 확인한다.
 - **Allowed**: 몇 분 안에 끝나는 명령은 전경 실행.
 - **Forbidden**:
   - 긴 대기를 백그라운드 셸로 잡기
@@ -187,8 +192,10 @@ paths:
   - 같은 작업 폴더로 실행을 둘 띄우기(`pid.txt` 가 막는다)
   - 분리 실행 중 무거운 로컬 실행 겹치기 — 특히 promote 단계(G14 · G15 · G19 를 이 PC 에서 돌린다)와 다른 pytest · WSL gate
   - 사용자 설정의 백그라운드 셸 정리 옵션을 AI 가 바꾸기(사용자 몫)
+  - Jenkins 호출에 `-k`(TLS 검증 끔) 쓰기 · 지문 확인 없이 인증서 저장하기 — 자격(netrc)을 실어 보낸다
 - **Why**: 시스템 메모리가 부족해지면 Claude Code 가 백그라운드 셸을 정리하고, 그 셸이 잡고 있던 실행도 함께 끝난다.
   2026-10-15 · 2026-10-28 전체 시험과 2026-11-09 승격 체인의 CI 대기가 이렇게 끊겼다(`docs/ai/catalogs/FAILURE_PATTERNS.md`).
+  TLS 고정은 2026-11-07 승격의 방식이다. 2026-11-09 승격은 임시 스크립트가 `-k` 로 돌았다(FAILURE_PATTERNS 2026-11-09).
   근거 `docs/ai/decisions/ADR-2026-11-09-promotion-visibility-and-detached-runs.md`, 검증 `tests/unit/test_longrun.py`.
 
 ## 금지 패턴
@@ -198,7 +205,7 @@ paths:
 - agent에서 Ingest / Callback 실행 — R3
 - 빌드 실패 후 분석 없이 재시도 반복 — R4
 - 저장소 비공개 상태에서 CI 투입 · 원복 안내 누락 — R7
-- 긴 대기를 백그라운드 셸로 잡기 · 셸 정리 뒤 처음부터 다시 넣기 — R8
+- 긴 대기를 백그라운드 셸로 잡기 · 셸 정리 뒤 처음부터 다시 넣기 · Jenkins 호출에 `-k` — R8
 
 ## 리뷰 포인트
 
@@ -206,7 +213,7 @@ paths:
 - [ ] cron 변경 사용자 승인
 - [ ] agent-master 망 분리 준수
 - [ ] 승격 체인 전 저장소 공개 확인 · 끝난 뒤 원복 안내 (R7)
-- [ ] 장시간 실행은 분리 실행 + 파일 감시 (R8)
+- [ ] 장시간 실행은 분리 실행 + 파일 감시 · Jenkins TLS 는 고정 인증서 (R8)
 
 ## 관련
 

@@ -6,13 +6,18 @@
   - run_plan: 기대대로 끝난 시나리오는 다시 넣지 않고, journal 에만 있는 진행 중 빌드는 이어받고, 다른 결과로 끝난 빌드는
     새로 넣는다. E2E-A2 · T5 는 이어받지 않는다. 빌드 번호는 기다리기 전에 journal 에 남는다.
   - 승격 체인 계획: prodgen 필수 시나리오 · 계약 기대값 사용, E2E_MAIN_ENTRIES 형식, 다음 계획 파일.
+  - Jenkins TLS: 모든 curl 호출이 고정한 인증서(`--cacert`)로 검증한다(`-k` 없음). 인증서는 지문이 기대값과 같을 때만 저장하고,
+    인증서 파일이 없으면 체인은 네트워크 확인 전에 멈춘다.
 scripts/ai 는 production tree 에 없다 — G14 overlay 에서 제외되도록 표식을 달고, import 는 fixture 안에서 한다.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import os
+import re
+import ssl
 import subprocess
 import sys
 import time
@@ -31,7 +36,7 @@ def lr():
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
     return {name: importlib.import_module(f"scripts.ai.longrun.{name}")
-            for name in ("detached", "submit", "bodies", "chain", "__main__")}
+            for name in ("detached", "submit", "bodies", "chain", "jenkins", "__main__")}
 
 
 class _Stop(Exception):
@@ -285,6 +290,76 @@ def test_chain_entries_and_next_plan(tmp_path, lr):
     assert nxt["ci_prev"] == 70 and nxt["matrix"][0] == {"scenario": "S1", "prev": 800}
     assert nxt["canary"][0]["prev"] == nxt["canary"][0]["baseline"] == 330
     assert ch.plan["ci_prev"] == 69                           # 원래 계획은 바뀌지 않는다
+
+
+def test_chain_without_pinned_cert_stops_before_network(tmp_path, lr):
+    ch = lr["chain"].Chain(SHA, _plan(), tmp_path, tmp_path / "netrc", tmp_path / "pw", cacert=tmp_path / "none.pem")
+
+    def boom(*a, **k):
+        raise AssertionError("파일이 없으면 git · Jenkins · GitHub 를 부르지 않는다")
+
+    ch.git = boom
+    ch.anonymous_read_ok = boom
+    ch.jk.get_json = boom
+    probs = ch.preflight("preflight", plan_only=True)
+    assert any("고정한 Jenkins 인증서 없음" in p and "pin-cert" in p for p in probs)
+    assert any("자격 파일 없음" in p for p in probs)
+
+
+# ---------------------------------------------------------------- Jenkins TLS (고정 인증서)
+def test_jenkins_curl_verifies_tls_with_pinned_cert(tmp_path, lr, monkeypatch):
+    jm = lr["jenkins"]
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        out = b"200" if "-o" in cmd else b"HTTP/1.1 200 OK\r\n\r\n{}\n200"
+        return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr=b"")
+
+    monkeypatch.setattr(jm.subprocess, "run", fake_run)
+    ca = tmp_path / "jenkins_chain.pem"
+    jk = jm.Jenkins("https://jenkins.invalid", tmp_path / "netrc", jar=tmp_path / "jar", cacert=ca)
+    assert jk.get_json("https://jenkins.invalid/api/json") == {}
+    assert jk.download("https://jenkins.invalid/x", tmp_path / "x.json") == 200
+    jk.crumb_header = "Jenkins-Crumb: c"
+    jk.stop("f/main", 1)
+    assert len(calls) == 3
+    for cmd in calls:
+        assert cmd[cmd.index("--cacert") + 1] == str(ca)
+        short = [a for a in cmd if a.startswith("-") and not a.startswith("--")]
+        assert not any("k" in a for a in short), cmd               # -k · -sk · -skg 없음
+        assert "--insecure" not in cmd
+    src = "\n".join(p.read_text(encoding="utf-8") for p in (REPO / "scripts" / "ai" / "longrun").glob("*.py"))
+    assert not re.search(r'"-s?k[a-z]*"|--insecure', src)           # 패키지 어디에도 검증을 끄는 인자가 없다
+
+
+def test_jenkins_tls_failure_is_named(tmp_path, lr, monkeypatch):
+    jm = lr["jenkins"]
+    monkeypatch.setattr(jm.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 60, stdout=b"\n000", stderr=b""))
+    jk = jm.Jenkins("https://jenkins.invalid", tmp_path / "netrc", cacert=tmp_path / "ca.pem")
+    with pytest.raises(jm.JenkinsError) as ei:
+        jk.get_json("https://jenkins.invalid/api/json")
+    assert "TLS 검증 실패" in str(ei.value) and "curl rc 60" in str(ei.value)
+
+
+def test_pin_cert_saves_only_matching_fingerprint(tmp_path, lr):
+    jm = lr["jenkins"]
+    der = b"pinned-cert-der-bytes"
+    pem = ssl.DER_cert_to_PEM_cert(der)
+    seen = []
+
+    def fetch(addr, timeout=None):
+        seen.append(addr)
+        return pem
+
+    want = hashlib.sha256(der).hexdigest().upper()
+    out = tmp_path / "ca" / "jenkins_chain.pem"
+    rc, fp = jm.pin_cert("https://jenkins.invalid:8443/x", out, None, fetch=fetch)
+    assert rc == 2 and fp.replace(":", "") == want and not out.exists() and seen[-1] == ("jenkins.invalid", 8443)
+    rc, _ = jm.pin_cert("https://jenkins.invalid", out, "AA:" * 31 + "AA", fetch=fetch)
+    assert rc == 4 and not out.exists() and seen[-1] == ("jenkins.invalid", 443)
+    rc, _ = jm.pin_cert("https://jenkins.invalid", out, fp.lower(), fetch=fetch)     # 대소문자 · 콜론 무관
+    assert rc == 0 and out.read_text(encoding="ascii") == pem
 
 
 def test_chain_run_refuses_second_runner(tmp_path, lr, capsys):

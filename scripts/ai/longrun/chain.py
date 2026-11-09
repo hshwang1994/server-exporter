@@ -23,7 +23,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import REPO_ROOT
+from . import DEFAULT_CACERT, REPO_ROOT
 from . import bodies as B
 from .detached import acquire
 from .jenkins import Jenkins, params_of
@@ -45,11 +45,11 @@ JOB_KEYS = ("main", "ci", "production")
 
 
 class Chain:
-    def __init__(self, sha: str, plan: dict, work: Path, netrc: Path, vault_pw: Path, *, fresh: bool = False,
-                 repo: Path = REPO_ROOT, py: str = sys.executable):
+    def __init__(self, sha: str, plan: dict, work: Path, netrc: Path, vault_pw: Path, *, cacert: Path = DEFAULT_CACERT,
+                 fresh: bool = False, repo: Path = REPO_ROOT, py: str = sys.executable):
         self.sha, self.plan, self.work, self.netrc, self.vault_pw = sha, plan, work, netrc, vault_pw
-        self.fresh, self.repo, self.py = fresh, repo, py
-        self.jk = Jenkins(plan["jenkins_url"], netrc, jar=work / "_session_cookies.txt")
+        self.cacert, self.fresh, self.repo, self.py = Path(cacert), fresh, repo, py
+        self.jk = Jenkins(plan["jenkins_url"], netrc, jar=work / "_session_cookies.txt", cacert=self.cacert)
         self.st: dict = {}
 
     # ------------------------------------------------------------------ 공통
@@ -192,15 +192,27 @@ class Chain:
         return problems
 
     # ------------------------------------------------------------------ preflight (읽기 전용)
+    def missing_inputs(self, start: str) -> list[str]:
+        """실행 전에 있어야 하는 파일 — 자격 파일과 고정한 Jenkins 인증서 (내용은 읽지 않는다)."""
+        idx = PHASES.index(start)
+        problems = []
+        for f, why, need in ((self.netrc, "Jenkins 읽기 · 투입", True),
+                             (self.vault_pw, "prodgen G19", idx <= PHASES.index("promote"))):
+            if need and not f.exists():
+                problems.append(f"자격 파일 없음({why}): {f}")
+        if not self.cacert.exists():
+            problems.append(f"고정한 Jenkins 인증서 없음: {self.cacert} - `python -m scripts.ai.longrun pin-cert --url "
+                            f"{self.plan.get('jenkins_url')} --expect-sha256 <기록된 지문>` 으로 받는다(rule 80 R8). -k 로 대신하지 않는다")
+        return problems
+
     def preflight(self, start: str, plan_only: bool) -> list[str]:
         problems = self.validate_plan()
         if problems:
             return problems
         idx = PHASES.index(start)
-        for f, why, need in ((self.netrc, "Jenkins 읽기 · 투입", True),
-                             (self.vault_pw, "prodgen G19", idx <= PHASES.index("promote"))):
-            if need and not f.exists():
-                problems.append(f"자격 파일 없음({why}): {f}")
+        problems += self.missing_inputs(start)
+        if problems:
+            return problems  # 파일이 없으면 네트워크 확인 전에 멈춘다
         rc, _ = self.git("cat-file", "-e", f"{self.sha}^{{commit}}")
         if rc != 0:
             problems.append(f"로컬 저장소에 커밋 {self.sha[:12]} 없음")

@@ -1383,3 +1383,23 @@
   - 수십 분 넘는 대기 · 무거운 로컬 실행은 `python -m scripts.ai.longrun` 으로 분리 실행하고 Monitor 는 `watch` 로 건다
   - 승격 체인 preflight 가 CI 와 같은 방식으로 저장소를 읽어 보고, 비공개면 시작하지 않는다. 사용자에게 공개 전환을 요청하고, 끝나면 원복을 안내한다
 - 관련 rule: rule 80 R7 · R8, rule 93 R2 예외 2, rule 24 R9 · ADR-2026-11-09-promotion-visibility-and-detached-runs
+
+---
+
+## 2026-11-09 — 승격 체인의 Jenkins 호출이 TLS 검증을 끈 curl(`-k`)로 자격을 보냈다 (2026-11-07 고정 인증서 방식에서 후퇴)
+
+- 카테고리: security-regression (TLS 검증 약화) — 하네스 도구, 제품 결함 아님
+- 발견 위치: 이 세션의 승격 체인 임시 스크립트(scratchpad `matrix_runner.py` · `run_deploy.py`)와, 그것을 옮긴 `scripts/ai/longrun/jenkins.py`(커밋 `0d14e4fa`, push 전)
+- 증상: main Job 매트릭스 #732~#742 · CI #68 · #69 · canary #326~#329 의 투입과 결과 읽기(curl `--netrc-file`)가 모두 `-k` 였다.
+  2026-11-07 승격의 임시 스크립트는 서버 인증서를 `openssl s_client -showcerts` 로 받아 지문을 확인하고 `--cacert` 로 검증했다
+- 원인: 도구를 다시 쓰면서 prodgen 의 Jenkins 읽기(`evidence.py` · `verify/__init__.py` · `verify/gates_live.py` 의 `curl -sk`)를 본떴다.
+  2026-11-07 의 방식은 기록에 한 줄("고정한 Jenkins 인증서로 TLS 검증")만 있었고 절차 · 지문이 없었다
+- 영향: 이번 승격 동안 Jenkins 자격이 서버 인증서 확인 없이 사내망으로 나갔다. 승격 뒤 받은 서버 인증서 지문은 2026-11-07 기록과 같다
+  (`B0:9E:…:A3:16`). 실행 중 연결이 그 서버였는지는 확인할 수 없다. 제품 · 원격 변경 영향 0
+- 수정:
+  - `scripts/ai/longrun/jenkins.py` 의 모든 curl 호출이 `--cacert <고정 인증서>` 를 쓰고 `-k` 를 없앴다
+  - `pin-cert`(지문이 기대값과 같을 때만 저장) 추가. 인증서 파일이 없으면 preflight 가 네트워크 확인 전에 멈춘다. TLS 실패는 오류 문장에 이름을 붙인다
+  - 시험 4건 추가(`tests/unit/test_longrun.py`)
+  - 실제 Jenkins 에서 `pin-cert` rc 2(기대 지문 없음) · 4(다름) · 0(같음, openssl 로 받은 것과 같은 PEM)과 `promote-chain --plan-only`(다음 계획) PASS 를 확인했다
+- 재발 방지: rule 80 R8 에 고정 절차 · jenkins-prod 지문 · Forbidden(`-k`)을 적었다. prodgen 의 `-sk` 는 그대로다(기존 동작 — NEXT_ACTIONS 2026-11-09)
+- 관련 rule: rule 80 R8, CLAUDE.md §12 · ADR-2026-11-09-promotion-visibility-and-detached-runs 결정 6
