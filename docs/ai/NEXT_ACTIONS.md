@@ -5,6 +5,12 @@
 > 정본: `docs/ai/decisions/ADR-2026-11-09-serial-required-redfish-esxi.md` · `docs/reference/decision-log.md` 2026-11-09 ·
 > `tests/evidence/2026-11-09-serial-required-redfish-esxi.md`.
 
+- [ ] **[HIGH / 사용자 실행 필요] production 승격 — 이 세션의 자동 모드 분류기가 main Job 매트릭스 투입(Jenkins 빌드 POST)을 막았다** — 대상은 이 절을 적은
+      main 커밋(수집 코드는 `59344d96` 와 같다). `promote --dry-run --skip-live`(2026-11-09, `ff56b5eb`): build ok · 198 파일 · class B 0 · tree hash `1954ecb2`
+      · 정적 gate PASS · PROVENANCE · parent `09fb6625` · 원격 변경 0. 남은 순서: main Job 매트릭스 11건(2026-11-07 #720~#731 과 같은 파라미터, eventUuid 만 새 값)
+      → CI(`PROMOTE_SHA` = 그 main SHA, `E2E_MAIN_ENTRIES` · tip 관측) → `prodgen promote --push-remote origin,internal` → production canary 4건(#321~#324 와
+      host 별 대조: status · sections · diagnosis · errors · correlation · hardware.serial). 매트릭스부터 승격까지 main 에 push 하지 않는다(같은 SHA 묶음).
+      위 2026-11-07 절의 "긴급 승격 `09fb6625` 정규 재승격" 도 이것으로 닫힌다.
 - [ ] **[HIGH / 사용자 — Portal 담당자 안내]** 새 필드는 없지만 받는 모양이 바뀐다. (1) Redfish · ESXi 결과도 시나리오 E 모양(`status: failed` 인데
       `sections.*: success` · `data` 있음)으로 올 수 있다. (2) Service Tag 가 없는 Dell 실패 결과에 이제 `data` 가 실린다(종전 `data: {}`).
       (3) OS Serial 문장이 둘로 나뉘었다(Linux sudo 실패 / 그 밖). (4) 다른 실패 사유가 이미 있으면 Serial 행이 붙지 않는다(Grid 행 1개 감소).
@@ -21,7 +27,7 @@
 - [ ] **[LOW / 운영 담당자] 시험 장비 `10.100.64.132`** — main Job S2 에서 도달 불가(2026-11-07 #721: 5985 · 22 "호스트로 갈 루트가 없음" · 5986 시간 초과 · ICMP 무응답. 2026-10-19 #710 은 success). 장비 전원 · 네트워크 확인. 시나리오 판정(혼합 배치)에는 영향 없음.
 - [ ] **[HIGH / 사용자 — GitLab 관리 화면] GitLab `main` 재보호** — 2026-11-02 보호를 푼 뒤 관리자 웹 편집 9건(2026-11-02~04)이 배포본 브랜치에 직접 들어왔다. 아래 2026-11-02 절의 재보호 항목과 같은 일이다. 재보호 전까지는 승격 전에 `git ls-remote internal refs/heads/main` 이 GitHub `production` 과 같은지 먼저 본다(다르면 같은 방식으로 main 에 들여온 뒤 승격).
 - [x] **[DONE 2026-11-07 — 사용자 결정: 삭제]** `syjeong_test` 용도 확인 — 사용자 지시("syjeong_test 파일 지워라 CI다돌릴필요없고 지우고 바로 push 하면됨")로 main 과 생성 대상(`production_manifest.yml`)에서 지웠다. CI · 매트릭스는 돌리지 않았다(사용자 지시). 이어서 사용자 지시("긴급승격")로 긴급 승격 production `09fb6625` — GitLab `main` 에서도 빠졌다.
-- [ ] **[MED / AI — 다음 main 변경 때] 긴급 승격 `09fb6625` 의 정규 재승격** — `Verdict: PARTIAL` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` 를 정규 절차(main Job 매트릭스 → CI → `prodgen promote` → canary)로 채운다. 선례 2026-10-14 `36745453` → `338ed8d3` · 2026-10-15 `31f9b804` → `28c38c17`. 런타임 파일은 `7e3b2e6b`(정규 승격본)에서 `syjeong_test` 하나만 빠진 상태.
+- [ ] **[MED / AI — 다음 main 변경 때] 긴급 승격 `09fb6625` 의 정규 재승격** — `Verdict: PARTIAL` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` 를 정규 절차(main Job 매트릭스 → CI → `prodgen promote` → canary)로 채운다. 선례 2026-10-14 `36745453` → `338ed8d3` · 2026-10-15 `31f9b804` → `28c38c17`. 런타임 파일은 `7e3b2e6b`(정규 승격본)에서 `syjeong_test` 하나만 빠진 상태. → 2026-11-09 Serial 3채널 변경의 정규 승격으로 닫는다(위 2026-11-09 절 — 사용자 실행 대기).
 - [ ] **[LOW / AI] prodgen 의 git push 출력 디코딩** — `promote.py` `_publish` · `push_sync` 의 `subprocess.run(["git", "push", …], text=True)` 가 Windows 한국어 로캘(cp949)에서 GCM 경고 문장을 읽다 reader thread `UnicodeDecodeError`(2026-11-07 restore · 긴급 승격에서 관측, push 는 성공). push 가 실패하면 `proc.stderr` 가 None 이 되어 실패 기록 경로(`.strip()`)가 깨질 수 있다 → `encoding="utf-8", errors="replace"` 와 회귀 시험 검토. CI(Linux UTF-8)는 영향 없음.
 - [ ] **[LOW / AI] restore 커밋 뒤 `Bootstrap-Baseline` trailer 가 이어지지 않음** — `restore()` 는 legacy 대상일 때만 그 trailer 를 쓰고, promote 는 parent 에서만 잇는다 → `e180a4ca` 뒤 `7e3b2e6b` · `09fb6625` 에 없다(`d464de4b` 까지는 있음). 영향은 legacy baseline(`4ce90a00`)으로 되돌릴 때뿐 — 그때 기록 탐색이 되는지 확인하고, 필요하면 restore 가 parent 의 trailer 를 잇게 한다.
 - [INFO] `target_type` 은 string(기본 `''`)이다 — Portal 이 값을 늘 보내므로 동작 변화 없음. 빈 값 · 다른 값은 입력 확인 단계가 멈춘다.

@@ -15,7 +15,8 @@
 | pytest · syntax-check (HEAD `59344d96`, WSL git clone) | syntax-check 3채널 rc 0 · pytest 7296 passed · 18 skipped · 5 xfailed · 84 failed — 전부 환경: PowerShell 시험 81(WSL 미지원 — 2026-10-28 G3 와 같은 81건, Windows 통과) · `test_env_guard.py` 3(래퍼가 `REPO_ROOT` export — `env -u REPO_ROOT` 9 passed) |
 | 정적 | `verify_vendor_boundary` · `verify_harness_consistency` 통과 · `validate_field_dictionary` PASS · `output_schema_drift_check` 정합 · Jinja compile `--all --blocking` rc 0 · py_compile OK · 변경 YAML 10개 PyYAML 파싱 OK(yamllint 미설치 — 환경 제약) |
 | 훅 우회 | additive-only 만 `ADDITIVE_SKIP_NEW_CYCLE=1` — `e75f7589`(`build_status.yml` 시나리오 E 주석 · `field_dictionary.yml` help/channel) · `22f44e20`(`field_dictionary.yml` help). envelope 키 · 항목 변화 0. `--no-verify` 0 |
-| 미실행 | Serial 을 주지 않는 실제 Redfish · ESXi 장비 · Service Tag 미노출 실제 Dell |
+| 승격 미리보기 | `prodgen promote --sha ff56b5eb --dry-run --skip-live` rc 0(257 s) — build ok · 198 파일 · class B 0 · tree hash `1954ecb2` · G01~G10 · G16~G18 · G20 PASS · G11~G15 · G19 SKIP(오프라인) → PARTIAL(설계대로) · PROVENANCE · parent `09fb6625` · 객체 · ref · push 0 |
+| 미실행 | main Job 매트릭스 · CI · 실 승격 · production canary — 매트릭스 투입(Jenkins 빌드 POST)을 이 세션의 자동 모드 분류기가 막았다(사용자 실행 대기, NEXT_ACTIONS 2026-11-09). Serial 을 주지 않는 실제 Redfish · ESXi 장비 · Service Tag 미노출 실제 Dell |
 
 ## 2026-11-07 (2) — `syjeong_test` 삭제 (main · 생성 대상) · 긴급 승격 production `09fb6625`
 
