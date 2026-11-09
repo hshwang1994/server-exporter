@@ -161,3 +161,35 @@ def test_esxi_identity_templates_null_the_na_placeholder():
     assert sys_serial is None and hw == {"vendor": "VMware, Inc.", "model": "VMware Virtual Platform", "serial": None, "bios_version": None}
     real = env.from_string(frag["hardware"]["serial"]).render(_e_raw_facts={"ansible_product_serial": "VMware-56 4d 12 34"})
     assert real == "VMware-56 4d 12 34"
+
+
+def _redfish_hardware_serial_template():
+    tasks = yaml.safe_load((REPO / "redfish-gather" / "tasks" / "normalize_standard.yml").read_text(encoding="utf-8"))
+    task = next(t for t in tasks if isinstance(t, dict) and t.get("name") == "redfish | normalize_standard | build standard fragment")
+    return task["ansible.builtin.set_fact"]["_data_fragment"]["hardware"]["serial"]
+
+
+def test_redfish_hardware_serial_applies_sentinel_first_then_the_shared_npar_filter():
+    """2026-11-09: Redfish hardware.serial 도 ESXi 와 같은 순서(dmi_sentinel_null('serial') → normalize_os_serial).
+
+    모듈(_strip_or_none)은 공백만 정리해 'N/A' 같은 자리표시자가 값으로 남았다. 필수 식별자 규칙(require_serial)은 같은 집합을 누락으로
+    보므로 data 와 판정이 어긋나지 않게 템플릿에서 null 로 만든다. 벤더 · 모델 지식은 필터 한 곳(rule 12 R1)이다.
+    """
+    from serial_normalizer import normalize_os_serial
+
+    tpl = _redfish_hardware_serial_template()
+    assert "dmi_sentinel_null('serial') | normalize_os_serial(" in tpl, tpl
+    assert tpl.index("dmi_sentinel_null") < tpl.index("normalize_os_serial")
+    env = NativeEnvironment()
+    env.filters.update({"dmi_sentinel_null": dmi_sentinel_null, "normalize_os_serial": normalize_os_serial})
+
+    def render(system):
+        return env.from_string(tpl).render(_rf_d_system=system)
+
+    dell = {"manufacturer": "Dell Inc.", "model": "PowerEdge R740"}
+    for raw in ("N/A", "NA", "To Be Filled By O.E.M.", "System Serial Number", "0", "00000000", "", "   "):
+        assert render(dict(dell, serial=raw)) is None, raw
+    assert render(dict(dell, serial=None)) is None and render(dict(dell)) is None
+    assert render(dict(dell, serial="GSBPK54")) == "GSBPK54"
+    # nPar 접미사 제거(2026-10-17 CSUS 3200)는 그대로 — 자리표시자 필터가 앞에 와도 실제 값에는 영향이 없다
+    assert render({"serial": "SGHD3TLNDD-000", "manufacturer": "HPE", "model": "Compute Scale-up Server 3200"}) == "SGHD3TLNDD"

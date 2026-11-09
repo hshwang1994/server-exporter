@@ -122,8 +122,9 @@ _fr_catalog:
   # 대상에 계정 요청을 보내기 **전에** 수집기 안에서 멈췄다 (Redfish adapter 선택 등).
   gather_internal:
     default: "개더링 프로젝트에서 정보 수집 중 오류가 발생했습니다."
-  # 필수 식별자 (status 시나리오 E — 2026-10-13 OS 사용자 정책): 인증은 통과했는데 Serial Number 를 끝내 얻지 못했다.
-  #   공통 규칙 common/tasks/normalize/require_serial.yml 이 status=failed 로 확정하며 code 는 GATHER_FAILED, stage 는 gather 다.
+  # 필수 식별자 (status 시나리오 E — 2026-10-13 OS 사용자 정책, 2026-11-09 Redfish · ESXi 로 확장): 인증은 통과했는데 Serial Number 를
+  #   끝내 얻지 못했다. 공통 규칙 common/tasks/normalize/require_serial.yml 이 status=failed 로 확정하며 code 는 GATHER_FAILED, stage 는 gather 다.
+  #   Redfish · ESXi 문장은 사용자 지정 문구 그대로다 (2026-11-09). Redfish 문장의 대상 종류 어휘는 'BMC' 다.
   #   세부 원인(권한 없음 / 미제공 / 읽기 실패 등)은 diagnosis.details.serial_number.cause 와 errors[].detail 이 가른다.
   #   다른 실패 사유가 이미 있으면 이 문장들은 쓰이지 않는다 — 기존 사유가 대표 문장으로 남는다 (2026-11-09).
   #   OS 문장은 원인으로 고른다 (2026-11-09 사용자 결정 — os-gather/tasks/normalize/require_serial.yml):
@@ -131,6 +132,8 @@ _fr_catalog:
   #     그 밖(Windows 전부 · Linux 의 나머지 원인)                             → serial_missing
   serial_missing:
     os: "서버의 Serial Number를 확인하지 못했습니다. Vault에 등록된 OS 계정의 권한과 서버의 Serial Number 제공 여부를 확인하세요."
+    esxi: "서버의 Serial Number를 확인하지 못했습니다. ESXi에서 해당 정보를 정상적으로 제공하는지 확인하세요."
+    redfish: "서버의 Serial Number를 확인하지 못했습니다. BMC에서 Serial Number가 정상적으로 제공되는지 확인하세요."
   # Linux 수집 계정이 sudo 권한을 얻지 못했다 (sudo 정책 거부 · 비밀번호 거부 · 비밀번호 후보 없음 — 조치는 같다).
   #   수집 순서가 root → NOPASSWD → 로그인 비밀번호 → Vault sudo 비밀번호라 NOPASSWD 를 먼저, Vault 비밀번호를 다음으로 안내한다.
   serial_missing_sudo:

@@ -316,6 +316,226 @@ def test_rule_never_fails_without_an_output():
     assert out == "not a mapping"
 
 
+# ── Redfish · ESXi (2026-11-09 사용자 결정 — 시나리오 E 를 3채널로) ───────────────────────────────────
+REDFISH_RULE = REPO / "redfish-gather" / "tasks" / "require_serial.yml"
+CHANNELS = ("redfish", "esxi")
+CH_SECTIONS = {
+    "redfish": {"system": "not_supported", "hardware": "success", "bmc": "success", "cpu": "success", "memory": "success",
+                "storage": "success", "network": "success", "firmware": "success", "users": "not_supported",
+                "power": "success", "thermal": "success"},
+    "esxi": {"system": "success", "hardware": "success", "bmc": "not_supported", "cpu": "success", "memory": "success",
+             "storage": "success", "network": "success", "firmware": "not_supported", "users": "not_supported",
+             "power": "success", "thermal": "success"},
+}
+CPU_ROW = {"section": "cpu", "message": "CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.", "detail": "e0"}
+PRESERVED = ("sections", "data", "hostname", "meta", "correlation", "ip", "vendor", "target_type", "collection_method")
+NORMAL = {"redfish": {"_rf_collect_ok": True}, "esxi": {}}   # 정상 경로 — Redfish 는 수집이 성공해야 build_output 에 닿는다
+
+
+def fr(key, channel):
+    return failure_reason(CATALOG, key, channel, "ic")
+
+
+def ch_envelope(channel, serial, **kw):
+    env = envelope(serial, **kw)
+    env.update({"target_type": channel, "collection_method": {"redfish": "redfish_api", "esxi": "vsphere_api"}[channel],
+                "sections": dict(CH_SECTIONS[channel])})
+    env["diagnosis"]["details"] = {"channel": channel, "hostname_source": "system"}
+    return env
+
+
+def run_channel(channel, env, **extra):
+    """site.yml 이 부르는 그대로 — Redfish 는 wrapper(BMC 를 읽은 결과만), ESXi 는 공통 규칙에 _rs_channel=esxi."""
+    ctx = {"_output": env, **extra}
+    if channel == "redfish":
+        return run_rule(ctx, rule=REDFISH_RULE)["_output"]
+    return run_rule(ctx, rule=CORE, params={"_rs_channel": "esxi"})["_output"]
+
+
+def _all_failed(sections):
+    return {k: ("failed" if v == "success" else v) for k, v in sections.items()}
+
+
+def channel_case(channel, path):
+    """(env, extra) — C1 정상 · C2 hardware 실패 partial · C3 H12 · C4 인증 뒤 rescue."""
+    if path == "c1":
+        return ch_envelope(channel, None), dict(NORMAL[channel])
+    if path == "c2":
+        env = ch_envelope(channel, None, status="partial", errors=[CPU_ROW])
+        env["sections"]["hardware"] = "failed"
+        return env, dict(NORMAL[channel])
+    if path == "c3":
+        reason = fr("gather_no_data", channel)
+        rep = {"section": f"{channel}_gather", "message": reason, "detail": "success_sections=0; supported=x; failed=x"}
+        env = ch_envelope(channel, None, status="failed", stage="gather", code="GATHER_FAILED", reason=reason, errors=[rep, CPU_ROW])
+        env["sections"] = _all_failed(env["sections"])
+        return env, dict(NORMAL[channel])
+    if path == "c4":
+        reason = fr("gather_after_auth", channel)
+        env = ch_envelope(channel, None, status="partial", stage="gather", code="GATHER_FAILED", reason=reason,
+                          errors=[{"section": f"{channel}_gather", "message": reason, "detail": "[task: x] boom"}])
+        return env, {}   # rescue — Redfish 는 _rf_collect_ok 없이 auth_success=true(자격 관측 passed)로만 대상이 된다
+    raise ValueError(path)
+
+
+@pytest.mark.parametrize("channel", CHANNELS)
+def test_c1_success_without_serial_fails_with_the_channel_sentence(channel):
+    env, extra = channel_case(channel, "c1")
+    out = run_channel(channel, env, **extra)
+    sentence = CATALOG["serial_missing"][channel]
+    assert out["status"] == "failed"
+    diag = out["diagnosis"]
+    assert (diag["failure_stage"], diag["failure_code"], diag["failure_reason"]) == ("gather", "GATHER_FAILED", sentence)
+    assert out["errors"] == normalize_errors([{"section": f"{channel}_gather", "message": sentence,
+                                               "detail": "field=serial_number; mandatory=true; cause=not_provided"}])
+    assert diag["details"]["serial_number"] == {"present": False, "cause": "not_provided", "sudo": None}
+    for key in PRESERVED:
+        assert out[key] == env[key], key
+
+
+@pytest.mark.parametrize("channel", CHANNELS)
+def test_c2_failed_hardware_keeps_its_own_row_after_the_serial_row(channel):
+    env, extra = channel_case(channel, "c2")
+    out = run_channel(channel, env, **extra)
+    assert out["status"] == "failed"
+    assert out["errors"][0]["message"] == CATALOG["serial_missing"][channel] == out["diagnosis"]["failure_reason"]
+    assert out["errors"][0]["detail"] == "field=serial_number; mandatory=true; cause=not_collected"
+    assert out["errors"][1:] == normalize_errors([CPU_ROW]), "실제 원인 행은 그대로 남는다"
+    assert out["diagnosis"]["details"]["serial_number"] == {"present": False, "cause": "not_collected", "sudo": None}
+
+
+@pytest.mark.parametrize("channel", CHANNELS)
+@pytest.mark.parametrize("path", ["c3", "c4"])
+def test_c3_c4_existing_reason_keeps_its_sentence_and_rows(channel, path):
+    env, extra = channel_case(channel, path)
+    if path == "c4":
+        env["diagnosis"]["auth_success"] = True
+    out = run_channel(channel, env, **extra)
+    assert out["status"] == "failed"
+    assert out["errors"] == env["errors"]
+    for key in ("failure_stage", "failure_code", "failure_reason", "auth_success"):
+        assert out["diagnosis"][key] == env["diagnosis"][key], key
+    cause = "not_collected" if path == "c3" else "not_provided"
+    assert out["diagnosis"]["details"]["serial_number"] == {"present": False, "cause": cause, "sudo": None}
+
+
+@pytest.mark.parametrize("outcome_key,auth_success", [("gather_internal", None), ("gather_internal", False)])
+@pytest.mark.parametrize("collect_ok", [None, False])
+def test_c5_redfish_rescue_that_never_read_the_bmc_is_left_alone(outcome_key, auth_success, collect_ok):
+    """stopped_before_auth · not_attempted — stage 는 gather 지만 계정 요청을 보내기 전에 멈췄다 (redfish-gather/site.yml rescue)."""
+    reason = fr(outcome_key, "redfish")
+    env = ch_envelope("redfish", None, status="failed", stage="gather", code="GATHER_FAILED", reason=reason,
+                      errors=[{"section": "redfish_gather", "message": reason, "detail": "[task: x] boom"}])
+    env["diagnosis"]["auth_success"] = auth_success
+    env["sections"] = _all_failed(env["sections"])
+    extra = {} if collect_ok is None else {"_rf_collect_ok": collect_ok}
+    assert run_channel("redfish", env, **extra) == env
+
+
+_PRE_GATHER = [
+    ("auth", "AUTH_PROBE_FAILED", "auth_unconfirmed"),
+    ("auth", "AUTH_PROBE_FAILED", "auth_rejected"),
+    ("auth", "CREDENTIAL_SET_UNAVAILABLE", "project_vault_missing"),
+    ("auth", "CREDENTIAL_SET_UNAVAILABLE", "loc_vault_missing"),
+    ("port", "TCP_CONNECTION_REFUSED", "port_refused"),
+    ("port", "TCP_CONNECT_FAILED", "port_silent"),
+    ("reachable", "TARGET_UNREACHABLE", "target_unreachable"),
+    ("protocol", "PROTOCOL_CHECK_FAILED", "protocol_unconfirmed"),
+]
+
+
+@pytest.mark.parametrize("channel,stage,code,key", [
+    (ch, *row) for ch in CHANNELS for row in _PRE_GATHER
+    if ch in CATALOG[row[2]] or "default" in CATALOG[row[2]]])   # 그 채널이 실제로 낼 수 있는 문장만
+def test_c6_pre_gather_failures_are_left_alone_on_every_channel(channel, stage, code, key):
+    reason = fr(key, channel)
+    env = ch_envelope(channel, None, status="failed", stage=stage, code=code, reason=reason,
+                      errors=[{"section": f"{channel}_gather", "message": reason, "detail": None}])
+    env["sections"] = _all_failed(env["sections"])
+    # Redfish 는 수집 성공 표시가 있어도 stage 조건만으로 막힌다 (ESXi 는 stage 조건이 유일한 문이다)
+    assert run_channel(channel, env, **NORMAL[channel]) == env
+
+
+@pytest.mark.parametrize("channel", CHANNELS)
+@pytest.mark.parametrize("serial", ["GSBPK54", "VMware-42 04 6c c9", "SGHD3TLNDD", "CZ2D1F0BJT"])
+def test_c7_present_serial_leaves_the_envelope_untouched(channel, serial):
+    assert run_channel(channel, ch_envelope(channel, serial), **NORMAL[channel]) == ch_envelope(channel, serial)
+
+
+@pytest.mark.parametrize("channel", CHANNELS)
+@pytest.mark.parametrize("serial", ["N/A", "NA", "", "   ", "To Be Filled By O.E.M.", "0", "00000000"])
+def test_placeholder_serial_is_missing_on_every_channel(channel, serial):
+    out = run_channel(channel, ch_envelope(channel, serial), **NORMAL[channel])
+    assert out["status"] == "failed" and out["diagnosis"]["failure_reason"] == CATALOG["serial_missing"][channel]
+
+
+@pytest.mark.parametrize("collect_ok,auth_success,fires", [
+    (True, True, True), (True, None, True), (None, True, True), (False, True, True),
+    (False, None, False), (None, None, False), (False, False, False), (None, "true", False),
+])
+def test_redfish_rule_applies_only_when_the_bmc_was_actually_read(collect_ok, auth_success, fires):
+    env = ch_envelope("redfish", None)
+    env["diagnosis"]["auth_success"] = auth_success
+    out = run_channel("redfish", env, **({} if collect_ok is None else {"_rf_collect_ok": collect_ok}))
+    assert (out["status"] == "failed") is fires
+    if not fires:
+        assert out == env
+
+
+@pytest.mark.parametrize("channel", CHANNELS)
+def test_channels_never_borrow_each_others_sentence(channel):
+    out = run_channel(channel, ch_envelope(channel, None), **NORMAL[channel])
+    others = [CATALOG["serial_missing"][c] for c in ("os", "esxi", "redfish") if c != channel] + [SENTENCE_SUDO]
+    shown = {e["message"] for e in out["errors"]} | {out["diagnosis"]["failure_reason"]}
+    assert not (set(others) & shown), set(others) & shown
+
+
+def _os_case(path):
+    if path == "c1":
+        return envelope(None, errors=DIAG_PRIV), {"_os_type": "linux", "_l_id_diagnostics": DIAG_PRIV, "_l_sudo_mode": "denied"}
+    if path == "c2":
+        env = envelope(None, status="partial", errors=DIAG_PRIV + [CPU_ROW])
+        env["sections"]["cpu"] = "failed"
+        return env, {"_os_type": "linux", "_l_id_diagnostics": DIAG_PRIV, "_l_sudo_mode": "rejected"}
+    if path == "c3":
+        return _h12()[1], {"_os_type": "linux"}
+    return _rescue_partial()[1], {"_os_type": "windows", "_w_id_diagnostics": DIAG_PRIV}
+
+
+@pytest.mark.parametrize("channel", ("os",) + CHANNELS)
+@pytest.mark.parametrize("path", ["c1", "c2", "c3", "c4"])
+def test_invariants_on_every_channel_and_path(channel, path):
+    """사용자 검증 요구(2026-11-09): 중복 · 오전달 없음 — 3채널 · 4경로 공통 불변식."""
+    if channel == "os":
+        env, extra = _os_case(path)
+        out = run_rule({"_output": env, **extra})["_output"]
+    else:
+        env, extra = channel_case(channel, path)
+        if path == "c4":
+            env["diagnosis"]["auth_success"] = True
+        out = run_channel(channel, env, **extra)
+    diag, had_reason = out["diagnosis"], bool((env["diagnosis"]["failure_reason"] or "").strip())
+    # 1) failed 봉투의 첫 행은 대표 문장이고 stage · code · reason 이 모두 있다
+    assert out["status"] == "failed"
+    assert diag["failure_stage"] and diag["failure_code"] and diag["failure_reason"]
+    assert out["errors"][0]["message"] == diag["failure_reason"]
+    # 2) 규칙은 이미 있는 문장을 다시 넣지 않는다 — 새 행은 사유가 없던 결과의 Serial 행 1개뿐
+    before = [e["message"] for e in normalize_errors(env["errors"])]
+    after = [e["message"] for e in out["errors"]]
+    added = list(after)
+    for m in before:
+        added.remove(m)
+    assert added == ([] if had_reason else [diag["failure_reason"]]), added
+    assert after.count(diag["failure_reason"]) == 1
+    # 3) 기존 사유는 그대로 — 원인을 바꿔 말하지 않는다
+    if had_reason:
+        assert diag["failure_reason"] == env["diagnosis"]["failure_reason"] and out["errors"] == env["errors"]
+    # 4) 수집 값 · 식별 필드는 보존
+    for key in PRESERVED:
+        assert out[key] == env[key], key
+    assert diag["details"]["serial_number"]["present"] is False
+
+
 # ── 배선: build_output.yml 의 include 경로 (2026-10-13 CI #53) ─────────────────────────────────────
 def test_build_output_includes_the_rule_from_repo_root_not_playbook_dir():
     """os-gather/tasks/normalize/build_output.yml 은 다른 playbook(tests/fixtures/addon/harness.yml)도 include 한다 —
@@ -330,7 +550,7 @@ def test_build_output_includes_the_rule_from_repo_root_not_playbook_dir():
 
 
 # 공통 규칙의 입력 이름 — wrapper 도 공통 규칙도 이 이름을 set_fact 하지 않는다 (include 인자가 set_fact 보다 우선해 가려진다)
-CORE_INPUTS = {"_rs_channel", "_rs_error_section", "_rs_cause", "_rs_detail_extra", "_rs_sudo", "_rs_reason_key"}
+CORE_INPUTS = {"_rs_channel", "_rs_error_section", "_rs_cause", "_rs_detail_extra", "_rs_sudo", "_rs_reason_key", "_rs_eligible"}
 
 
 def test_os_wrapper_includes_the_common_rule_from_repo_root():
@@ -340,9 +560,56 @@ def test_os_wrapper_includes_the_common_rule_from_repo_root():
     assert incs[0]["ansible.builtin.include_tasks"]["file"] == \
         "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
     assert incs[0]["vars"]["_rs_channel"] == "os"
-    for path in (RULE, CORE):
+    for path in (RULE, CORE, REDFISH_RULE):
         for t in yaml.safe_load(path.read_text(encoding="utf-8")):
             assert not (set(t.get("ansible.builtin.set_fact") or {}) & CORE_INPUTS), (path.name, t.get("name"))
+
+
+def test_redfish_wrapper_includes_the_common_rule_from_repo_root():
+    tasks = yaml.safe_load(REDFISH_RULE.read_text(encoding="utf-8"))
+    assert len(tasks) == 1 and "ansible.builtin.include_tasks" in tasks[0]
+    assert tasks[0]["ansible.builtin.include_tasks"]["file"] == \
+        "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+    assert tasks[0]["vars"]["_rs_channel"] == "redfish" and "_rs_eligible" in tasks[0]["vars"]
+
+
+def _task_lists(node):
+    """playbook 안의 모든 태스크 목록(tasks · block · rescue · always) — 이웃 관계를 보려고 목록 단위로 낸다."""
+    if isinstance(node, list):
+        if node and all(isinstance(t, dict) for t in node):
+            yield node
+        for item in node:
+            yield from _task_lists(item)
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _task_lists(value)
+
+
+def _include_target(task):
+    inc = task.get("ansible.builtin.include_tasks")
+    return (inc.get("file") if isinstance(inc, dict) else inc) if inc else None
+
+
+@pytest.mark.parametrize("channel,target,params", [
+    ("redfish", "{{ lookup('env','REPO_ROOT') }}/redfish-gather/tasks/require_serial.yml", None),
+    ("esxi", "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml", {"_rs_channel": "esxi"}),
+])
+def test_site_calls_the_rule_right_before_every_schema_version_injection(channel, target, params):
+    """정상 경로 · rescue 모두 build_output / build_failed_output → require_serial → inject schema_version (→ CHECKPOINT) 순서다.
+
+    CHECKPOINT 보다 뒤에 두면 콜백 · Layer A 가 Serial 판정 전 status 를 복원한다. REPO_ROOT 기준 경로(2026-10-13 CI #53)."""
+    plays = yaml.safe_load((REPO / f"{channel}-gather" / "site.yml").read_text(encoding="utf-8"))
+    hits = 0
+    for tasks in _task_lists(plays):
+        for i, task in enumerate(tasks):
+            if not str(task.get("name", "")).endswith("inject schema_version"):
+                continue
+            prev, before = tasks[i - 1], tasks[i - 2]
+            assert _include_target(prev) == target, (task["name"], prev.get("name"))
+            assert prev.get("vars") == params, (task["name"], prev.get("vars"))
+            assert (_include_target(before) or "").endswith(("/build_output.yml", "/build_failed_output.yml")), task["name"]
+            hits += 1
+    assert hits == 2, hits
 
 
 # ── fixture (synthetic) ────────────────────────────────────────────────────────────────────────────

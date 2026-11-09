@@ -6,13 +6,17 @@
 #   그대로 둔다 — 이미 수집한 값은 보존한다. 인증 단계(auth) · 사전 점검 실패 봉투는 건드리지 않는다 (대상 내부에 접근한 적이
 #   없는데 Serial 을 "확인하지 못했다" 고 말하지 않는다).
 #
-# 채널 wrapper 가 include 한다 — 원인 판정만 채널마다 다르고 판정 · 봉투 수정은 여기 하나다.
-#   os : os-gather/tasks/normalize/require_serial.yml
+# 3채널이 같은 규칙을 쓴다 (2026-11-09 사용자 결정 — 종전에는 OS 만). 원인 판정 · 대상 조건만 채널마다 다르고 판정 · 봉투 수정은 여기 하나다.
+#   os      : os-gather/tasks/normalize/require_serial.yml (원인 = 식별자 진단 토큰 + sudo 결과, 문장 = 원인별)
+#   redfish : redfish-gather/tasks/require_serial.yml      (대상 = BMC 를 실제로 읽은 결과만)
+#   esxi    : esxi-gather/site.yml 이 직접 include          (rescue 는 인증 · facts 를 확인했을 때만 stage=gather 라 조건이 따로 없다)
 #
 # 입력 (include vars — 이 파일은 아래 이름을 set_fact 하지 않는다. include 인자가 set_fact 보다 우선해 덮어쓴 값이 보이지 않는다):
 #   _rs_channel       : 문장 카탈로그 채널 (os | esxi | redfish) — 필수
 #   _rs_error_section : 대표 오류의 section (기본 '<_rs_channel>_gather')
-#   _rs_cause         : diagnosis.details.serial_number.cause — 필수
+#   _rs_cause         : diagnosis.details.serial_number.cause (없으면 일반 규칙 — sections.hardware 가 success 면 not_provided
+#                       [대상이 주지 않음 · 빈 값 · 자리표시자], 아니면 not_collected [그 섹션을 읽지 못함])
+#   _rs_eligible      : 이 결과가 대상 내부를 실제로 읽은 결과인가 (기본 true) — false 면 아무것도 하지 않는다
 #   _rs_detail_extra  : 대표 오류 detail 의 꼬리 (기본 '') — OS 의 evidence / sudo
 #   _rs_sudo          : diagnosis.details.serial_number.sudo (기본 null)
 #   _rs_reason_key    : 문장 카탈로그 키 (기본 'serial_missing') — OS 는 원인에 따라 'serial_missing_sudo' 를 넘긴다
@@ -49,10 +53,14 @@
       {{ (_rs_diag.failure_reason | string | trim) if (_rs_has_reason | bool)
          else (_fr_catalog | failure_reason(_rs_reason_key | default('serial_missing', true), _rs_channel,
                                             _cred_location | default(se_location | default('')))) }}
+    _rs_secs: "{{ _output.sections if ((_output.sections | default(none)) is mapping) else {} }}"
+    _rs_cause_eff: >-
+      {{ (_rs_cause | string | trim) if (((_rs_cause | default('', true)) | string | trim | length) > 0)
+         else ('not_provided' if ((_rs_secs.hardware | default('')) == 'success') else 'not_collected') }}
     _rs_error:
       section: "{{ _rs_error_section | default(_rs_channel ~ '_gather') }}"
       message: "{{ _rs_reason }}"
-      detail: "{{ 'field=serial_number; mandatory=true; cause=' ~ _rs_cause ~ (_rs_detail_extra | default('')) }}"
+      detail: "{{ 'field=serial_number; mandatory=true; cause=' ~ _rs_cause_eff ~ (_rs_detail_extra | default('')) }}"
     _rs_errors_cur: "{{ (_output.errors | default([])) if ((_output.errors | default([])) is not string) else [] }}"
   ansible.builtin.set_fact:
     _output: >-
@@ -64,7 +72,7 @@
                  'failure_code':   ((_rs_diag.failure_code | default(none)) if (_rs_has_reason | bool) else 'GATHER_FAILED'),
                  'failure_reason': _rs_reason,
                  'details': ((_rs_diag.details if ((_rs_diag.details | default(none)) is mapping) else {})
-                             | combine({'serial_number': {'present': false, 'cause': _rs_cause,
+                             | combine({'serial_number': {'present': false, 'cause': _rs_cause_eff,
                                                           'sudo': (_rs_sudo | default(none, true))}}))
                }))
            })
@@ -73,5 +81,6 @@
   when:
     - _output is defined
     - _output is mapping
+    - (_rs_eligible | default(true)) | bool
     - (_rs_serial | default(none)) is none
     - (_rs_stage | default(none)) in [none, 'gather']

@@ -351,9 +351,13 @@ def test_loc_placeholder_renders_actual_location():
 @pytest.mark.parametrize("key,channel", [
     (k, c) for k, e in FR_CATALOG.items() for c in e if c != "default"])
 def test_channel_sentences_name_their_target_kind(key, channel):
-    """대상 종류별 문장은 그 종류 어휘를 담는다 — 채널 문장을 따로 둔 이유다."""
-    word = {"os": "OS", "esxi": "ESXi", "redfish": "Redfish"}[channel]
-    assert word in FR_CATALOG[key][channel], f"{key}/{channel}"
+    """대상 종류별 문장은 그 종류 어휘를 담는다 — 채널 문장을 따로 둔 이유다.
+
+    Redfish 대상은 'BMC' 도 그 종류 어휘로 인정한다 — 관리자가 조치하는 장치 이름이다
+    (2026-11-09 사용자 지정 문구 serial_missing/redfish: "BMC에서 Serial Number가 …").
+    """
+    words = {"os": ("OS",), "esxi": ("ESXi",), "redfish": ("Redfish", "BMC")}[channel]
+    assert any(w in FR_CATALOG[key][channel] for w in words), f"{key}/{channel}"
 
 
 def test_sentences_are_unique_across_catalog():

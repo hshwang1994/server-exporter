@@ -34,7 +34,7 @@ if not hasattr(sys.modules["ansible.module_utils.basic"], "AnsibleModule"):
     sys.modules["ansible.module_utils.basic"].AnsibleModule = object
 
 import emulator_harness as H  # noqa: E402
-from identity_normalizer import normalize_uuid, uuid_byteswap  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_uuid, uuid_byteswap  # noqa: E402
 from serial_normalizer import normalize_os_serial  # noqa: E402
 
 CRAWL = REPO / "tests" / "reference" / "redfish"
@@ -58,7 +58,8 @@ def _fragment():
 
 def _render(expr, **ctx):
     env = NativeEnvironment()
-    env.filters.update({"normalize_uuid": normalize_uuid, "uuid_byteswap": uuid_byteswap, "normalize_os_serial": normalize_os_serial})
+    env.filters.update({"normalize_uuid": normalize_uuid, "uuid_byteswap": uuid_byteswap, "normalize_os_serial": normalize_os_serial,
+                        "dmi_sentinel_null": dmi_sentinel_null})
     return env.from_string(expr).render(**ctx)
 
 

@@ -19,6 +19,7 @@ from test_redfish_hostname_policy_replay import _replay, _set_fact
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "filter_plugins"))
+from identity_normalizer import dmi_sentinel_null  # noqa: E402
 from serial_normalizer import normalize_os_serial  # noqa: E402
 
 CORRELATION = REPO / "common" / "tasks" / "normalize" / "build_correlation.yml"
@@ -27,6 +28,7 @@ CORRELATION = REPO / "common" / "tasks" / "normalize" / "build_correlation.yml"
 def _env():
     env = NativeEnvironment()
     env.filters["normalize_os_serial"] = normalize_os_serial
+    env.filters["dmi_sentinel_null"] = dmi_sentinel_null   # hardware.serial 식이 자리표시자를 먼저 null 로 (2026-11-09)
     return env
 
 

@@ -1,0 +1,24 @@
+---
+# redfish-gather/tasks/require_serial.yml
+#
+# Redfish 채널 필수 식별자 규칙 (status 시나리오 E — 2026-11-09 사용자 결정으로 OS 에서 Redfish · ESXi 로 확장).
+# 판정 · 봉투 수정은 공통 규칙 common/tasks/normalize/require_serial.yml 이 한다. 여기서는 "이 결과가 BMC 를 실제로 읽은 결과인가" 만 정한다.
+#
+# 대상 (_rs_eligible):
+#   - 정상 경로: 표준 수집이 성공했다(_rf_collect_ok) — 수집이 실패하면 site.yml 이 "abort if collect completely failed" 로 rescue 에 보낸다.
+#   - rescue  : 자격을 실은 요청이 통과한 관측이 있다(diagnosis.auth_success 가 true — site.yml 의 자격 단계 관측 passed).
+#   제외: 계정 요청을 보내기 전에 멈춘 rescue(stopped_before_auth · not_attempted → gather_internal)는 stage 가 gather 여도 BMC 내부를 읽은
+#         적이 없다 — Serial 을 "확인하지 못했다" 고 말하지 않는다. 인증 단계(auth) 실패 · 사전 점검 실패는 공통 규칙이 건드리지 않는다.
+# 원인(details.serial_number.cause)은 공통 규칙의 일반 규칙이다 — hardware 섹션이 success 면 not_provided(BMC 가 주지 않음 · 자리표시자), 아니면
+#   not_collected. Serial 원천은 Systems 첫 member 의 SerialNumber 하나다(normalize_standard.yml 의 hardware.serial — 자리표시자는 null).
+# 호출: redfish-gather/site.yml 의 build_output 뒤(정상 경로) · rescue 의 build_failed_output 뒤. schema_version 주입 · CHECKPOINT 보다 앞이다.
+
+# 경로는 REPO_ROOT 기준이다 — os-gather 의 같은 include 와 같은 이유(2026-10-13 CI #53 교훈: 다른 playbook 에서도 include 된다).
+- name: "redfish | require_serial"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+  vars:
+    _rs_channel: redfish
+    _rs_eligible: >-
+      {{ (_rf_collect_ok | default(false) | bool)
+         or ((((_output | default({})).diagnosis | default({})).auth_success | default(none)) is sameas true) }}

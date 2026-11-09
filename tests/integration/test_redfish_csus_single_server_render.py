@@ -19,7 +19,7 @@ from test_redfish_hostname_policy_replay import _replay, _set_fact
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "filter_plugins"))
-from identity_normalizer import normalize_uuid, uuid_byteswap  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_uuid, uuid_byteswap  # noqa: E402
 from serial_normalizer import normalize_os_serial  # noqa: E402
 
 ADAPTER = yaml.safe_load((REPO / "adapters" / "redfish" / "hpe_csus_3200.yml").read_text(encoding="utf-8"))
@@ -28,6 +28,7 @@ ADAPTER = yaml.safe_load((REPO / "adapters" / "redfish" / "hpe_csus_3200.yml").r
 def _env():
     env = NativeEnvironment()
     env.filters.update({"normalize_os_serial": normalize_os_serial, "normalize_uuid": normalize_uuid, "uuid_byteswap": uuid_byteswap,
+                        "dmi_sentinel_null": dmi_sentinel_null,
                         "regex_replace": lambda v, pat, rep="", *a, **k: re.sub(pat, rep, str(v))})   # ansible 필터 최소 대역
     return env
 

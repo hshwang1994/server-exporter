@@ -418,6 +418,8 @@ fields:
       HPE CSUS 3200 · Superdome Flex 는 nPartition 접미사(`SGHD3TLNDD-000`)를 뗀 물리 시리얼(`SGHD3TLNDD`)이다 — 세 채널(OS · Redfish 2026-10-17 ·
       ESXi 2026-10-19)이 같은 normalize_os_serial 세 조건(HPE · CSUS 3200/Superdome Flex 모델 · `-NNN`)을 쓴다. 파티션 원본은
       multi_node.partitions[].system.serial (그대로 — 2026-10-19 사용자 결정).
+      자리표시자('N/A' · 'To Be Filled By O.E.M.' 등)는 세 채널 모두 null 이다 (Redfish 2026-11-09). 이 값이 null 이면 그 host 는
+      status=failed 다 — 필수 식별자 규칙(시나리오 E, 3채널 2026-11-09). 수집한 다른 값은 보존한다.
     help_en: >-
       Representative server serial. Default source is Redfish System.SerialNumber; empty string
       normalized to null. Dell is the exception — its System.SerialNumber is a board manufacturing
@@ -427,6 +429,8 @@ fields:
       HPE CSUS 3200 / Superdome Flex: the nPartition suffix (`SGHD3TLNDD-000`) is stripped to the physical serial (`SGHD3TLNDD`) on all three
       channels (OS, Redfish since 2026-10-17, ESXi since 2026-10-19) by the same three-condition filter (HPE, CSUS 3200/Superdome Flex model,
       `-NNN`); the partition value stays in multi_node.partitions[].system.serial.
+      Placeholders ('N/A', 'To Be Filled By O.E.M.', ...) are null on all three channels (Redfish since 2026-11-09). A null value fails
+      the host (status=failed, mandatory identifier rule, all three channels since 2026-11-09); other collected values are kept.
 
   hardware.uuid:
     type: "string|null"
@@ -3307,18 +3311,24 @@ fields:
   "diagnosis.details.serial_number":
     type: "object|absent"
     priority: nice
-    channel: [os]
-    # 2026-10-13 신설. OS 채널 필수 식별자 규칙(os-gather/tasks/normalize/require_serial.yml, status 시나리오 E)이
-    #   Serial Number 를 얻지 못해 status=failed 로 확정했을 때만 있다: present=false, cause ∈ privilege_unavailable |
-    #   read_failed | not_provided | facts_failed | not_collected | unknown, sudo(Linux 의 sudo mode, Windows 는 null).
+    channel: [os, esxi, redfish]
+    # 2026-10-13 신설(OS), 2026-11-09 Redfish · ESXi 로 확장 (사용자 결정). 필수 식별자 공통 규칙
+    #   (common/tasks/normalize/require_serial.yml, status 시나리오 E)이 Serial Number 를 얻지 못해 status=failed 로 확정했을 때만 있다:
+    #   present=false, cause, sudo(Linux 의 sudo mode — 그 밖은 null).
+    #   cause — OS: privilege_unavailable | read_failed | not_provided | facts_failed | not_collected | unknown
+    #           ESXi · Redfish: not_provided(hardware 섹션은 읽었는데 값이 없거나 자리표시자) | not_collected(hardware 섹션을 읽지 못함)
+    #   다른 실패 사유가 이미 있는 결과(성공 섹션 0개 · 인증 뒤 예외)에서는 대표 문장 · errors[] 를 바꾸지 않고 원인은 이 키에만 남는다.
     help_ko: >-
-      OS 채널에서 Serial Number 를 수집하지 못해 실패로 확정된 경우의 원인. 권한 없음(privilege_unavailable),
+      Serial Number 를 수집하지 못해 실패로 확정된 경우의 원인 (3채널). OS — 권한 없음(privilege_unavailable),
       권한은 있었으나 읽기 실패(read_failed), 대상이 제공하지 않음 또는 자리표시자(not_provided),
-      Windows facts 실패(facts_failed), 식별자 단계 미실행(not_collected). Serial 을 수집한 봉투에는 없다.
+      Windows facts 실패(facts_failed), 식별자 단계 미실행(not_collected). ESXi · Redfish — 대상이 제공하지 않음 또는
+      자리표시자(not_provided), 그 정보를 담는 섹션을 읽지 못함(not_collected). 이미 다른 실패 사유가 있으면 원인은 이 키에만
+      남는다. Serial 을 수집한 봉투에는 없다.
     help_en: >-
-      Why the OS channel could not collect the Serial Number when that failed the host: privilege_unavailable,
-      read_failed, not_provided (absent or placeholder), facts_failed (Windows), not_collected. Absent when
-      the serial was collected.
+      Why the Serial Number could not be collected when that failed the host (all three channels). OS:
+      privilege_unavailable, read_failed, not_provided (absent or placeholder), facts_failed (Windows), not_collected.
+      ESXi / Redfish: not_provided (absent or placeholder), not_collected (the section holding it was not read).
+      When another failure reason already exists, the cause is recorded only here. Absent when the serial was collected.
 
   "diagnosis.details.recovery_credential_scope":
     type: "string|null"

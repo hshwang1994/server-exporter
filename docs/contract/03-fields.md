@@ -180,15 +180,39 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 | **B. 성공이지만 부속 문제 있음** | `success` | 비어있지 않음 | 모두 `success` 또는 `not_supported` | 수집은 다 됐는데, 장비 어딘가에 문제가 있어 **기록**만 errors[] 에 남김 |
 | **C. 부분 성공** | `partial` | 비어있지 않음 | 일부 `failed`, 나머지 `success`/`not_supported` | 인증은 됐는데 일부 섹션 응답이 안 옴 (예: firmware endpoint 만 timeout) |
 | **D. 실패** | `failed` | 비어있지 않음 (첫 원소 = 대표 사유) | 거의 다 `failed` | 사전 점검(도달/포트/프로토콜/인증)에서 막혔거나, 수집까지 갔는데 성공 섹션이 0개 |
-| **E. 필수 식별자 누락 (OS 채널만)** | `failed` | 비어있지 않음 | `success` 가 섞여 있을 수 있음 | 인증은 통과했고 다른 섹션은 수집됐지만 **Serial Number 를 끝내 얻지 못함**. `data` 의 수집 값은 그대로 남는다 (2026-10-13 사용자 정책) |
+| **E. 필수 식별자 누락 (3채널)** | `failed` | 비어있지 않음 | `success` 가 섞여 있을 수 있음 | 인증은 통과했지만 **Serial Number 를 끝내 얻지 못함**. 수집한 `data` 값은 그대로 남는다 (2026-10-13 OS · 2026-11-09 ESXi·Redfish 사용자 정책) |
 
-> **E 는 섹션 규칙 위에 얹힌 유일한 예외다 (2026-10-13).** OS 채널(Linux · Windows)에서 Serial Number 는 필수 식별자다.
-> `correlation.serial_number`(= `hardware.serial` → `system.serial_number`)가 `null` 이면 `os-gather/tasks/normalize/require_serial.yml` 이
-> 조립된 봉투의 `status` 를 `failed` 로 확정한다. `sections` · `data` · `hostname` · `meta` · `correlation` 은 바꾸지 않는다 — 호출자는
-> `status: failed` 인데 `sections.cpu: success` 이고 `data.cpu` 가 차 있는 봉투를 받을 수 있다. 원인은 `diagnosis.failure_code: GATHER_FAILED`
-> + `diagnosis.details.serial_number.cause`(`privilege_unavailable` · `read_failed` · `not_provided` · `facts_failed` · `not_collected`)
-> 와 Linux 의 `diagnosis.details.sudo` 로 가른다. 인증 단계에서 끝난 봉투(`failure_stage: auth`)에는 적용하지 않는다.
-> 사용자 문장은 하나다: "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요."
+> **E 는 섹션 규칙 위에 얹힌 유일한 예외다 (2026-10-13 OS, 2026-11-09 ESXi · Redfish 로 확장).** 3채널 모두 Serial Number 는 필수 식별자다.
+> `correlation.serial_number`(= `hardware.serial` → `system.serial_number`)가 `null` 이면 공통 규칙 `common/tasks/normalize/require_serial.yml` 이
+> 조립된 봉투의 `status` 를 `failed` 로 확정한다. 빈 값과 자리표시자(`N/A` 등)도 `null` 로 본다. `sections` · `data` · `hostname` · `meta` ·
+> `correlation` 은 바꾸지 않는다 — 호출자는 `status: failed` 인데 `sections.cpu: success` 이고 `data.cpu` 가 차 있는 봉투를 받을 수 있다.
+>
+> - **다른 실패 사유가 없을 때** (Serial 이 실패의 유일한 이유): `failure_stage: gather` · `failure_code: GATHER_FAILED` · 아래 Serial 문장이 대표
+>   사유가 되고, 같은 문장의 오류 1건이 `errors[0]` 에 온다. 섹션 오류가 있으면 그 뒤에 그대로 남는다.
+> - **다른 실패 사유가 이미 있을 때** (성공 섹션 0개 · 수집 중 예외): 대표 문장 · `failure_stage` · `failure_code` · `errors[]` 는 그대로 두고 `status` 만
+>   `failed` 로 확정한다. Serial 원인은 `diagnosis.details.serial_number` 에만 남는다 — 같은 실패를 두 줄로 말하지 않는다 (2026-11-09 사용자 결정.
+>   종전 OS 는 대표 문장과 같은 문장의 오류 1건을 뒤에 하나 더 붙였다).
+> - **적용하지 않는 경우**: 사전 점검(`reachable` · `port` · `protocol`) 또는 인증(`auth`) 단계에서 끝난 봉투, Redfish 에서 계정 요청을 보내기 전에
+>   멈춘 봉투. 대상 내부를 읽은 적이 없는데 Serial 을 "확인하지 못했다" 고 말하지 않는다.
+>
+> 원인은 `diagnosis.details.serial_number` = `{present: false, cause, sudo}` 로 가른다.
+>
+> | 채널 | `cause` 값 | 뜻 |
+> |---|---|---|
+> | OS | `privilege_unavailable` · `read_failed` · `not_provided` · `facts_failed` · `not_collected` · `unknown` | 권한을 얻지 못함 · 권한은 있었는데 읽기 실패 · 대상이 주지 않음 · Windows facts 실패 · 식별자 단계가 돌지 않음 · 진단을 읽지 못함. Linux 는 `sudo` 에 sudo 결과가 온다 |
+> | ESXi · Redfish | `not_provided` · `not_collected` | `hardware` 섹션은 성공했는데 값이 없음(대상이 주지 않음 · 빈 값 · 자리표시자) · `hardware` 섹션을 읽지 못함. `sudo` 는 `null` |
+>
+> 사용자 문장 (Serial 이 대표 사유일 때만 쓰인다. 정본 `common/vars/failure_reasons.yml`):
+>
+> | 채널 · 경우 | 문장 |
+> |---|---|
+> | Redfish | 서버의 Serial Number를 확인하지 못했습니다. BMC에서 Serial Number가 정상적으로 제공되는지 확인하세요. |
+> | ESXi | 서버의 Serial Number를 확인하지 못했습니다. ESXi에서 해당 정보를 정상적으로 제공하는지 확인하세요. |
+> | OS — Linux 이고 sudo 권한을 얻지 못함 (`cause: privilege_unavailable`) | 서버의 Serial Number를 확인하지 못했습니다. OS 수집 계정에 sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가 맞는지 확인하세요. |
+> | OS — 그 밖 (Windows 전부, Linux 의 나머지 원인) | 서버의 Serial Number를 확인하지 못했습니다. Vault에 등록된 OS 계정의 권한과 서버의 Serial Number 제공 여부를 확인하세요. |
+>
+> 종전 OS 문장("OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요.")은
+> 2026-11-09 에 위 두 문장으로 나뉘었다. `failure_code` 는 그대로 `GATHER_FAILED` 다.
 
 > **보조(OEM) 단계 실패는 D 가 아니다 (2026-06-16, redfish).** vendor OEM 수집/정규화는 표준 섹션 수집 **뒤**에 도는 보조 단계다.
 > 여기서 예외가 나도 표준 섹션은 그대로 `success` 로 유지되고, OEM 실패는 `errors[]` 에 `section: "oem"` 경고로만 남는다
@@ -263,7 +287,8 @@ if response["data"]["hardware"].get("health") == "Critical":
 > 0개라 `failed` 가 된 봉투(문장 "대상 서버에서 수집된 정보가 없습니다.")에서도 `errors[0]` 은 대표 오류다 — `section` 은 채널
 > 표시(`linux_gather` · `windows_gather` · `esxi_gather` · `redfish_gather`), `message` 는 `diagnosis.failure_reason` 과 같고,
 > `detail` 은 섹션 결과 요약(`success_sections=0; supported=…; failed=…`)이다. 섹션 단위 오류는 그 뒤에 그대로 남는다
-> (상한 10, 넘치면 절단 표시 1건). OS 채널은 그 뒤에 Serial Number 오류 1건이 더 붙을 수 있다 (4절 E).
+> (상한 10, 넘치면 절단 표시 1건). Serial Number 까지 없으면 그 원인은 `diagnosis.details.serial_number` 에만 남고 오류 행은 늘지 않는다
+> (4절 E — 2026-11-09. 종전 OS 는 같은 문장의 오류 1건이 뒤에 더 붙었다).
 
 전체 실패 대표 문장 카탈로그 (정본: `common/vars/failure_reasons.yml` 의 `_fr_catalog`).
 
@@ -301,6 +326,10 @@ if response["data"]["hardware"].get("health") == "Critical":
 |  | 수집 중 대상 연결 끊김 (인증 성공 뒤) | 정보 수집 중 대상 서버와 연결이 끊겼습니다. |
 |  | 예외 없이 끝났는데 성공 섹션 0개 | 대상 서버에서 수집된 정보가 없습니다. |
 |  | (Redfish) 계정 요청 전 수집기 내부 오류 | 개더링 프로젝트에서 정보 수집 중 오류가 발생했습니다. |
+|  | (Redfish) Serial Number 를 얻지 못함 (4절 E) | 서버의 Serial Number를 확인하지 못했습니다. BMC에서 Serial Number가 정상적으로 제공되는지 확인하세요. |
+|  | (ESXi) Serial Number 를 얻지 못함 (4절 E) | 서버의 Serial Number를 확인하지 못했습니다. ESXi에서 해당 정보를 정상적으로 제공하는지 확인하세요. |
+|  | (OS) Serial Number 를 얻지 못함 — Linux 이고 sudo 권한을 얻지 못함 (4절 E) | 서버의 Serial Number를 확인하지 못했습니다. OS 수집 계정에 sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가 맞는지 확인하세요. |
+|  | (OS) Serial Number 를 얻지 못함 — 그 밖 (4절 E) | 서버의 Serial Number를 확인하지 못했습니다. Vault에 등록된 OS 계정의 권한과 서버의 Serial Number 제공 여부를 확인하세요. |
 | `OUTPUT_BUILD_FAILED` | 결과 객체 자체를 만들지 못함 | 개더링 프로젝트에서 수집 결과를 만들지 못했습니다. |
 
 > **code 가 바뀐 경우 (2026-09-21, Redfish 한정)** — 실행 위치 미등록, 표준 계정 0개(vendor 식별),
@@ -527,6 +556,8 @@ for e in response["errors"]:
 > 실측 HPE CSUS 3200 은 Partition0 에 없고 Chassis r001u01 에 `R9N70A`). 둘 다 없으면 `null`. 시리얼의 nPartition 접미사 제거는 ESXi 채널과 Superdome Flex
 > 모델에도 적용된다 — 7절 FAQ · `docs/develop/05-field-mapping.md`. HPE CSUS 3200 은 사이트 협약(파티션 1개)에 따라 **다른 x86 서버와 같은 JSON 모양**이어야 하고
 > Partition0 이 서버다(`docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`); `data.multi_node` 는 그대로 남는다(사용자 결정).
+> **2026-11-09** — Redfish `hardware.serial`(Systems 첫 member 의 `SerialNumber`)은 위 (1) 의 자리표시자 집합을 거치지 않아 `N/A` 같은 값이 그대로
+> 남았다. 이제 같은 집합으로 거른다(`redfish-gather/tasks/normalize_standard.yml`). 3채널 모두 Serial Number 가 `null` 이면 그 host 는 `failed` 다(4절 E).
 
 ### 6.2 `data.memory`
 

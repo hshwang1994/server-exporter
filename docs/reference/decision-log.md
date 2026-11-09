@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-11-07
+> 최종 갱신: 2026-11-09
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -17,9 +17,9 @@
 | 도달성 판정 | 관리 TCP 응답 OR ICMP Echo. ICMP 는 TCP 전 포트 무응답일 때 1회, Gate 가 아니다 | 2026-09-03 |
 | Redfish 자격 축 | 표준 수집 계정은 전역 1벌(`vault/common/redfish/standard.yml`), 복구 계정은 Location×Vendor(`vault/<loc>/redfish/<vendor>.yml`, `role: recovery`) | 2026-08-12 · 2026-10-11 D-17 |
 | 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공". HPE RMC(CSUS 3200/Superdome Flex)는 `hpe_rmc` Family — 생성 POST 에 `Enabled` 를 보내지 않는다(사이트 실측 거부). 계정 레코드 `enabled` 는 3-상태 | 2026-08-12~13 · 2026-10-14 |
-| status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음. Redfish 는 첫 인증 2xx 뒤 하위 403 을 섹션 실패(partial)로, Power·Thermal 둘 다 404 는 not_supported 로. **예외 E(OS 채널)**: Serial Number 를 얻지 못한 host 는 섹션과 무관하게 failed (data · sections 보존) | 2026-05-06 · 2026-10-12 · 2026-10-13 |
+| status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음. Redfish 는 첫 인증 2xx 뒤 하위 403 을 섹션 실패(partial)로, Power·Thermal 둘 다 404 는 not_supported 로. **예외 E(3채널 — 2026-11-09 부터 ESXi · Redfish 포함)**: Serial Number 를 얻지 못한 host 는 섹션과 무관하게 failed (data · sections 보존). 다른 실패 사유가 이미 있으면 사유 · errors[] 는 그대로 두고 원인만 `diagnosis.details.serial_number` | 2026-05-06 · 2026-10-12 · 2026-10-13 · 2026-11-09 |
 | Linux sudo | SSH 인증 뒤 sudo 확인: root → NOPASSWD(제출 0) → 로그인 비밀번호 → Vault `sudo_passwords`(같은 값 1회). 정책 거부·sudo 불가는 즉시 중단, 비밀번호 거부는 대상 잠금 정책에서 계산한 예산(`_l_sudo_max_rejections`) 안에서만. 분류는 결과 구조(rc 유무·값)만, Ansible 버전 가정 없음. 실패 host 는 특권 태스크 4개를 건너뛴다 | 2026-10-13 |
-| OS Serial Number | 필수 식별자. `correlation.serial_number` 가 null 이면 `require_serial.yml` 이 status=failed(GATHER_FAILED · `serial_missing` 문장), 원인은 `diagnosis.details.serial_number.cause`. 새 failure_code 없음 | 2026-10-13 |
+| Serial Number (3채널) | 필수 식별자. `correlation.serial_number` 가 null 이면 공통 규칙 `common/tasks/normalize/require_serial.yml` 이 status=failed(GATHER_FAILED · 채널별 Serial 문장 — OS 는 Linux sudo 실패만 `serial_missing_sudo`), 원인은 `diagnosis.details.serial_number.cause`. 사전 점검 · 인증 실패와 Redfish 계정 요청 전 중단은 제외. Dell 은 Service Tag 가 없어도 수집을 버리지 않는다(serial null + notice). 새 failure_code 없음 | 2026-10-13 · 2026-11-09 |
 | envelope | 13 필드 고정 · 새 키 추가는 호환성 작업 밖(사용자 승인) | 2026-05-01 · 2026-10-03 |
 | hostname | `system.hostname → system.fqdn → bmc.network_hostname → null`, IP 대체 없음. 세 채널 모두 `system.hostname` = 첫 라벨 · `system.fqdn` = 도메인 있을 때만. Redfish 원천 순서는 adapter `vendor_notes.hostname_priority` — **HPE CSUS 3200 은 RMC 이름 우선**(없을 때만 Partition HostName), 그 밖은 System.HostName | 2026-06-16 · 2026-09-03 · 2026-10-15 |
 | ESXi 전원·온도·팬 · Linux iSCSI | ESXi 는 vSphere 하드웨어 센서(`numericSensorInfo`)로 `power` · `thermal` 을 낸다(센서 공급자 없으면 not_supported) — `sections.power/thermal` 이 success 로 바뀌는 계약 변화(승인). Linux 는 `/sys/class/iscsi_host`(sysfs 만)로 iSCSI 이니시에이터를 `storage.hbas[]` 에 넣는다(`iqn`, 세션 묶음 1건). `power.summary` 는 공통 필터 | 2026-10-19 (3) |
@@ -48,6 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장 · 공통 규칙 1개 · 기존 사유가 있으면 Serial 행 중복 없음 · OS 문장 원인별 · Dell Service Tag 누락 시 데이터 보존 |
 | 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) · 긴급 승격 production `09fb6625` |
 | 2026-11-07 — Redfish Summary 수정 main 병합(merge commit) · 사내 GitLab `main` 직접 수정 9건 반영(`target_type` string · `syjeong_test` 생성 대상) |
 | 2026-11-02 — 사내 GitLab 을 고객사 형태로(`main` 하나 = GitHub production) · jenkins-prod 는 GitHub · dual push 폐기 |
@@ -109,6 +110,65 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장
+
+> 정본: `common/tasks/normalize/require_serial.yml` · `common/vars/failure_reasons.yml` · [03-fields.md](../contract/03-fields.md) 4절 E.
+> 2026-10-13 절(OS 채널 시나리오 E 도입)을 넓히고 일부를 바꾼다 — 바뀐 것은 아래 결정 3 · 4 · 6 이다.
+
+### 사용자 지시
+
+- "OS나 ESXi일 경우 시리얼넘버가 개더링되지않으면 개더링이 실패단계로 나오도록 예전에 로직을 만들었었어 … redfish 또한 시리얼번호가 null로 나온다면
+  실패로 나오도록 동일한 처리를 하려고하는것임 (가능한지 및 지금 출력이랑 합치는게 좋은방안인지? 더 좋은 방안은 없는지 등)"
+- 확인 질문에 대한 답: 범위 "Redfish + ESXi", Dell "이번에 함께 통일", 구조 "공통 규칙 1개로 합치기", 기존 사유가 있을 때 "3채널 중복 제거".
+- 문장 지정: Redfish "서버의 Serial Number를 확인하지 못했습니다. BMC에서 Serial Number가 정상적으로 제공되는지 확인하세요." ·
+  ESXi "서버의 Serial Number를 확인하지 못했습니다. ESXi에서 해당 정보를 정상적으로 제공하는지 확인하세요."
+- OS 문장: "os는 개더링하는 계정이 nopasswd? 가 있어야하고 만약 설정돼있지않다면 vault에 sudo 패스워드 가 맞는지 확인하라고? 넣는건 어때?"
+- 검증 요구: 기존 오류와 Serial 오류가 중복되거나 원인을 잘못 전하지 않을 것, 기존 OS 출력은 변경 전후 같을 것, Redfish · ESXi 정상 장비 결과에
+  예상 밖 변화가 없을 것.
+
+### 결정
+
+1. **범위 · 구조**: 시나리오 E(Serial Number 를 끝내 얻지 못한 host 는 섹션과 무관하게 `failed`, 수집한 `data` · `sections` 보존)를 OS 에서 ESXi · Redfish
+   로 넓힌다. 판정 · 봉투 수정은 공통 규칙 하나(`common/tasks/normalize/require_serial.yml`)이고, 채널은 원인 판정과 대상 조건만 넘긴다 — OS 는
+   `os-gather/tasks/normalize/require_serial.yml`, Redfish 는 `redfish-gather/tasks/require_serial.yml`, ESXi 는 `esxi-gather/site.yml` 이 직접 부른다.
+   새 `failure_code` · `failure_stage` · envelope 키는 없다(`GATHER_FAILED` + `diagnosis.details.serial_number.cause`).
+2. **대상**: 사전 점검(`reachable` · `port` · `protocol`) · 인증(`auth`) 단계 실패는 건드리지 않는다. Redfish 는 BMC 를 실제로 읽은 결과만 대상이다
+   (표준 수집 성공 또는 `diagnosis.auth_success: true`) — 계정 요청을 보내기 전에 멈춘 rescue(`gather_internal`)는 stage 가 `gather` 여도 제외한다.
+3. **중복 제거 (3채널)**: 다른 실패 사유가 이미 있으면 대표 문장 · `failure_stage` · `failure_code` · `errors[]` 는 그대로 두고 `status: failed` 와
+   `diagnosis.details.serial_number` 만 남긴다. 종전 OS 는 대표 문장과 같은 문장의 행을 하나 더 붙여(성공 섹션 0개 · 인증 뒤 rescue) Portal Grid 에
+   같은 문장이 두 줄 보였다. 2026-10-13 결정 4 는 "있으면 문장 유지 + status 만 failed" 라고 적었지만 코드는 그 경우에도 Serial 오류 1건(문장은
+   대표 문장 그대로)을 뒤에 붙였다 — 이 결정으로 코드가 그 서술대로 되고, 3채널에 같이 적용된다.
+4. **문장**: Redfish · ESXi 는 사용자 지정 문구 그대로다. OS 는 원인으로 고른다 — Linux 이고 sudo 권한을 얻지 못함(`cause: privilege_unavailable`)이면
+   새 키 `serial_missing_sudo`("…OS 수집 계정에 sudo NOPASSWD가 설정돼 있는지, 설정돼 있지 않다면 Vault에 등록된 sudo 비밀번호가 맞는지 확인하세요."),
+   그 밖(Windows 전부 · Linux 의 나머지 원인)은 `serial_missing`(첫 문장만 Redfish · ESXi 와 같게). Windows 에는 sudo 가 없고 나머지 원인은 sudo 로
+   풀리지 않아 sudo 안내가 틀린 안내가 된다. 안내 순서(NOPASSWD → Vault 비밀번호)는 수집 순서(root → NOPASSWD → 로그인 비밀번호 → Vault)와 같다.
+   Grid 계약 시험은 Redfish 문장의 대상 종류 어휘로 'BMC' 도 인정한다.
+5. **Redfish 자리표시자**: `hardware.serial`(Systems 첫 member 의 `SerialNumber`)이 `dmi_sentinel_null` 을 거치지 않아 `N/A` 같은 값이 남던 것을
+   OS · ESXi 와 같은 집합으로 거른다(`redfish-gather/tasks/normalize_standard.yml`).
+6. **Dell 통일**: Service Tag(`ServiceRoot.Oem.Dell.ServiceTag`)를 얻지 못하면 모듈이 수집을 버리던 동작(`status: failed` · `data: {}`)을 없앤다.
+   대표 시리얼은 `null` 이고(보드 시리얼로 폴백하지 않는 2026-08-11 결정 유지) 사유는 `diagnosis.details.notices` 1건, host 의 `failed` 는 결정 1 의
+   규칙이 낸다. "서버 기본 정보" 오류 행은 만들지 않는다 — Serial 행과 같은 사건을 두 번 말하고, 정상 수집된 섹션을 실패처럼 보이게 한다.
+
+결정 주체: 사용자(1 · 3 · 4 · 6 — 2026-11-09 대화의 답과 계획 승인). 2 · 5 는 1 을 구현하는 조건으로 AI 가 제안했고 같은 계획 승인에 포함됐다.
+
+### 실행 기록 (2026-11-09)
+
+| 커밋 | 내용 | 검증 |
+|---|---|---|
+| `e25e57d9` | 규칙을 공통 파일로 이동(순수 리팩터) | OS 대조 741 사례 — 전부 같음 |
+| `6f93375d` | 기존 사유가 있으면 Serial 행 중복 없음 | OS 대조 — 307 사례에서 꼬리 중복 행만 빠지고 나머지 같음 |
+| `f5592a0f` | OS 문장 원인별 | OS 대조 — Serial 이 대표 사유인 362 사례(sudo 문장 90 · 일반 문장 272)의 문장만 다르고 기대 문장과 같음 |
+| `feat: Redfish/ESXi Serial 누락 시 실패 처리` | Redfish · ESXi 확장 · Redfish 자리표시자 | Tier 1 재생 21대 — 정상 미러 18대(mock2 11 · 1차 7)는 봉투 · 요청 차이 0. 사본 3대(SerialNumber 삭제 · System 500 · Dell Service Tag 삭제)는 기대한 경로만 바뀜(C1 · C2 · 결정 6 이전의 Dell). OS 대조는 앞 커밋과 같음 |
+
+### 대안 (Considered)
+
+- 채널마다 규칙 복제 — 기각. 판정이 셋으로 갈라지면 중복 제거 같은 수정이 한 채널에만 들어간다.
+- 기존 사유가 있어도 Serial 행을 붙이기(종전 OS) — 기각(결정 3).
+- Dell 은 모듈에서 실패 유지 — 기각. 수집한 데이터를 버리고, 문장이 Serial 문장이 아니다(`gather_after_auth`).
+- 새 `failure_code`(Serial 전용) — 기각. Stable code 목록 변경은 Consumer · Schema 영향 확인이 필요하고, 2026-10-13 과 같이 `GATHER_FAILED` +
+  `diagnosis.details.serial_number.cause` 로 원인을 가를 수 있다.
+- OS 문장 하나에 sudo 안내를 넣기 — 기각(결정 4 — Windows · 다른 원인에 틀린 안내).
 
 ## 2026-11-07 (2) — `syjeong_test` 삭제
 

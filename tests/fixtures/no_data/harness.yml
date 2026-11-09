@@ -3,7 +3,8 @@
 #
 # 실제 공통 조립 코드(init_fragments → merge_fragment → build_sections → build_status → build_errors → build_output)와 json_only 콜백을
 # 그대로 태운다. 수집 대신 고정 fragment 를 넣고 연결은 local 이다. OS 사례는 운영과 같이 os-gather/tasks/normalize/build_output.yml
-# (require_serial 포함)을 지나고, ESXi · Redfish 사례는 common/tasks/normalize/build_output.yml 체인을 직접 지난다.
+# (require_serial 포함)을 지나고, ESXi · Redfish 사례는 common/tasks/normalize/build_output.yml 체인을 직접 지난 뒤 각 site.yml 과 같은
+# 필수 식별자 규칙(require_serial)을 지난다 (2026-11-09).
 # 사례는 `-e harness_case=<이름>` 으로 고른다 (아래 _hc_cases).
 - name: "no-data representative error harness"
   hosts: all
@@ -28,9 +29,15 @@
       windows:   {channel: os, os_type: windows, failed: [system, cpu], collected: [], errors: 1, serial: null}
       # 대조군: partial (Serial 있음) — 아무것도 바뀌지 않는다
       partial:   {channel: os, os_type: linux, failed: [cpu], collected: [system], errors: 1, serial: HARNESS-SN}
-      # 다른 채널 — 채널 표시만 다르고 require_serial 은 없다
+      # 다른 채널 — 채널 표시가 다르다. 운영과 같이 require_serial 을 지나지만 대표 문장이 이미 있어 원인만 details 에 남는다 (2026-11-09)
       esxi:      {channel: esxi, os_type: '', failed: [system, cpu], collected: [], errors: 1, serial: null}
       redfish:   {channel: redfish, os_type: '', failed: [system, cpu], collected: [], errors: 1, serial: null}
+      # ESXi · Redfish — 섹션은 모두 성공했는데 Serial 이 없다(C1) → 채널 문장으로 failed, Serial 행이 errors[0] (2026-11-09)
+      esxi_no_serial:    {channel: esxi, os_type: '', supported: [hardware, cpu], failed: [], collected: [hardware, cpu], errors: 0, serial: null}
+      redfish_no_serial: {channel: redfish, os_type: '', supported: [hardware, cpu], failed: [], collected: [hardware, cpu], errors: 0, serial: null}
+      # Redfish 대조군 — BMC 를 읽었다는 근거(_rf_collect_ok · auth_success=true)가 없으면 규칙이 건드리지 않는다
+      redfish_unread:    {channel: redfish, os_type: '', supported: [hardware, cpu], failed: [], collected: [hardware, cpu], errors: 0, serial: null,
+                          rf_collect_ok: false, auth_success: null}
     _hc: "{{ _hc_cases[harness_case] }}"
 
   tasks:
@@ -43,7 +50,7 @@
         - name: "harness | fixed gather fragment"
           ansible.builtin.set_fact:
             _data_fragment: "{{ {'system': {'hostname': 'harness-host', 'os_type': 'linux'}} if ('system' in _hc.collected) else {} }}"
-            _sections_supported_fragment: [system, cpu]
+            _sections_supported_fragment: "{{ _hc.supported | default(['system', 'cpu']) }}"
             _sections_collected_fragment: "{{ _hc.collected }}"
             _sections_failed_fragment: "{{ _hc.failed }}"
             _sections_unsupported_fragment: []
@@ -66,7 +73,7 @@
               reachable: true
               port_open: true
               protocol_supported: true
-              auth_success: true
+              auth_success: "{{ _hc.auth_success | default(true) }}"
               failure_stage: null
               failure_code: null
               failure_reason: null
@@ -101,6 +108,24 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/{{ item }}"
           loop: [build_sections.yml, build_status.yml, build_errors.yml, build_output.yml]
+
+        # 필수 식별자 규칙 — esxi-gather/site.yml · redfish-gather/site.yml 이 build_output 뒤에 부르는 것과 같은 include (2026-11-09)
+        - name: "harness | require_serial (esxi)"
+          when: _hc.channel == 'esxi'
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+          vars:
+            _rs_channel: esxi
+
+        - name: "harness | redfish collect result (정상 경로는 수집이 성공해야 build_output 에 닿는다)"
+          when: _hc.channel == 'redfish'
+          ansible.builtin.set_fact:
+            _rf_collect_ok: "{{ _hc.rf_collect_ok | default(true) }}"
+
+        - name: "harness | require_serial (redfish)"
+          when: _hc.channel == 'redfish'
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/redfish-gather/tasks/require_serial.yml"
 
         - name: "harness | inject schema_version"
           ansible.builtin.set_fact:

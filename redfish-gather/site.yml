@@ -385,6 +385,12 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_output.yml"
 
+        # 필수 식별자 (status 시나리오 E — 2026-11-09): Serial Number 가 없으면 status=failed. 수집한 data · sections 는 보존한다.
+        #   CHECKPOINT 보다 앞이어야 한다 — 콜백 · Layer A 가 CHECKPOINT 의 status 를 그대로 복원한다.
+        - name: "redfish | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/redfish-gather/tasks/require_serial.yml"
+
         - name: "redfish | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
@@ -719,6 +725,11 @@
         - name: "redfish | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        # 필수 식별자 — BMC 를 실제로 읽은 rescue 만 (인증 전에 멈춘 결과는 건드리지 않는다). 기존 사유가 있으므로 문장 · errors 는 그대로다.
+        - name: "redfish | rescue | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/redfish-gather/tasks/require_serial.yml"
 
         - name: "redfish | rescue | inject schema_version"
           ansible.builtin.set_fact:

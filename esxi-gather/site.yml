@@ -241,6 +241,15 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_output.yml"
 
+        # 필수 식별자 (status 시나리오 E — 2026-11-09): Serial Number 가 없으면 status=failed. 수집한 data · sections 는 보존한다.
+        #   원인은 공통 규칙의 일반 규칙(hardware 섹션 success → not_provided, 아니면 not_collected)이다.
+        #   CHECKPOINT 보다 앞이어야 한다 — 콜백 · Layer A 가 CHECKPOINT 의 status 를 그대로 복원한다.
+        - name: "esxi | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+          vars:
+            _rs_channel: esxi
+
         - name: "esxi | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
@@ -361,6 +370,14 @@
         - name: "esxi | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        # 필수 식별자 — rescue 는 인증 · facts 를 확인했을 때만 stage=gather 다(위 failure_reason 보장). 그 밖(auth)은 공통 규칙이 건드리지 않는다.
+        #   기존 사유가 있으므로 문장 · errors 는 그대로이고 status 와 details.serial_number 만 바뀐다.
+        - name: "esxi | rescue | require_serial"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/require_serial.yml"
+          vars:
+            _rs_channel: esxi
 
         - name: "esxi | rescue | inject schema_version"
           ansible.builtin.set_fact:

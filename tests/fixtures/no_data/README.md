@@ -9,6 +9,9 @@
 
 무엇을 보나 (2026-10-13, H12 후속): 정상 경로에서 성공 섹션이 0개라 `status=failed` 가 됐을 때 `errors[0].message` 가
 `diagnosis.failure_reason`(수집된 정보가 없다는 문장)과 같은가, 섹션 오류는 뒤에 보존되는가, 상한 10 + 절단 표시가 붙는가,
-채널 표시(`linux_gather` · `windows_gather` · `esxi_gather` · `redfish_gather`)가 맞는가, OS 채널에서 `require_serial.yml` 이
-Serial 원인을 `diagnosis.details.serial_number` 에만 남기고 같은 문장의 행을 다시 붙이지 않는가(2026-11-09 결정 — 종전에는 뒤에
-한 행이 더 붙었다). `partial` 대조군은 아무것도 바뀌지 않아야 한다.
+채널 표시(`linux_gather` · `windows_gather` · `esxi_gather` · `redfish_gather`)가 맞는가, 3채널 모두 필수 식별자 규칙(`require_serial`)이
+Serial 원인을 `diagnosis.details.serial_number` 에만 남기고 같은 문장의 행을 다시 붙이지 않는가(2026-11-09 결정 — 종전에는 OS 에서
+뒤에 한 행이 더 붙었고 ESXi · Redfish 에는 규칙이 없었다). `partial` 대조군은 아무것도 바뀌지 않아야 한다.
+
+2026-11-09 추가 사례: `esxi_no_serial` · `redfish_no_serial` 은 섹션이 모두 성공했는데 Serial 이 없는 결과가 채널 문장으로 `failed` 가
+되는가, `redfish_unread` 는 BMC 를 읽었다는 근거(`_rf_collect_ok` · `auth_success=true`)가 없을 때 규칙이 건드리지 않는가를 본다.

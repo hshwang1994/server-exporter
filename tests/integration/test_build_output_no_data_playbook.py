@@ -4,9 +4,11 @@
   - `common/tasks/normalize/build_output.yml` 의 "ensure representative error": status=failed 인데 errors[0].message 가
     diagnosis.failure_reason 과 다르면 대표 오류를 앞에 두고 섹션 오류를 뒤에 보존한다 (완전히 같은 원소만 제외 · 상한 10 · 절단 표시).
   - 채널 표시는 rescue 와 같다 (linux_gather · windows_gather · esxi_gather · redfish_gather).
-  - OS 채널은 그 뒤에 require_serial.yml 이 Serial 원인을 diagnosis.details.serial_number 에만 남긴다 — 대표 문장이 이미 있으므로
-    errors[] 에는 행을 붙이지 않는다 (2026-11-09 사용자 결정 4, 종전에는 같은 문장의 행이 뒤에 하나 더 붙었다).
+  - 그 뒤 3채널 모두 필수 식별자 규칙(require_serial)이 Serial 원인을 diagnosis.details.serial_number 에만 남긴다 — 대표 문장이 이미
+    있으므로 errors[] 에는 행을 붙이지 않는다 (2026-11-09 사용자 결정 4, 종전에는 OS 에서 같은 문장의 행이 뒤에 하나 더 붙었다).
     partial 대조군은 바뀌지 않는다.
+  - ESXi · Redfish 는 섹션이 모두 성공했는데 Serial 이 없으면 채널 문장으로 failed 다 (2026-11-09 — 시나리오 E 확장).
+    Redfish 는 BMC 를 읽었다는 근거(_rf_collect_ok 또는 auth_success=true)가 없으면 규칙이 건드리지 않는다.
 정적 렌더(tests/e2e/test_errors_message_contract.py)와 달리 실제 Templar(jinja2_native) · include 체인 · json_only 콜백을 지난다.
 Linux / WSL 의 ansible-playbook 이 있어야 한다 (없거나 Windows 면 skip). ANSIBLE_PLAYBOOK_BIN 으로 실행 파일을 바꿀 수 있다.
 """
@@ -35,7 +37,8 @@ if not PLAYBOOK_BIN:
                 allow_module_level=True)
 
 HOST = "192.0.2.10"
-CASES = ("no_data", "no_errors", "many", "windows", "partial", "esxi", "redfish")
+CASES = ("no_data", "no_errors", "many", "windows", "partial", "esxi", "redfish",
+         "esxi_no_serial", "redfish_no_serial", "redfish_unread")
 REASONS = yaml.safe_load((REPO / "common" / "vars" / "failure_reasons.yml").read_text(encoding="utf-8"))
 NO_DATA = REASONS["_fr_catalog"]["gather_no_data"]["default"]
 TRUNCATED = REASONS["_fr_errors_truncated"]
@@ -129,11 +132,35 @@ def test_windows_uses_its_channel_marker(runs):
 
 
 @pytest.mark.parametrize("case,marker", [("esxi", "esxi_gather"), ("redfish", "redfish_gather")])
-def test_other_channels_get_the_marker_and_no_serial_rule(runs, case, marker):
+def test_other_channels_get_the_marker_and_keep_their_rows(runs, case, marker):
     env = runs[case]
     _assert_failed_no_data(env)
     assert env["errors"] == [_rep(marker), {"section": "cpu", "message": CPU_MESSAGE, "detail": "harness error 0"}]
-    assert "serial_number" not in env["diagnosis"]["details"]
+    assert env["diagnosis"]["details"]["serial_number"] == SERIAL_NOT_COLLECTED
+
+
+@pytest.mark.parametrize("case,channel", [("esxi_no_serial", "esxi"), ("redfish_no_serial", "redfish")])
+def test_esxi_and_redfish_without_serial_fail_with_their_channel_sentence(runs, case, channel):
+    env = runs[case]
+    sentence = REASONS["_fr_catalog"]["serial_missing"][channel]
+    assert set(env) == ENVELOPE_KEYS
+    assert env["status"] == "failed"
+    assert env["sections"]["hardware"] == "success" and env["sections"]["cpu"] == "success", "섹션 결과는 그대로"
+    diag = env["diagnosis"]
+    assert (diag["failure_stage"], diag["failure_code"], diag["failure_reason"]) == ("gather", "GATHER_FAILED", sentence)
+    assert env["errors"] == [{"section": f"{channel}_gather", "message": sentence,
+                              "detail": "field=serial_number; mandatory=true; cause=not_provided"}]
+    assert diag["details"]["serial_number"] == {"present": False, "cause": "not_provided", "sudo": None}
+    assert diag["auth_success"] is True
+
+
+def test_redfish_rule_needs_evidence_the_bmc_was_read(runs):
+    """_rf_collect_ok=false · auth_success=null — 인증 전에 멈춘 rescue 와 같은 근거. 실제 Templar 에서도 규칙이 건드리지 않는다."""
+    env = runs["redfish_unread"]
+    assert env["status"] == "success"
+    diag = env["diagnosis"]
+    assert (diag["failure_stage"], diag["failure_code"], diag["failure_reason"]) == (None, None, None)
+    assert env["errors"] == [] and "serial_number" not in diag["details"]
 
 
 def test_partial_control_is_untouched(runs):
