@@ -413,8 +413,9 @@ fields:
     help_ko: >-
       서버 대표 시리얼번호. 기본 원천은 Redfish System.SerialNumber 이고 빈 문자열은 null 로 정규화.
       단 Dell 은 예외 — System.SerialNumber 가 보드 제조 시리얼(CNIVC…)이라 OS SMBIOS Type 1 값과
-      달라서, ServiceRoot.Oem.Dell.ServiceTag (Dell Service Tag) 를 쓴다. Dell 은 이 값을 필수로
-      보고 확보하지 못하면 다른 후보로 대체하지 않고 수집을 실패시킨다 (2026-08-11 교정).
+      달라서, ServiceRoot.Oem.Dell.ServiceTag (Dell Service Tag) 를 쓴다. 확보하지 못해도 다른 후보로
+      대체하지 않는다 (2026-08-11 교정). 그때 이 값은 null 이고 사유는 diagnosis.details.notices 에 남으며, 수집한 나머지 값은
+      보존된다 — host 의 failed 는 아래 필수 식별자 규칙이 낸다 (2026-11-09, 종전에는 모듈이 수집 전체를 실패시켰다).
       HPE CSUS 3200 · Superdome Flex 는 nPartition 접미사(`SGHD3TLNDD-000`)를 뗀 물리 시리얼(`SGHD3TLNDD`)이다 — 세 채널(OS · Redfish 2026-10-17 ·
       ESXi 2026-10-19)이 같은 normalize_os_serial 세 조건(HPE · CSUS 3200/Superdome Flex 모델 · `-NNN`)을 쓴다. 파티션 원본은
       multi_node.partitions[].system.serial (그대로 — 2026-10-19 사용자 결정).
@@ -424,8 +425,10 @@ fields:
       Representative server serial. Default source is Redfish System.SerialNumber; empty string
       normalized to null. Dell is the exception — its System.SerialNumber is a board manufacturing
       serial (CNIVC…) that differs from the OS SMBIOS Type 1 value, so ServiceRoot.Oem.Dell.ServiceTag
-      (Dell Service Tag) is used. For Dell this value is mandatory: if it cannot be obtained the
-      collection fails rather than falling back to another candidate (corrected 2026-08-11).
+      (Dell Service Tag) is used. If it cannot be obtained it is never replaced by another candidate
+      (corrected 2026-08-11); the value is null, the reason goes to diagnosis.details.notices and the rest of the
+      collection is kept — the mandatory identifier rule below fails the host (2026-11-09; previously the module
+      failed the whole collection).
       HPE CSUS 3200 / Superdome Flex: the nPartition suffix (`SGHD3TLNDD-000`) is stripped to the physical serial (`SGHD3TLNDD`) on all three
       channels (OS, Redfish since 2026-10-17, ESXi since 2026-10-19) by the same three-condition filter (HPE, CSUS 3200/Superdome Flex model,
       `-NNN`); the partition value stays in multi_node.partitions[].system.serial.

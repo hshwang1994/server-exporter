@@ -202,6 +202,10 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 > | OS | `privilege_unavailable` · `read_failed` · `not_provided` · `facts_failed` · `not_collected` · `unknown` | 권한을 얻지 못함 · 권한은 있었는데 읽기 실패 · 대상이 주지 않음 · Windows facts 실패 · 식별자 단계가 돌지 않음 · 진단을 읽지 못함. Linux 는 `sudo` 에 sudo 결과가 온다 |
 > | ESXi · Redfish | `not_provided` · `not_collected` | `hardware` 섹션은 성공했는데 값이 없음(대상이 주지 않음 · 빈 값 · 자리표시자) · `hardware` 섹션을 읽지 못함. `sudo` 는 `null` |
 >
+> Dell(Redfish)의 대표 Serial Number 는 Service Tag(`ServiceRoot.Oem.Dell.ServiceTag`)다. 없거나 무효면 보드 시리얼로 대신하지 않고 `null` 로 둔다.
+> 수집한 섹션은 그대로 남고 사유는 `diagnosis.details.notices` 에 1건 기록되며, host 는 위 규칙으로 `failed` 다 — Service Tag 사유로 `errors[]` 행을 따로
+> 만들지 않는다 (2026-11-09. 종전에는 모듈이 수집 전체를 실패시켜 `data` 가 비고 문장도 Serial 문장이 아니었다).
+>
 > 사용자 문장 (Serial 이 대표 사유일 때만 쓰인다. 정본 `common/vars/failure_reasons.yml`):
 >
 > | 채널 · 경우 | 문장 |
@@ -522,7 +526,7 @@ for e in response["errors"]:
 "hardware": {
   "vendor":       "Dell Inc.",        // BMC 가 보고한 원본 manufacturer (정규화 안 한 값)
   "model":        "PowerEdge R740",
-  "serial":       "2BJ8033",          // Dell 은 ServiceRoot.Oem.Dell.ServiceTag (2026-08-11 교정)
+  "serial":       "2BJ8033",          // Dell 은 ServiceRoot.Oem.Dell.ServiceTag (2026-08-11 교정). 없으면 null — 4절 E
   "uuid":         "4c4c4544-...",
   "sku":          "2BJ8033",          // 벤더마다 의미 다름 (Dell=서비스 태그 / HPE=파트번호 / Lenovo=CTO 주문)
   "bios_version": "2.21.2",

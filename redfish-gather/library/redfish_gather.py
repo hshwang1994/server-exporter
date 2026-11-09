@@ -2211,15 +2211,18 @@ def _extract_oem_dell(data):                                                  # 
 # 아래 레지스트리에 등록된 vendor 만 main()/run_gather 층에서 대표 시리얼을 덮어쓴다.
 # 등록되지 않은 vendor 는 코드 경로 자체를 타지 않아 회귀 위험이 구조적으로 0이다.
 #
-# 이 판정을 gather_system 이 아니라 main() 층에 둔 이유:
-#   대표 시리얼을 못 얻었을 때 "섹션 실패"(=partial)가 아니라 "수집 실패"(=failed)로
-#   끝내야 하는데, 섹션 러너(_make_section_runner)는 partial 까지만 만들 수 있다.
-#   따라서 확정과 차단을 모두 main() 층이 책임진다.
+# 이 확정을 gather_system 이 아니라 main() 층에 둔 이유: resolver 는 섹션 러너 밖에서 얻은 ServiceRoot 를 읽고,
+#   덮어쓰기는 모든 섹션 수집이 끝난 뒤 한 번만 해야 한다.
+# 2026-11-09 (사용자 결정 2): 대표 시리얼을 못 얻어도 모듈은 수집을 버리지 않는다 (종전: data={} 로 failed).
+#   대표 시리얼은 None 으로 두고 사유는 notice 1건으로 남긴다. host 를 failed 로 내는 판정은 채널 공통 필수 식별자 규칙
+#   (common/tasks/normalize/require_serial.yml — 상태 시나리오 E)이 하며, 수집한 data 는 보존된다.
 
 def _resolve_serial_dell(service_root, refetch=None):                         # nosec rule12-r1
     """Dell 서버 대표 시리얼 = Service Tag (ServiceRoot.Oem.Dell.ServiceTag 단일 정본).
 
-    사용자 결정 (2026-08-11): 다른 시리얼 후보로 폴백하지 않는다. 못 얻으면 수집을 실패시킨다.
+    사용자 결정 (2026-08-11): 다른 시리얼 후보로 폴백하지 않는다. 못 얻으면 대표 시리얼은 None 이다.
+    2026-11-09 부터 그 경우에도 수집 결과는 보존되고, host 의 failed 판정은 공통 필수 식별자 규칙(상태 시나리오 E)이 한다
+    (종전: 모듈이 수집 자체를 실패시켰다).
 
     원천 선택 근거 (rule 96 R1-A):
       - Dell iDRAC9 Redfish API Guide "Table 70. Properties for DellServiceRoot" 가
@@ -10095,8 +10098,10 @@ def main():
             multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
         )
 
-    # 2026-08-11: 대표 시리얼 resolver 가 등록된 vendor 는 그 값을 **필수값**으로 다룬다.
-    # 못 얻으면 다른 시리얼 후보로 대체하지 않고 수집 자체를 실패시킨다 (사용자 결정).
+    # 2026-08-11: 대표 시리얼 resolver 가 등록된 vendor 는 그 값만 대표 시리얼로 쓴다 — 다른 시리얼 후보로 대체하지 않는다.
+    # 2026-11-09 (사용자 결정 2): 못 얻어도 수집은 계속한다. 대표 시리얼은 None, 사유는 notice 1건이다 — errors[] 에 넣지 않는다.
+    #   errors[] 에 넣으면 "서버 기본 정보" 섹션 실패 행이 따로 생겨 공통 규칙의 Serial 행과 같은 사건을 두 번 말하고,
+    #   정상 수집된 system 섹션을 실패처럼 보이게 한다. host 의 failed 판정은 공통 필수 식별자 규칙(시나리오 E)이 한다.
     # 미등록 vendor 는 _serial_resolver 가 None 이라 이 블록과 아래 확정 블록을 통째로 건너뛴다.
     _serial_resolver = _SERIAL_RESOLVERS.get(vendor)
     _forced_serial = None
@@ -10113,13 +10118,7 @@ def main():
         _forced_serial, _serial_err = _serial_resolver(
             service_root, refetch=_reauth_service_root)
         if _serial_err is not None:
-            all_errors.append(_err('system', _serial_err))
-            _exit(
-                changed=False, status='failed', vendor=vendor,
-                collected=[], failed_sections=['all'], unsupported_sections=[],
-                errors=all_errors, data={}, probe_facts=probe_facts,
-                multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
-            )
+            _notice('system', _serial_err)
 
     aux = {}   # 2026-10-27 (C9): data 밖으로 나가는 구조 근거(firmware_links)
     result_data = _collect_all_sections(
@@ -10133,23 +10132,13 @@ def main():
         pcie_link_registries=(p.get('pcie_port_link_condition_registries') or None),
     )
 
-    # 대표 시리얼 확정. gather_system 의 SerialNumber 값을 마지막에 덮어쓴다.
-    # system 섹션을 못 얻었으면 대표 시리얼을 실을 자리가 없다 → partial 로 내보내면
-    # hardware.serial=null 인 '정상' 결과가 되므로, 그 경로는 정상 결과로 반환하지 않는다.
+    # 대표 시리얼 확정. gather_system 의 SerialNumber(보드 시리얼) 값을 마지막에 덮어쓴다 — 못 얻었으면 None 이다.
+    # system 섹션을 못 얻었으면(GET 실패 등) 실을 자리가 없다 — 대표 시리얼은 null 로 나가고 공통 필수 식별자 규칙이
+    # host 를 failed 로 만든다 (2026-11-09 — 종전: 여기서 data={} 로 failed, 오류 행을 하나 더 붙였다).
     if _serial_resolver is not None:
         _sys_section = result_data.get('system')
         if isinstance(_sys_section, dict) and _sys_section:
             _sys_section['serial'] = _forced_serial
-        else:
-            all_errors.append(_err(
-                'system',
-                '서버 대표 시리얼을 결과에 실을 수 없습니다 — system 섹션 수집 실패'))
-            _exit(
-                changed=False, status='failed', vendor=vendor,
-                collected=[], failed_sections=['all'], unsupported_sections=[],
-                errors=all_errors, data={}, probe_facts=probe_facts,
-                multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
-            )
 
     # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 정의 vendor 만 multi_node 수집.
     # None / 미정의 vendor — 13 vendor 영향 0 (Additive only).

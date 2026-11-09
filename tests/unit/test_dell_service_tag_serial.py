@@ -1,17 +1,21 @@
-"""Dell 서버 대표 시리얼 = ServiceRoot.Oem.Dell.ServiceTag (2026-08-11 Dell 1차 교정).
+"""Dell 서버 대표 시리얼 = ServiceRoot.Oem.Dell.ServiceTag (2026-08-11 Dell 1차 교정 · 2026-11-09 실패 판정 이관).
 
 사용자 결정 (2026-08-11):
   - Dell 대표 시리얼 원천은 ServiceRoot.Oem.Dell.ServiceTag **단 하나**.
   - ComputerSystem.SerialNumber / System.SKU / DellSystem.ChassisServiceTag /
     DellSystem.NodeID / BIOS SystemServiceTag 로 **폴백하지 않는다**.
-  - 확보 못 하면 기존 failure contract 로 **수집을 실패**시킨다 (신규 failure code 금지).
+사용자 결정 (2026-11-09 결정 2 — 종전 "확보 못 하면 모듈이 수집을 실패시킨다(data={})" 를 대체):
+  - Service Tag 를 확보하지 못해도 모듈은 수집을 버리지 않는다. 대표 시리얼은 None 이고 사유는 notice 1건이다.
+    errors[] 에는 아무것도 더하지 않는다 — 더하면 "서버 기본 정보" 실패 행이 생겨 Serial 행과 같은 사건을 두 번 말한다.
+  - host 를 failed 로 내는 판정은 채널 공통 필수 식별자 규칙(common/tasks/normalize/require_serial.yml — 상태 시나리오 E)이
+    봉투 층에서 한다. 그 판정은 tests/unit/test_status_serial_required_scenario_e.py 와 Tier 1 미러 재생이 검증한다.
 
 배경: Dell iDRAC 의 ComputerSystem.SerialNumber 는 보드 제조 시리얼(`CNIVC…`)이라
 SMBIOS Type 1 System Serial 과 다르다. 동일 R760 실측에서 Redfish=CNIVC0048R0159,
 Linux(/sys/class/dmi/id/product_serial)=GSBPK54 로 채널 간 매칭이 깨졌다
 (docs/ai/contracts/serial-number.md §19).
 
-실행 층: 대표 시리얼 확정/차단은 main() 층 책임이라 `emulator_harness.run_gather`
+실행 층: 대표 시리얼 확정은 main() 층 책임이라 `emulator_harness.run_gather`
 (= main() gather 흐름 1:1 미러) 로 구동한다. gather_system 단독 호출은 대상이 아니다.
 """
 from __future__ import annotations
@@ -36,8 +40,12 @@ DECOY_SERIAL = "CNIVC0048R0159"   # ComputerSystem.SerialNumber (보드 제조 �
 DECOY_SKU = "SKU64CXJ54"          # System.SKU
 DECOY_CHASSIS_TAG = "CST64CXJ54"  # Oem.Dell.DellSystem.ChassisServiceTag
 DECOY_NODE_ID = "NID64CXJ54"      # Oem.Dell.DellSystem.NodeID
+DECOYS = (DECOY_SERIAL, DECOY_SKU, DECOY_CHASSIS_TAG, DECOY_NODE_ID)
 
 SERVICE_TAG = "GSBPK54"
+
+# resolver 실패 사유에 들어 있는 원천 이름 — 대표 시리얼 notice 를 다른 system notice 와 가른다
+SERIAL_NOTICE_TOKEN = "ServiceRoot.Oem.Dell.ServiceTag"
 
 
 # ── 합성 Dell BMC ────────────────────────────────────────────────────────────
@@ -121,9 +129,15 @@ class _FakeBmc(object):
         return 401, {}, "HTTP 401: Unauthorized"
 
 
+def _with_notices(result):
+    """notices 는 모듈 전역 누적이고 run_gather 진입 시 초기화된다 — 이 실행의 notice 를 곧바로 결과에 붙여 둔다."""
+    result["_notices"] = rg.notices()
+    return result
+
+
 def _run_fake(bmc, vendor_user="u"):
-    return H.run_gather(bmc.get, bmc.noauth, realm_impl=lambda *a, **k: None,
-                        user=vendor_user)
+    return _with_notices(H.run_gather(bmc.get, bmc.noauth, realm_impl=lambda *a, **k: None,
+                                      user=vendor_user))
 
 
 # ── 실 fixture 디렉터리 재생 ─────────────────────────────────────────────────
@@ -150,11 +164,69 @@ def _recording_from_dir(name):
 def _run_dir(name):
     recording, service_root = _recording_from_dir(name)
     get_impl, noauth_impl, realm_impl = H.make_replayer(recording)
-    return H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl), service_root
+    return _with_notices(H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl)), service_root
+
+
+def _load_r740_mirror():
+    base = FIXTURE_ROOT / "real_dell_r740"
+    with open(base / "recording.json", encoding="utf-8") as fh:
+        recording = json.load(fh)
+    with open(base / "meta.json", encoding="utf-8") as fh:
+        layout = json.load(fh).get("manager_layout")
+    return recording, layout
+
+
+def _run_recording(recording, layout):
+    get_impl, noauth_impl, realm_impl = H.make_replayer(recording)
+    return _with_notices(H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl, manager_layout=layout))
 
 
 def _serial_of(result):
     return ((result.get("data") or {}).get("system") or {}).get("serial")
+
+
+def _serial_notices(result):
+    return [n for n in result["_notices"] if n["section"] == "system" and SERIAL_NOTICE_TOKEN in n["message"]]
+
+
+def _data_without_serial(result):
+    data = copy.deepcopy(result.get("data") or {})
+    system = data.get("system")
+    if isinstance(system, dict):
+        system.pop("serial", None)
+    return data
+
+
+def _paths_of(obj, needle, path=""):
+    """obj 안에서 값이 needle 인 위치 목록 (JSON 경로)."""
+    if isinstance(obj, dict):
+        return [p for k, v in obj.items() for p in _paths_of(v, needle, "%s.%s" % (path, k))]
+    if isinstance(obj, list):
+        return [p for i, v in enumerate(obj) for p in _paths_of(v, needle, "%s[%d]" % (path, i))]
+    return [path] if obj == needle else []
+
+
+def _reference(system_status=200):
+    """같은 합성 BMC 에 정상 Service Tag 를 준 결과 — 비교 기준."""
+    root = _service_root()
+    return _run_fake(_FakeBmc(noauth_root=root, auth_root=root, system_status=system_status))
+
+
+# 섹션 결과 · 오류 수 · 식별 근거 — Service Tag 유무로 달라지면 안 되는 키 (GOLDEN_KEYS 에서 data 를 뺀 것)
+SAME_KEYS = tuple(k for k in H.GOLDEN_KEYS if k != "data")
+
+
+def _assert_only_serial_lost(result, ref):
+    """Service Tag 를 못 얻은 결과가 정상 Service Tag 결과와 대표 시리얼 하나만 다르다 (2026-11-09 결정 2)."""
+    assert result["vendor"] == "dell", "vendor 가 dell 로 식별돼야 의미가 있다 (vacuous pass 차단)"
+    assert result["status"] != "failed", "모듈이 수집을 버리지 않는다"
+    assert _serial_of(result) is None
+    for key in SAME_KEYS:
+        assert result[key] == ref[key], "%s 가 정상 Service Tag 결과와 다르다 — 대표 시리얼 관련 모듈 오류 0건이어야 한다" % key
+    assert _data_without_serial(result) == _data_without_serial(ref), "대표 시리얼 외 data 는 그대로"
+    notes = _serial_notices(result)
+    assert len(notes) == 1, "대표 시리얼 사유는 notice 정확히 1건: %r" % (notes,)
+    assert _serial_notices(ref) == []
 
 
 # ── 1~3. ServiceTag 정상 + System 수집 정상 ──────────────────────────────────
@@ -169,37 +241,54 @@ def test_serial_is_service_root_service_tag(fixture_name):
     expected = rg._safe(service_root, "Oem", "Dell", "ServiceTag")
     assert expected, "%s: fixture 에 ServiceTag 없음 (테스트 전제 붕괴)" % fixture_name
     assert _serial_of(result) == expected
+    assert _serial_notices(result) == []
 
 
 def test_real_dell_r740_mirror_uses_service_tag():
     """실장비 미러(real_dell_r740) 재생 — 보드 시리얼이 아니라 Service Tag."""
-    base = FIXTURE_ROOT / "real_dell_r740"
-    with open(base / "recording.json", encoding="utf-8") as fh:
-        recording = json.load(fh)
-    with open(base / "meta.json", encoding="utf-8") as fh:
-        layout = json.load(fh).get("manager_layout")
-    get_impl, noauth_impl, realm_impl = H.make_replayer(recording)
-    result = H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl,
-                          manager_layout=layout)
+    recording, layout = _load_r740_mirror()
+    result = _run_recording(recording, layout)
     expected = rg._safe(recording["noauth::"][1], "Oem", "Dell", "ServiceTag")
     assert _serial_of(result) == expected
     assert _serial_of(result) != recording["get::Systems/System.Embedded.1"][1]["SerialNumber"]
 
 
+def test_real_dell_r740_mirror_without_service_tag_keeps_everything_else():
+    """실장비 미러에서 ServiceRoot 의 Service Tag 만 지우면 — 대표 시리얼만 null 이 되고 나머지 결과는 원본과 같다.
+
+    미러에는 인증 ServiceRoot(get::) 기록이 없어 재조회는 404 로 끝난다 (재조회 1회 뒤 포기).
+    """
+    recording, layout = _load_r740_mirror()
+    ref = _run_recording(recording, layout)
+    doctored = copy.deepcopy(recording)
+    for key in ("noauth::", "get::"):
+        if key in doctored:
+            ((doctored[key][1].get("Oem") or {}).get("Dell") or {}).pop("ServiceTag", None)
+    assert rg._safe(doctored["noauth::"][1], "Oem", "Dell", "ServiceTag") is None, "전제: 태그 제거"
+    result = _run_recording(doctored, layout)
+    assert ref["status"] == "success" and _serial_of(ref)
+    _assert_only_serial_lost(result, ref)
+    assert _paths_of(result, recording["get::Systems/System.Embedded.1"][1]["SerialNumber"]) == [], \
+        "보드 시리얼이 결과 어디에도 없다"
+
+
 # ── 4. ServiceTag 정상 + System 수집 실패 ────────────────────────────────────
 
-def test_system_section_failure_is_not_returned_as_normal_result():
-    """ServiceTag 는 정상인데 System GET 이 실패하면 partial+serial=null 로 내보내지 않는다.
+def test_system_section_failure_keeps_other_sections_and_leaves_serial_null():
+    """ServiceTag 는 정상인데 System GET 이 실패한 경우 (종전: data={} 로 failed — 2026-11-09 변경).
 
-    다른 섹션(processors)은 성공하므로 가드가 없으면 status=partial 이 되고
-    data.system 이 {} 라 hardware.serial 이 null 인 '정상' envelope 이 만들어진다.
+    다른 섹션(processors)은 그대로 남고 system 섹션만 실패다. 대표 시리얼을 실을 자리가 없어 null 이며,
+    늘어나는 오류는 system 섹션 실패 1건뿐이다 (대표 시리얼 관련 모듈 오류 0건). host 의 failed 판정은 공통 규칙 몫이다.
     """
-    root = _service_root()
-    bmc = _FakeBmc(noauth_root=root, auth_root=root, system_status=500)
-    result = _run_fake(bmc)
-    assert result["status"] == "failed"
-    assert result["data"] == {}
-    assert result["error_count"] >= 1
+    ok = _reference(200)
+    result = _reference(500)
+    assert result["status"] != "failed"
+    assert "system" in result["failed_sections"] and "system" not in result["collected"]
+    assert "processors" in result["collected"]
+    assert result["data"]["processors"] == ok["data"]["processors"], "다른 섹션 데이터 보존"
+    assert _serial_of(result) is None
+    assert result["error_count"] == ok["error_count"] + 1, "늘어난 오류는 system 섹션 실패 1건뿐"
+    assert _serial_notices(result) == [], "Service Tag 는 정상이라 대표 시리얼 notice 없음"
 
 
 # ── 5. ServiceTag 없음 / 6. invalid ──────────────────────────────────────────
@@ -218,53 +307,54 @@ INVALID_TAGS = ["", "   ", "NA", "N/A", "None", "Not Specified",
                 "To Be Filled By O.E.M.", "System Serial Number", "0", "00000000"]
 
 
-@pytest.mark.parametrize("case", sorted(MISSING_ROOTS))
-def test_missing_service_tag_fails_collection(case):
-    root = MISSING_ROOTS[case]
-    bmc = _FakeBmc(noauth_root=root, auth_root=root)
-    result = _run_fake(bmc)
-    # vendor 가 dell 로 식별돼야 이 테스트가 의미를 갖는다 (vacuous pass 차단).
-    assert result["vendor"] == "dell"
-    assert result["status"] == "failed"
-    assert result["data"] == {}
-    assert result["error_count"] >= 1
+def _root_without_oem():
+    return {k: v for k, v in _service_root().items() if k != "Oem"}
 
 
-@pytest.mark.parametrize("bad", INVALID_TAGS)
-def test_invalid_service_tag_fails_collection(bad):
-    root = _service_root(bad)
-    bmc = _FakeBmc(noauth_root=root, auth_root=root)
-    result = _run_fake(bmc)
-    assert result["vendor"] == "dell"
-    assert result["status"] == "failed"
-    assert result["data"] == {}
-    assert result["error_count"] >= 1
+# Service Tag 를 얻지 못하는 ServiceRoot 전부 (무인증 · 인증 응답이 같다)
+UNRESOLVED_ROOTS = dict(
+    [("missing:" + k, MISSING_ROOTS[k]) for k in sorted(MISSING_ROOTS)]
+    + [("invalid:%r" % b, _service_root(b)) for b in INVALID_TAGS]
+)
+
+
+@pytest.mark.parametrize("system_status", [200, 500])
+@pytest.mark.parametrize("case", sorted(UNRESOLVED_ROOTS))
+def test_unresolved_service_tag_keeps_the_collection(case, system_status):
+    """Service Tag 없음 / 무효값 — 결과는 정상 Service Tag 와 같은 섹션 결과 · 같은 data 이고 대표 시리얼만 null 이다.
+
+    System GET 실패(500)가 겹쳐도 같다: 그 경우 기준도 System 이 실패한 정상 태그 결과다.
+    """
+    root = UNRESOLVED_ROOTS[case]
+    result = _run_fake(_FakeBmc(noauth_root=root, auth_root=root, system_status=system_status))
+    _assert_only_serial_lost(result, _reference(system_status))
 
 
 # ── 7. 폴백 금지 실증 ────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize(
-    "root",
-    [MISSING_ROOTS[k] for k in sorted(MISSING_ROOTS)] + [_service_root(b) for b in INVALID_TAGS],
-)
-def test_never_falls_back_to_other_serial_candidates(root):
-    """Service Tag 를 못 얻은 결과 어디에도 다른 시리얼 후보가 등장하지 않는다.
+FALLBACK_CASES = dict(UNRESOLVED_ROOTS, no_oem=_root_without_oem())
 
-    System 응답에는 SerialNumber / SKU / ChassisServiceTag / NodeID 가 모두 정상 존재한다.
+
+@pytest.mark.parametrize("system_status", [200, 500])
+@pytest.mark.parametrize("case", sorted(FALLBACK_CASES))
+def test_never_falls_back_to_other_serial_candidates(case, system_status):
+    """Service Tag 를 못 얻은 결과에서 다른 시리얼 후보가 대표 시리얼 자리로 올라오지 않는다.
+
+    data 를 보존하게 된 뒤(2026-11-09)에는 SKU · ChassisServiceTag 가 자기 필드(system.sku · system.oem.chassis_service_tag)에
+    정당하게 남는다 — 정상 Service Tag 결과와 **같은 자리에만** 나타나야 한다. 보드 시리얼(ComputerSystem.SerialNumber)과
+    NodeID 는 정상 결과에도 어디에도 없으므로 여기서도 어디에도 없어야 한다.
     """
-    bmc = _FakeBmc(noauth_root=root, auth_root=root)
-    result = _run_fake(bmc)
+    root = FALLBACK_CASES[case]
+    result = _run_fake(_FakeBmc(noauth_root=root, auth_root=root, system_status=system_status))
+    ref = _reference(system_status)
     assert result["vendor"] == "dell"
-    blob = json.dumps(result, ensure_ascii=False)
-    for decoy in (DECOY_SERIAL, DECOY_SKU, DECOY_CHASSIS_TAG, DECOY_NODE_ID):
-        assert decoy not in blob, "폴백 금지 위반 — %s 가 결과에 등장" % decoy
+    assert _serial_of(result) is None
+    for decoy in DECOYS:
+        assert _paths_of(result, decoy) == _paths_of(ref, decoy), "폴백 금지 위반 — %s 의 위치가 정상 결과와 다르다" % decoy
+    assert _paths_of(ref, DECOY_SERIAL) == [] and _paths_of(ref, DECOY_NODE_ID) == [], "전제: 정상 결과에도 없다"
 
 
 # ── 8~10. 무인증/인증 ServiceRoot 노출 차이 ──────────────────────────────────
-
-def _root_without_oem():
-    return {k: v for k, v in _service_root().items() if k != "Oem"}
-
 
 def test_service_tag_recovered_from_authenticated_service_root():
     """무인증 ServiceRoot 는 200 이지만 OEM 블록이 없고, 인증 응답에만 ServiceTag 가 있는 경우.
@@ -276,13 +366,14 @@ def test_service_tag_recovered_from_authenticated_service_root():
     result = _run_fake(bmc)
     assert result["status"] != "failed"
     assert _serial_of(result) == SERVICE_TAG
+    assert _serial_notices(result) == []
     assert bmc.auth_root_gets == 1, "인증 ServiceRoot 재조회는 정확히 1회"
 
 
-def test_service_tag_absent_in_both_roots_still_fails():
+def test_service_tag_absent_in_both_roots_keeps_the_collection_after_one_refetch():
     bmc = _FakeBmc(noauth_root=_root_without_oem(), auth_root=_root_without_oem())
     result = _run_fake(bmc)
-    assert result["status"] == "failed"
+    _assert_only_serial_lost(result, _reference(200))
     assert bmc.auth_root_gets == 1, "재조회 후에도 없으면 더 시도하지 않는다"
 
 
@@ -296,45 +387,57 @@ def test_no_extra_service_root_fetch_when_noauth_already_has_tag():
 
 
 def test_no_refetch_without_credentials():
-    """자격증명이 없으면 재조회하지 않는다 (무인증 probe 경로 보호)."""
+    """자격증명이 없으면 재조회하지 않는다 (무인증 probe 경로 보호). 대표 시리얼은 null, 수집은 남는다."""
     bmc = _FakeBmc(noauth_root=_root_without_oem(), auth_root=_service_root())
-    result = H.run_gather(bmc.get, bmc.noauth, realm_impl=lambda *a, **k: None, user="")
-    assert result["status"] == "failed"
+    result = _run_fake(bmc, vendor_user="")
+    assert result["status"] != "failed"
+    assert _serial_of(result) is None
+    assert len(_serial_notices(result)) == 1
     assert bmc.auth_root_gets == 0
 
 
-# ── 11. 불변식 — 정상 결과에 Dell serial null 0건 ────────────────────────────
+# ── 11. 불변식 — Dell 대표 시리얼은 Service Tag 이거나 null, null 이면 근거가 남는다 ──
 
 def _all_dell_results():
-    """이 파일이 다루는 모든 Dell 실행 경로의 결과를 모은다."""
-    results = []
+    """이 파일이 다루는 모든 Dell 실행 경로 — (이름, 결과, 그 경로에서 얻을 수 있는 Service Tag 또는 None)."""
+    out = []
     for name in ("dell", "dell_r760"):
-        results.append(_run_dir(name)[0])
-    variants = (
-        [_service_root()]
-        + [MISSING_ROOTS[k] for k in sorted(MISSING_ROOTS)]
-        + [_service_root(b) for b in INVALID_TAGS]
-        + [_root_without_oem()]
-    )
-    for root in variants:
+        result, root = _run_dir(name)
+        out.append((name, result, rg._safe(root, "Oem", "Dell", "ServiceTag")))
+    variants = ([("tag_ok", _service_root(), SERVICE_TAG), ("no_oem", _root_without_oem(), None)]
+                + [(name, root, None) for name, root in sorted(UNRESOLVED_ROOTS.items())])
+    for name, root, tag in variants:
         for system_status in (200, 500):
             bmc = _FakeBmc(noauth_root=root, auth_root=root, system_status=system_status)
-            results.append(_run_fake(bmc))
+            out.append(("%s/system=%d" % (name, system_status), _run_fake(bmc), tag))
     bmc = _FakeBmc(noauth_root=_root_without_oem(), auth_root=_service_root())
-    results.append(_run_fake(bmc))
-    return results
+    out.append(("tag_in_auth_root_only", _run_fake(bmc), SERVICE_TAG))
+    return out
 
 
-def test_dell_serial_is_never_null_in_a_non_failed_result():
-    """Dell 계약 불변식 — status 가 failed 가 아니면 대표 시리얼이 반드시 채워져 있다."""
+def test_dell_serial_is_service_tag_or_null_and_null_has_evidence():
+    """Dell 계약 불변식 (2026-11-09 개정).
+
+    - 어떤 경로도 수집을 버리지 않는다 (status failed · data={} 0건).
+    - 대표 시리얼은 그 경로의 Service Tag 이거나 null 이다.
+    - null 이면 근거가 있다: 대표 시리얼 notice(Service Tag 를 못 얻음) 또는 system 섹션 실패(실을 자리가 없음).
+    종전 불변식("failed 가 아니면 serial 이 채워져 있다")은 봉투 층으로 옮겨졌다 — serial 이 null 인 host 는 공통 규칙이
+    failed 로 만든다 (tests/unit/test_status_serial_required_scenario_e.py).
+    """
     offenders = []
-    for result in _all_dell_results():
-        if result["status"] == "failed":
-            continue
+    for name, result, tag in _all_dell_results():
         serial = _serial_of(result)
-        if not (isinstance(serial, str) and serial.strip()):
-            offenders.append((result["status"], serial))
-    assert not offenders, "정상 결과인데 Dell serial 이 비었다: %r" % (offenders,)
+        system_failed = "system" in result["failed_sections"]
+        if result["status"] == "failed" or result["data"] == {}:
+            offenders.append((name, "수집을 버렸다", result["status"]))
+        if serial is None:
+            if not (_serial_notices(result) or system_failed):
+                offenders.append((name, "null 인데 근거(notice · system 실패)가 없다"))
+            if tag is not None and not system_failed:
+                offenders.append((name, "Service Tag 를 얻을 수 있는데 null"))
+        elif serial != tag:
+            offenders.append((name, "Service Tag 가 아닌 값", serial))
+    assert not offenders, offenders
 
 
 # ── 12. 비-Dell 무회귀 ───────────────────────────────────────────────────────
@@ -358,3 +461,20 @@ def test_non_dell_still_uses_computer_system_serial_number(fixture_name):
 def test_non_dell_never_triggers_service_root_refetch():
     """비-Dell 은 resolver 자체가 등록되어 있지 않아 재조회 경로를 타지 않는다."""
     assert set(rg._SERIAL_RESOLVERS) == {"dell"}
+
+
+# ── 13. main() 과 run_gather 미러의 동기화 ───────────────────────────────────
+
+def test_module_main_no_longer_exits_on_unresolved_service_tag():
+    """main() 이 Service Tag 를 못 얻었을 때 data={} 로 끝내던 두 경로(2026-08-11)가 없어졌는지 소스로 확인한다.
+
+    이 파일의 시험은 run_gather(main() 1:1 미러)를 돌리므로, main() 에만 옛 _exit 가 남으면 시험은 통과하고 운영만 달라진다.
+    """
+    src = (REPO / "redfish-gather" / "library" / "redfish_gather.py").read_text(encoding="utf-8")
+    main_src = src[src.index("\ndef main("):]
+    block = main_src[main_src.index("_serial_resolver = _SERIAL_RESOLVERS.get(vendor)"):
+                     main_src.index("multi_node = _collect_multi_node_topology(")]
+    assert "_exit(" not in block, "대표 시리얼 처리 블록 안에 _exit 가 남아 있다"
+    assert "_notice('system', _serial_err)" in block
+    assert "all_errors.append" not in block, "대표 시리얼 사유를 errors[] 에 넣지 않는다"
+    assert "_sys_section['serial'] = _forced_serial" in block

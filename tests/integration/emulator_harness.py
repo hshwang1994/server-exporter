@@ -116,8 +116,8 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
                 "error_count": len(all_errors),
             }
 
-        # main() 미러링 (2026-08-11): 대표 시리얼 resolver 가 등록된 vendor 는 그 값이 필수값이다.
-        # 못 얻으면 다른 시리얼 후보로 대체하지 않고 실패로 끝낸다. 미등록 vendor 는 영향 0.
+        # main() 미러링 (2026-08-11): 대표 시리얼 resolver 가 등록된 vendor 는 그 값만 대표 시리얼로 쓴다 — 다른 후보로 대체하지 않는다.
+        # 2026-11-09: 못 얻어도 수집은 계속한다. 대표 시리얼은 None, 사유는 notice 1건(errors[] 아님). 미등록 vendor 는 영향 0.
         serial_resolver = rg._SERIAL_RESOLVERS.get(vendor)
         forced_serial = None
         if serial_resolver is not None:
@@ -132,18 +132,7 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             forced_serial, serial_err = serial_resolver(
                 service_root, refetch=_reauth_service_root)
             if serial_err is not None:
-                all_errors.append(rg._err("system", serial_err))
-                return {
-                    "vendor": vendor,
-                    "status": "failed",
-                    "collected": [],
-                    "failed_sections": ["all"],
-                    "unsupported_sections": [],
-                    "data": {},
-                    "multi_node": None,
-                    "probe_facts": probe_facts,
-                    "error_count": len(all_errors),
-                }
+                rg._notice("system", serial_err)
 
         aux = {}   # 2026-10-27: data 밖 구조 근거(firmware_links · ndf_mtu_by_mac) — GOLDEN_KEYS 밖, 테스트가 읽는다
         data = rg._collect_all_sections(
@@ -156,26 +145,12 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             pcie_link_registries=pcie_link_registries,
         )
 
-        # main() 미러링: 대표 시리얼 확정 + 실을 자리가 없으면 정상 결과로 반환하지 않는다.
+        # main() 미러링: 대표 시리얼 확정 (못 얻었으면 None). system 섹션을 못 얻었으면 실을 자리가 없다 —
+        # 대표 시리얼은 null 로 나간다 (2026-11-09 — 종전: data={} 로 failed).
         if serial_resolver is not None:
             sys_section = data.get("system")
             if isinstance(sys_section, dict) and sys_section:
                 sys_section["serial"] = forced_serial
-            else:
-                all_errors.append(rg._err(
-                    "system",
-                    "서버 대표 시리얼을 결과에 실을 수 없습니다 — system 섹션 수집 실패"))
-                return {
-                    "vendor": vendor,
-                    "status": "failed",
-                    "collected": [],
-                    "failed_sections": ["all"],
-                    "unsupported_sections": [],
-                    "data": {},
-                    "multi_node": None,
-                    "probe_facts": probe_facts,
-                    "error_count": len(all_errors),
-                }
 
         multi_node = rg._collect_multi_node_topology(
             ip, vendor, service_root, user, pw, timeout, verify_ssl,
