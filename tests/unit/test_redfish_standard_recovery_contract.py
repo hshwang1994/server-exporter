@@ -275,7 +275,11 @@ def test_account_service_never_collects():
 
 
 def test_recollect_requires_verified_recovery():
-    """Phase 3 재수집은 recovered=true + dryrun=false 일 때만 (§9)."""
+    """Phase 3 재수집은 recovered=true + verification=='verified' + dryrun=false 일 때만 (§9).
+
+    2026-11-16: 조건을 오류 행 판정(`_rf_acct_failed`)과 맞췄다. 렌더 진리표는
+    tests/unit/test_account_create_method_by_generation.py::test_phase3_recollect_truth_table.
+    """
     task = None
     for t in _tasks_of("redfish-gather/site.yml"):
         if "re-collect with standard account" in (t.get("name") or ""):
@@ -284,6 +288,7 @@ def test_recollect_requires_verified_recovery():
     when = " ".join(str(x) for x in (task.get("when") or []))
     assert "recovered" in when
     assert "dryrun" in when
+    assert "'verified'" in when
 
 
 # ═══════════════════════════════════════════════════════════════════════════

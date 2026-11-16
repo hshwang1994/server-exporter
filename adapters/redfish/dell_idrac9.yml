@@ -29,11 +29,15 @@
 #     tasks 는 idrac9/idrac10 동일(dell OEM)이라 **수집 데이터는 동일**. NEXT_ACTIONS 등재.
 #     ※ 2026-08-12 정정: "diagnosis 라벨만 cosmetic 차이" 는 **수집 경로에 한한 이야기**다.
 #       계정 경로에서는 cosmetic 이 아니었다 — 이 오선택이 Account Family 세대 근거로 그대로
-#       쓰여 dell_idrac10_slot_patch(reserved_slot_ids={1,2})가 선택됐고, 빈 슬롯이 2번일 때
-#       PATCH 대상 슬롯 URI 가 달라진다. 10.100.15.34 에서 차이가 안 보인 건 slot 2 를 root 가
-#       점유했기 때문이다. Family 판정은 Firmware major 기준으로 교정했고(redfish_gather.py
+#       쓰여 iDRAC10 Family(당시 dell_idrac10_slot_patch, reserved_slot_ids={1,2})가 선택됐고, 빈 슬롯이
+#       2번일 때 PATCH 대상 슬롯 URI 가 달라진다. 10.100.15.34 에서 차이가 안 보인 건 slot 2 를 root 가
+#       점유했기 때문이다. Family 판정은 장비 값 기준으로 교정했고(redfish_gather.py
 #       resolve_account_family), adapter 오선택 자체는 남아 있다.
 #       evidence: tests/evidence/2026-08-12-standard-password-convergence.md §5
+#     ※ 2026-11-16: iDRAC10 Family 는 Collection POST(dell_idrac10_collection_post)로 바뀌어, 이 오선택이 Family 에
+#       새면 이제 슬롯이 아니라 **생성 방식**이 갈린다(iDRAC9 는 Collection POST 미지원). 그래서 Family 판정은
+#       Manager.Model(<NN>G) → Firmware major(2~7 = iDRAC9 이하) → 계정 목록 모양 → hint 순으로 한다.
+#       evidence: tests/evidence/2026-11-16-dell-idrac10-account-create-post.md
 #   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
 # Storage strategy evolution (web sources, M-H1 cycle 2026-05-07):
 #   - iDRAC9 3.x ~ 4.x: standard storage path (Volumes 표준 미도입)

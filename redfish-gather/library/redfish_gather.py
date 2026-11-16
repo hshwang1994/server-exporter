@@ -614,7 +614,9 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
 
 def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
     """F50 phase 4 (cycle 2026-05-06): DELETE method 추가 — Lenovo XCC 권한 cache 손상 시
-    DELETE + POST 재생성 fallback. Dell iDRAC 는 DELETE 미지원 (PATCH-only)."""
+    DELETE + POST 재생성 fallback. Dell 은 이 fallback 을 쓰지 않는다 — iDRAC9 이하는 slot 모델이라
+    DELETE·POST 가 없고, iDRAC10 은 POST·DELETE 가 있지만 재생성은 실장비 근거가 없어 막아 둔다
+    (account_service_provision 의 재생성 분기, 2026-11-16)."""
     _evidence_request(path)
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     _invalidate_response_cache()   # P2
@@ -7471,8 +7473,9 @@ def _compute_final_status(collected, failed, errors=None, first_auth_status=None
 
 # ── P2 (cycle 2026-04-28): AccountService — 공통계정 자동 생성/복구 ──────────
 # vendor 분기는 Redfish API spec OEM namespace 의존 (rule 96 R1 외부 계약).
-# Dell  : slot 기반 PATCH (/Accounts/{N}, N=1..17). POST 미지원
-# HPE / Lenovo / Supermicro: POST /Accounts 표준
+# Dell  : iDRAC7/8/9 = slot 기반 PATCH (/Accounts/{N}, N=1..17, POST 미지원).
+#         iDRAC10 = Collection POST (2026-11-16 정정 — `_ACCOUNT_FAMILIES` 의 Dell 항목 주석)
+# HPE / Lenovo / Supermicro: POST /Accounts 표준 (Lenovo Purley 만 slot PATCH)
 # Cisco : AccountService 표준 미지원 (errors[]에 not_supported 기록 후 종료)
 
 # 2026-08-12 (rev.2): vendor -> create method 표(`_ACCOUNT_CREATE_STRATEGY`)를 제거했다.
@@ -7985,9 +7988,8 @@ _ACCOUNT_FAMILY_DEFAULTS = {
 }
 
 _ACCOUNT_FAMILIES = {                                                          # nosec rule12-r1
-    # Dell — slot PATCH. slot 1 = IPMI anonymous 예약. iDRAC10 은 slot 2 = root 예약.
-    # source: dell.com/.../idrac8_2.70.70.70_ug/configuring-local-users,
-    #         dell.com/.../idrac10_1.20.xx_ug/configuring-local-users (ID 1,2 reserved)
+    # Dell iDRAC7/8/9 — slot PATCH. slot 1 = IPMI anonymous 예약.
+    # source: dell.com/.../idrac8_2.70.70.70_ug/configuring-local-users
     # Locked: GET 에는 있지만 iDRAC9 7.10.70 실측에서 read-only 로 거부됐고(200+본문),
     #   공식 Updatable Property 목록(UserName/Password/RoleId/Enabled)에도 없다.
     # PasswordChangeRequired: 공식 Updatable 목록에 없음 → 보내지 않는다.
@@ -8000,7 +8002,20 @@ _ACCOUNT_FAMILIES = {                                                          #
                                      'AccountTypes': {'create': 'unsupported',
                                                       'repair': 'verify_only'},
                                  }},
-    'dell_idrac10_slot_patch':  {'create_method': 'slot_patch',                # nosec rule12-r1
+    # Dell iDRAC10 — Collection POST (`AccountService/Accounts`, BMC 가 Id 를 정한다. body 에 Id 없음).
+    # source: developer.dell.com iDRAC10 Redfish API "What's New" — 1.10.17.00(첫 릴리스)
+    #         "Support for POST operation on ManagerAccountCollection to create a user"
+    # source: github.com/dell/iDRAC-Redfish-Scripting Invoke-CreateIdracUserPasswordREDFISH.psm1 —
+    #         Manager.Model 12G~16G 는 Accounts/<id> PATCH, 그 밖(iDRAC10)은 Accounts POST(201) · DELETE(204)
+    # source: dell.com/.../idrac10_1.20.xx_ug/configuring-local-users (ID 1,2 reserved — 기록용,
+    #         POST 에서는 BMC 가 Id 를 정하므로 쓰기 대상 계산에 쓰이지 않는다)
+    # 사이트 실측 (사용자 보고 2026-11-16): slot PATCH 로는 "빈 계정 슬롯이 없어" 로 쓰기 전에 실패,
+    #   create_method 를 collection_post 로 바꾸자 Id 없는 POST 로 생성 · 재인증 성공. 원본 envelope 은 미캡처라 evidence 는 documented.
+    # Locked · AccountTypes: 생성 때 보내지 않는다 — iDRAC9 실측 계약을 그대로 둔다(iDRAC10 공식 Updatable 목록 미확보).
+    # DRIFT 발견 2026-11-16 (DRIFT-034): 2026-08-12 이 Family 를 만들 때 예약 슬롯만 문서로 확인하고 생성 방식은 iDRAC9 의
+    #   slot PATCH 를 근거 없이 물려받았다(id 도 dell_idrac10_slot_patch 였다). 실제 계약은 Collection POST.
+    'dell_idrac10_collection_post': {                                          # nosec rule12-r1
+                                 'create_method': 'collection_post',
                                  'reserved_slot_ids': ('1', '2'), 'evidence': 'documented',
                                  'props': {
                                      'Locked': {'create': 'unsupported', 'repair': 'read_only'},
@@ -8356,43 +8371,56 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
     v = (vendor or '').lower()
 
     if v == 'dell':                                                            # nosec rule12-r1
-        # iDRAC10 은 slot 1 뿐 아니라 slot 2 도 예약이라, 세대를 잘못 잡으면 **쓰기 대상
-        # 슬롯이 달라진다.** payload 와 method 는 같지만 URI 가 갈린다.
+        # 세대가 **생성 방식**을 가른다 (2026-11-16 정정). iDRAC7/8/9 는 미리 깔린 slot 에 PATCH 하고
+        # (Collection POST 없음), iDRAC10 은 Collection POST 로 만든다. 세대를 잘못 잡으면 장비가
+        # 지원하지 않는 방식으로 쓰게 되고, 그 1회 쓰기는 거부된다.
         #
         # 2026-08-12 실측 사고 (10.100.15.34): 실제로는 iDRAC9 / PowerEdge R760 /
-        #   Firmware 7.10.70.00 인데 Family 가 dell_idrac10_slot_patch 로 잡혔다.
-        #   원인은 두 겹이다.
+        #   Firmware 7.10.70.00 인데 Family 가 iDRAC10 으로 잡혔다. 원인은 두 겹이다.
         #     (a) Adapter 선택이 **무인증 probe** 단계라 model/firmware fact 가 비어 있고,
         #         비어 있는 fact 는 실격이 아니라 skip 이라 priority 만으로 정해진다
-        #         (dell_idrac10 priority 120 > dell_idrac9 100). → adapter_id 가 idrac10.
-        #     (b) 여기서 그 adapter_id 를 그대로 세대 근거로 썼다. 나머지 한쪽인
-        #         Manager.Model 은 Dell 에서 '<NN>G Monolithic' 형태(이 장비는 16G)라
-        #         'idrac10' 이 절대 들어가지 않는 죽은 조건이었다. 결국 **adapter hint
-        #         단독으로** Family 가 결정됐다 — 이 함수의 계약(hint 는 마지막 순위) 위반.
-        #   이번 장비에서 관측 가능한 차이가 0 이었던 것은 slot 2 를 root 가 쓰고 있어
-        #   예약 슬롯 차이가 드러나지 않았기 때문이지, 동작이 같아서가 아니다.
+        #         (dell_idrac10 priority 120 > dell_idrac9 100). → Dell 은 hint 가 **늘** idrac10 이다.
+        #     (b) 여기서 그 adapter_id 를 그대로 세대 근거로 썼다 — 이 함수의 계약(hint 는 마지막 순위) 위반.
+        #   2026-11-16: Firmware 4~7 만 iDRAC9 로 보던 판별은 iDRAC8(2.x — 사이트 R630 8대, '13G Monolithic')과
+        #   초기 iDRAC9(3.x)를 hint(idrac10)로 흘렸다. 두 Family 의 생성 방식이 같았을 때는 드러나지 않았다.
         #
-        # 그래서 세대는 **장비가 준 값**에서 정한다: Firmware major 가 유일하게 신뢰할 수
-        # 있는 신호다 (iDRAC9 = 4.x~7.x, iDRAC10 = 1.x — adapters/redfish/dell_idrac{9,10}.yml
-        # 의 firmware_patterns 와 같은 계약). Model 은 보조, hint 는 근거가 없을 때만.
-        # source: dell.com/.../idrac10_1.20.xx_ug/configuring-local-users (ID 1,2 reserved)
-        #
-        # 주의: _has_prepopulated_slots() 는 세대를 가르지 못한다. 두 Family 모두
-        #   slot_patch 이고 16 슬롯 prepopulated 는 iDRAC9/10 양쪽 모두 참이다.
+        # 그래서 세대는 **장비가 준 값**에서 정한다. 순서:
+        #   ① Manager.Model '<NN>G …' — Dell 공식 스크립트(Invoke-CreateIdracUserPasswordREDFISH)와 같은 기준:
+        #      12G~16G = iDRAC9 이하(slot PATCH), 그 밖 = iDRAC10. Model 에 'idrac10' 이 있어도 iDRAC10.
+        #   ② Firmware major — 1.x = iDRAC10 (Redfish 를 지원하는 구세대에 1.x 는 없다: iDRAC7/8 Redfish 는 2.30+),
+        #      2.x~7.x = iDRAC7/8/9 (adapters/redfish/dell_idrac{8,9,10}.yml 의 firmware_patterns 와 같은 계약).
+        #   ③ 계정 목록 모양 — 빈 UserName slot 이 미리 깔려 있으면 slot 모델(iDRAC9 이하)이다. iDRAC10 은
+        #      slot 을 미리 깔지 않는 것으로 보인다(사이트 보고: 빈 슬롯 0 — Accounts 캡처로 확정 예정).
+        #      Manager 를 못 읽었을 때만 쓴다.
+        #   ④ adapter hint — 위 근거가 하나도 없을 때만. 그것도 없으면 iDRAC9 이하(종전 기본).
+        # 한계: 미래 iDRAC10 Firmware 가 2.x 가 되면 ②가 iDRAC8 과 겹친다. Model(①)이 먼저라 Manager 를 읽은
+        #   경우는 영향이 없고, Model 이 빠진 경우만 slot 모델로 가서 빈 슬롯이 없으면 쓰기 전에 멈춘다.
         mdl = (mgr.get('model') or '').lower()
+        m_gen = re.search(r'\b(\d{2})\s*g\b', mdl)
+        model_gen = int(m_gen.group(1)) if m_gen else None
         fw_match = re.match(r'\s*(\d+)\.', str(firmware or ''))
         fw_major = int(fw_match.group(1)) if fw_match else None
-        if fw_major in (4, 5, 6, 7):
-            gen10 = False                    # Firmware 가 iDRAC9 를 확정한다 — hint 보다 우선
-        elif fw_major == 1 or 'idrac10' in mdl:
-            gen10 = True
+        prepopulated = _has_prepopulated_slots(accounts)
+        hint_gen10 = 'idrac10' in hint
+        if model_gen is not None:
+            gen10, basis = model_gen >= 17, 'model'
+        elif 'idrac10' in mdl:
+            gen10, basis = True, 'model'
+        elif fw_major == 1:
+            gen10, basis = True, 'firmware'
+        elif fw_major is not None and 2 <= fw_major <= 7:
+            gen10, basis = False, 'firmware'
+        elif prepopulated:
+            gen10, basis = False, 'slots'
+        elif hint_gen10:
+            gen10, basis = True, 'hint'
         else:
-            gen10 = 'idrac10' in hint        # 근거 없음 → hint 는 마지막 순위
+            gen10, basis = False, 'default'
         reasons.append(                                                        # nosec rule12-r1
-            f'vendor=dell fw_major={fw_major} model={mdl!r} '
-            f'hint_idrac10={"idrac10" in hint} '
-            f'prepopulated={_has_prepopulated_slots(accounts)} → idrac10={gen10}')
-        return account_family('dell_idrac10_slot_patch' if gen10 else 'dell_slot_patch'), reasons
+            f'vendor=dell model_gen={model_gen} fw_major={fw_major} model={mdl!r} '
+            f'prepopulated={prepopulated} hint_idrac10={hint_gen10} basis={basis} '
+            f'→ idrac10={gen10} ({"Collection POST" if gen10 else "slot PATCH"})')
+        return account_family('dell_idrac10_collection_post' if gen10 else 'dell_slot_patch'), reasons
 
     if v == 'cisco':                                                           # nosec rule12-r1
         # 실제 Role 어휘가 가장 강한 근거다. CIMC 는 admin/user/readonly,
@@ -8444,6 +8472,20 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
         mdl = (mgr.get('model') or '').lower()
         m_gen = re.search(r'xclarity controller\s*(\d+)?', mdl)                       # nosec rule12-r1
         model_gen = (int(m_gen.group(1)) if m_gen.group(1) else 2) if m_gen else None
+        # (0-a) 2026-11-16: 숫자 없는 'Lenovo XClarity Controller' 는 XCC 1세대 이름이고, Intel Purley 와
+        #   Whitley/AMD 가 **같은 이름**을 쓴다. 계정 생성 계약은 다르다 — Purley 만 미리 깔린 slot 12개
+        #   (빈 slot = UserName "")에 PATCH 로 만들고, Collection POST 는 Whitley 와 AMD 2-socket 에만 해당한다.
+        #   위 (0) 이 이 이름을 전부 XCC2 Family(POST)로 보내 Purley 가 지원하지 않는 POST 를 받게 됐다
+        #   (2026-10-27 회귀). 장비가 보여 준 계정 목록 모양으로 가른다. hint 는 근거로 쓰지 않는다 —
+        #   Lenovo 1차 선택은 무인증이라 priority 로 늘 xcc3 다.
+        # source: pubs.lenovo.com/xcc-restapi/create_an_account_intel_p_based_patch (Accounts/{1...12}, 빈 slot = UserName "")
+        # source: pubs.lenovo.com/xcc-restapi/create_an_account_post ("Lenovo Intel Whitley-based systems and AMD 2 sockets systems")
+        # 실측: tests/reference/redfish/lenovo/10_50_11_232 (SR650 V2 Whitley, AFBT58B 5.70) 는 계정 3개만 노출 — 동적 모델.
+        # lab: Purley 부재 (NEXT_ACTIONS ACC-L3)
+        if m_gen and not m_gen.group(1) and _has_prepopulated_slots(accounts):
+            reasons.append(f'Manager.Model={mdl!r}(XCC 1세대) + pre-populated empty slots 관측 '   # nosec rule12-r1
+                           f'→ Purley slot PATCH (hint={hint!r} 는 참고)')
+            return account_family('lenovo_purley_slot_patch'), reasons
         # (1) 장비가 실제로 노출한 AccountTypes — XCC2/XCC3 의 서명이다.
         exposes_account_types = any(a.get('account_types') for a in accounts)
         # (2) HostBootstrapAccount 는 XCC2/XCC3 계열에만 나타나는 표준 Property 다.
@@ -9596,8 +9638,11 @@ def account_service_provision(
                 ),
             ))
             return out
-        # 권한 손상 감지 — 운영 안전 위해 best-effort fallback.
-        # vendor='dell' 은 PATCH-only (POST 미지원) → fallback 불가, errors[] 만 기록.
+        # 권한 손상 감지 — 운영 안전 위해 best-effort fallback (위 allow_delete_recreate opt-in).
+        # vendor='dell' 은 이 fallback 을 하지 않는다 → errors[] 만 기록.
+        #   iDRAC7/8/9 (slot 모델): Collection POST · DELETE 가 없다 (PATCH-only).
+        #   iDRAC10: POST 생성 · DELETE 는 있지만 DELETE+POST 재생성은 실장비 근거가 없다. 막아 둔 것을
+        #     근거 없이 여는 것은 Delete/Recreate 보호 정책 완화라 그대로 막는다 (2026-11-16).
         # 그 외 vendor (Lenovo/HPE/Supermicro/Cisco/Huawei/Inspur/Fujitsu/Quanta):
         # DELETE + POST 재생성 시도.
         out['errors'].append(_err(
@@ -9607,10 +9652,12 @@ def account_service_provision(
             detail=verify_err or f'verify HTTP {verify_code}',
         ))
         if vendor == 'dell':                                                   # nosec rule12-r1
-            # Dell PATCH-only — DELETE + POST 미지원
             out['errors'].append(_err(
                 'account_service',
-                'Dell iDRAC PATCH-only — DELETE+POST fallback 미지원 (수동 복구 필요)',  # nosec rule12-r1
+                ('Dell iDRAC PATCH-only — DELETE+POST fallback 미지원 (수동 복구 필요)'  # nosec rule12-r1
+                 if family['create_method'] == 'slot_patch' else
+                 'Dell iDRAC10 — DELETE+POST 재생성은 실장비 검증 전이라 하지 않습니다 (수동 복구 필요)'),  # nosec rule12-r1
+                detail=f'family={family["id"]}',
             ))
             return out
         # DELETE 시도
@@ -9707,9 +9754,9 @@ def account_service_provision(
     chosen_slot = None
     explicit_id = None
     if family['create_method'] == 'slot_patch':
-        # Dell / Lenovo Purley: 미리 깔린 빈 슬롯에 PATCH 해서 계정을 만든다.
-        # 예약 슬롯은 Family 가 안다 (Dell slot 1, iDRAC10 은 slot 1·2).
-        # source: dell.com/.../idrac10_1.20.xx_ug/configuring-local-users,
+        # Dell iDRAC7/8/9 · Lenovo Purley: 미리 깔린 빈 슬롯에 PATCH 해서 계정을 만든다.
+        # 예약 슬롯은 Family 가 안다 (Dell slot 1). iDRAC10 은 Collection POST 라 여기 오지 않는다 (2026-11-16).
+        # source: dell.com/.../idrac8_2.70.70.70_ug/configuring-local-users,
         #         pubs.lenovo.com/xcc-restapi/create_an_account_intel_p_based_patch
         # 보호 계정은 Family 의 reserved id 뿐 아니라 **Resource Property** 로도 걸러낸다.
         protected_ids = {('' if a.get('id') is None else str(a.get('id')))

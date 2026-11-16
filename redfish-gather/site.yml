@@ -211,10 +211,14 @@
         # ── Phase 3: 표준 계정으로 재인증 + 재수집 ───────────────────────
         # 복구가 **실제로 확인**됐을 때만 (§9 — write 2xx 는 성공이 아니다).
         # 여기서 성공해야 비로소 "표준 계정으로 수집했다" 가 된다.
+        # 2026-11-16: 확인 조건을 오류 행 판정(account_service.yml `_rf_acct_failed`)과 같게 둔다 —
+        #   recovered 와 verification=='verified' 를 함께 본다. 생성 · 동기화가 실패하면 여기서 멈추고
+        #   아래 abort 가 실패 결과를 만든다.
         - name: "redfish | re-collect with standard account (after recovery)"
           when:
             - _rf_account_reconcile_allowed | bool
             - (_rf_account_service_meta | default({})).recovered | default(false) | bool
+            - ((_rf_account_service_meta | default({})).verification | default('none')) == 'verified'
             - not ((_rf_account_service_meta | default({})).dryrun | default(true) | bool)
           ansible.builtin.include_tasks: tasks/collect_standard.yml
           vars:

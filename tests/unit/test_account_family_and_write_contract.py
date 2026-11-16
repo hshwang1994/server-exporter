@@ -83,12 +83,15 @@ def test_dell_idrac10_protects_reserved_root_slot():
 
     source: dell.com/.../idrac10_1.20.xx_ug/configuring-local-users
 
-    2026-08-12: 세대 근거를 adapter hint 가 아니라 **Firmware** 로 고정했으므로
-    이 테스트도 장비가 주는 값으로 다시 앵커한다 (iDRAC10 = 1.x, iDRAC9 = 4.x~7.x).
+    2026-08-12: 세대 근거를 adapter hint 가 아니라 **장비 값** 으로 고정했으므로
+    이 테스트도 장비가 주는 값으로 다시 앵커한다 (iDRAC10 = 17G · 1.x, iDRAC9 = 16G · 7.x).
+    2026-11-16: iDRAC10 은 Collection POST 로 만든다 — BMC 가 Id 를 정하므로 예약 목록은
+    쓰기 대상 계산에 쓰이지 않지만, 문서 계약으로 남긴다.
     """
     fam, _ = rg.resolve_account_family(
         "dell", _disc(_slots(16), manager=_dell_mgr("1.20.55.10", "17G Monolithic")), None)
-    assert fam["id"] == "dell_idrac10_slot_patch"
+    assert fam["id"] == "dell_idrac10_collection_post"
+    assert fam["create_method"] == "collection_post"
     assert set(fam["reserved_slot_ids"]) == {"1", "2"}
     old, _ = rg.resolve_account_family(
         "dell", _disc(_slots(16), manager=_dell_mgr("7.10.70.00", "16G Monolithic")), None)
@@ -101,8 +104,9 @@ def test_dell_generation_comes_from_firmware_not_adapter_hint():
     실제는 iDRAC9 / PowerEdge R760 / FW 7.10.70.00 인데 Adapter 가
     redfish_dell_idrac10 을 골랐고(무인증 probe 라 model/firmware fact 가 비어
     priority 만으로 결정됨), 그 adapter_id 가 그대로 Family 세대 근거로 쓰여
-    dell_idrac10_slot_patch 가 선택됐다. 예약 슬롯이 {1} 이 아니라 {1,2} 가 되어
+    iDRAC10 Family(당시 dell_idrac10_slot_patch)가 선택됐다. 예약 슬롯이 {1} 이 아니라 {1,2} 가 되어
     **쓰기 대상 슬롯 URI 가 달라진다** (이 장비에선 slot 2 를 root 가 써서 가려졌을 뿐).
+    2026-11-16 부터 iDRAC10 Family 는 Collection POST 라, 같은 오판이면 생성 방식 자체가 틀린다.
     """
     disc = _disc(_slots(16), manager=_dell_mgr("7.10.70.00", "16G Monolithic"))
     fam, reasons = rg.resolve_account_family("dell", disc, "redfish_dell_idrac10")
@@ -116,20 +120,45 @@ def test_dell_idrac10_detected_from_firmware_even_with_idrac9_hint():
     """반대 방향도 성립해야 한다 — hint 가 idrac9 여도 Firmware 1.x 면 iDRAC10."""
     disc = _disc(_slots(16), manager=_dell_mgr("1.20.55.10", "17G Monolithic"))
     fam, _ = rg.resolve_account_family("dell", disc, "redfish_dell_idrac9")
-    assert fam["id"] == "dell_idrac10_slot_patch"
+    assert fam["id"] == "dell_idrac10_collection_post"
     assert set(fam["reserved_slot_ids"]) == {"1", "2"}
 
 
-def test_dell_falls_back_to_hint_only_when_device_gives_no_generation_signal():
-    """Firmware/Model 을 못 읽으면 그때만 hint 를 쓴다 (기존 동작 유지 — 회귀 0)."""
-    disc = _disc(_slots(16))
-    assert rg.resolve_account_family("dell", disc, "redfish_dell_idrac10")[0]["id"] \
-        == "dell_idrac10_slot_patch"
-    assert rg.resolve_account_family("dell", disc, None)[0]["id"] == "dell_slot_patch"
+def _dell_dynamic(*names):
+    """만들어진 계정만 보이는 목록 (slot 을 미리 깔지 않는 모양). Id 2 부터."""
+    return [{"slot_uri": f"/redfish/v1/AccountService/Accounts/{i}", "id": str(i),
+             "username": n, "role_id": "Administrator", "enabled": True,
+             "has_username_key": True} for i, n in enumerate(names, start=2)]
 
 
-def test_dell_generation_changes_the_write_target_slot():
-    """두 Family 는 이름만 다른 게 아니다 — 예약 슬롯이 달라 PATCH 대상이 갈린다."""
+def test_dell_without_manager_uses_slot_shape_before_hint():
+    """Manager 를 못 읽으면 계정 목록 모양이 hint 보다 먼저다 (2026-11-16).
+
+    종전에는 Firmware/Model 이 없으면 바로 hint 를 썼다. 그런데 Dell 의 hint 는 무인증 1차
+    선택값이라 fact 가 비면 **늘** redfish_dell_idrac10 이다 (priority 120 — test_adapter_selection_t01).
+    iDRAC10 Family 가 Collection POST 가 된 지금, 그 hint 로 iDRAC9 이하를 보내면 장비가
+    지원하지 않는 POST 1회가 거부된다. 빈 slot 이 미리 깔린 목록은 slot 모델이라는 장비 증거다.
+    """
+    prepop = _disc(_slots(16))
+    assert rg.resolve_account_family("dell", prepop, "redfish_dell_idrac10")[0]["id"] == "dell_slot_patch"
+    assert rg.resolve_account_family("dell", prepop, None)[0]["id"] == "dell_slot_patch"
+    # slot 을 미리 깔지 않는 목록이면 장비 근거가 없다 → 그때만 hint 가 세대를 말한다.
+    dynamic = _disc(_dell_dynamic("root"))
+    fam, reasons = rg.resolve_account_family("dell", dynamic, "redfish_dell_idrac10")
+    assert fam["id"] == "dell_idrac10_collection_post"
+    assert any("basis=hint" in r for r in reasons), reasons
+    # 근거가 하나도 없으면 종전 기본(iDRAC9 이하) — slot 모델로 가서 빈 슬롯이 없으면 쓰기 전에 멈춘다.
+    fam0, reasons0 = rg.resolve_account_family("dell", dynamic, None)
+    assert fam0["id"] == "dell_slot_patch"
+    assert any("basis=default" in r for r in reasons0), reasons0
+
+
+def test_dell_generation_changes_the_create_method():
+    """두 Family 는 이름만 다른 게 아니다 — 생성 방식이 다르다 (2026-11-16).
+
+    iDRAC9 이하는 미리 깔린 빈 slot 에 PATCH, iDRAC10 은 Collection POST.
+    예약 슬롯 차이(iDRAC10 은 slot 2 = default root 도 예약)는 문서 계약으로 남는다.
+    """
     # slot 1 예약, slot 2 만 비어 있는 상태.
     accounts = _slots(16, filled=("", "", "u3", "u4", "u5", "u6", "u7", "u8",
                                   "u9", "u10", "u11", "u12", "u13", "u14", "u15", "u16"))
@@ -140,9 +169,12 @@ def test_dell_generation_changes_the_write_target_slot():
         "dell", _disc(accounts, manager=_dell_mgr("7.10.70.00", "16G Monolithic")), None)
     fam10, _ = rg.resolve_account_family(
         "dell", _disc(accounts, manager=_dell_mgr("1.20.55.10", "17G Monolithic")), None)
+    assert fam9["create_method"] == "slot_patch"
+    assert fam10["create_method"] == "collection_post", \
+        "iDRAC10 은 Collection POST 로 만든다 — slot PATCH 면 빈 슬롯이 없어 쓰기 전에 멈춘다(2026-11-16 사이트)"
     assert "2" not in set(fam9["reserved_slot_ids"])
     assert "2" in set(fam10["reserved_slot_ids"]), \
-        "iDRAC10 이 slot 2 를 예약하지 않으면 default root 슬롯을 덮어쓸 수 있다"
+        "iDRAC10 문서 계약: slot 2 = default root 예약"
 
 
 def test_cisco_imc3_uses_instance_post_not_collection_post():
