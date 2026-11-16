@@ -194,3 +194,64 @@ def test_policy_fields_parse_from_vendor_fixture(path):
     # 없는 값을 0 으로 접지 않는다 — "정책 없음" 과 "0" 은 다른 사실이다.
     if "MinPasswordLength" not in body:
         assert policy["min_password_length"] is None
+
+
+# 실행 경로(account_provision)는 detect_vendor 가 고른 첫 Manager 를 discovery 에 넘긴다(redfish_gather.py main).
+# 미러에는 Systems 가 없어 detect_vendor 를 재생할 수 없으므로 같은 규칙(Managers 첫 member)으로 고른다.
+# hint 는 2026-11-16 main Job #752 에서 관측한 무인증 1차 adapter 다. HPE 미러는 lab 매트릭스에 없어 hint 를 두지 않는다.
+_LIVE_FLOW_FAMILY = {
+    ("dell", "10_100_15_27"): ("redfish_dell_idrac10", "dell_slot_patch"),
+    ("dell", "10_100_15_28"): ("redfish_dell_idrac10", "dell_slot_patch"),
+    ("dell", "10_100_15_31"): ("redfish_dell_idrac10", "dell_slot_patch"),
+    ("dell", "10_100_15_33"): ("redfish_dell_idrac10", "dell_slot_patch"),
+    ("dell", "10_100_15_34"): ("redfish_dell_idrac10", "dell_slot_patch"),
+    ("lenovo", "10_50_11_232"): ("redfish_lenovo_xcc3", "lenovo_xcc2_accounttypes"),
+    ("hpe", "10_50_11_231"): (None, "hpe_ilo5plus"),
+    ("cisco", "10_100_15_2"): ("redfish_cisco_ucs_xseries", "cisco_cimc_collection_post_id"),
+}
+
+
+def _first_manager_uri(table):
+    members = (table.get("Managers", (0, {}))[1] or {}).get("Members") or []
+    return members[0].get("@odata.id") if members else None
+
+
+@pytest.mark.parametrize("key", sorted(_LIVE_FLOW_FAMILY), ids=lambda k: f"{k[0]}/{k[1]}")
+def test_live_flow_family_on_real_mirror_is_pinned(key, monkeypatch):
+    """실행 경로대로(Manager 포함 + 관측한 1차 adapter hint) 실미러의 계정 Family 를 고정한다.
+
+    2026-11-16 에 iDRAC10 Family 를 Collection POST 로 바꾸고 Dell/Lenovo 세대 판별을 장비 값 우선으로 바꿨다.
+    lab 실장비(이 미러들)의 Family 는 그 전후가 같다. Family 가 바뀌면 생성 방식이 바뀐다.
+    """
+    vendor, name = key
+    host = ar.REFERENCE / vendor / name
+    if not host.is_dir():
+        pytest.skip(f"{vendor}/{name} 미러 없음")
+    hint, expected = _LIVE_FLOW_FAMILY[key]
+    table = ar.load_mirror(host)
+    monkeypatch.setattr(rg, "_get", ar.make_get(table))
+    mgr_uri = _first_manager_uri(table)
+    assert mgr_uri, "미러에 Manager 가 없다 - 실행 경로를 재생할 수 없다"
+    d = rg.account_service_discover("10.0.0.1", "u", "p", 5, False, manager_uri=mgr_uri)
+    assert (d.get("manager") or {}).get("model"), "Manager Model 을 읽지 못했다"
+    fam, reasons = rg.resolve_account_family(vendor, d, hint)
+    assert fam["id"] == expected, reasons
+
+
+def test_dell_mirror_without_manager_ignores_idrac10_hint(monkeypatch):
+    """Manager 를 못 읽어도 실미러 Dell(16 slot 이 미리 깔림)은 1차 hint(idrac10) 대신 계정 목록 모양으로 판정한다.
+
+    수정 전에는 hint 를 따라 iDRAC10 Family 가 됐다. 그 Family 의 생성 방식이 POST 가 된 뒤(2026-11-16)에도
+    hint 를 따르면 iDRAC9 에 POST 를 보낸다. Dell iDRAC9 이하에는 Collection POST 생성이 없다.
+    """
+    dell = ar.hosts("dell")
+    if not dell:
+        pytest.skip("dell 미러 없음")
+    for host in dell:
+        table = ar.load_mirror(host)
+        monkeypatch.setattr(rg, "_get", ar.make_get(table))
+        d = rg.account_service_discover("10.0.0.1", "u", "p", 5, False)
+        assert not d.get("manager")
+        fam, reasons = rg.resolve_account_family("dell", d, "redfish_dell_idrac10")
+        assert fam["id"] == "dell_slot_patch", (host.name, reasons)
+        assert fam["create_method"] == "slot_patch"
