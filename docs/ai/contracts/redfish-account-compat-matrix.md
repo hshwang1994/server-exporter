@@ -184,6 +184,16 @@ hint 는 근거가 없을 때만 쓰도록 되돌렸다. 회귀 테스트 4건 �
 **Adapter 오선택 자체(1번)는 남아 있다.** 인증 후 adapter 재선택이 필요한 별도 변경이라
 이번 cycle 범위 밖이며 `docs/ai/NEXT_ACTIONS.md` 에 등재돼 있다.
 
+**[2026-11-16 — 세대가 생성 방식을 가른다 (DRIFT-034)]** 사이트 iDRAC10 에서 slot PATCH 생성이
+"빈 계정 슬롯이 없어" 로 쓰기 전에 실패했다. Dell 공식 계약은 iDRAC10 = Collection POST 다(사용자가
+`collection_post` 로 바꾸자 성공). iDRAC10 Family 를 `dell_idrac10_collection_post` 로 바꾸면서 판별도 다시 짰다.
+2026-08-12 판별은 Firmware 4~7 만 iDRAC9 로 보고 **그 밖(iDRAC8 2.x · 초기 iDRAC9 3.x · Manager 미확인)은 hint 로** 넘겼다.
+Dell hint 는 늘 idrac10 이므로, 생성 방식이 갈린 지금 그 누수는 지원하지 않는 POST 1회가 된다(R630 13G/2.86 · R740 14G/3.36 재생으로 확인).
+새 순서: ① Manager.Model `<NN>G`(12~16 = slot · 17+ = POST — Dell 공식 스크립트 기준) 또는 Model 의 `idrac10`
+→ ② Firmware major(1 = POST · 2~7 = slot) → ③ 계정 목록 모양(빈 slot 미리 깔림 = slot) → ④ hint → 근거 0 이면 slot.
+운영에서는 `main()` 이 복구 자격으로 Manager URI 를 찾아 넘기므로 Model · Firmware 가 보통 있다.
+시험: `tests/unit/test_account_create_method_by_generation.py`.
+
 ### 이번 cycle 에서 실제로 낮아진 불확실성
 
 `tests/reference/redfish/**` 의 실장비 미러(Dell 5호스트 / HPE 1 / Lenovo 1 / Cisco 1)를
@@ -242,7 +252,7 @@ Recovery Account                  = Location × Vendor (vault/<loc>/redfish/<ven
 | AccountService URI | Manager-scoped (`/Managers/<id>/AccountService`) | 세대별 상이 — 실측 `.34` 는 root-scoped | root-scoped 관측 |
 | 코드의 URI 결정 | **ServiceRoot 링크 추종** (하드코딩 제거) | 동일 | 동일 |
 | Accounts URI | `AccountService.Accounts.@odata.id` | 동일 | 동일 |
-| Create | 빈 slot PATCH | 빈 slot PATCH | 빈 slot PATCH |
+| Create | 빈 slot PATCH | 빈 slot PATCH | **Collection POST** (`AccountService/Accounts`, Id 없음 — 2026-11-16 정정) |
 | Update | ManagerAccount PATCH | 동일 | 동일 |
 | Reserved slot | ID 1 (IPMI anonymous) | ID 1 | **ID 1 + ID 2 (default root)** |
 | RoleId | Roles Collection 에서 선택 | 동일 | 동일 |
@@ -251,11 +261,11 @@ Recovery Account                  = Location × Vendor (vault/<loc>/redfish/<ven
 | Lockout | IP Blocking | IP Blocking | FailCount 3 / FailWindow 60s / Penalty 60s |
 | ETag | 미사용 | 미사용 | 미사용 |
 | Write 성공 계약 | 2xx **AND** 본문 거부 없음 | 동일 | **200 + 본문 read-only 거부** 를 실패로 처리 |
-| Repository Strategy | `dell_slot_patch` | `dell_slot_patch` | `dell_idrac10_slot_patch` |
+| Repository Strategy | `dell_slot_patch` | `dell_slot_patch` | `dell_idrac10_collection_post` (종전 `dell_idrac10_slot_patch`) |
 | Fixture Evidence | 없음 | 실미러 `10_100_15_27/28/31/33/34` | **없음** (아래 정정) |
-| Live Evidence | 없음 | **2026-08-12 git: 10.100.15.34 / FW 7.10.70.00 — Repair 경로 전 단계 동작, 비밀번호만 거부. 계정 상태 변화 0** | 대상 부재 (lab 의 `.34` 는 실제로 iDRAC9) |
-| Status | `UNVERIFIED` | **`HOLD`** (Repair 경로 검증됨 / 비밀번호 정책 미해소) | `UNVERIFIED` |
-| Remaining Gap | iDRAC7/8 실미러 부재 | Create 실장비 미검증 | 표준 비밀번호가 Security Strengthen Policy 미충족 — **운영 결정(E-6)** |
+| Live Evidence | 없음 | **2026-08-12 git: 10.100.15.34 / FW 7.10.70.00 — Repair 경로 전 단계 동작, 비밀번호만 거부. 계정 상태 변화 0** | **사용자 사이트 보고 2026-11-16** — slot PATCH 는 "빈 계정 슬롯이 없어" 로 쓰기 전 실패, Collection POST 로 생성 · 재인증 성공 (원본 envelope · Accounts 미캡처). lab 대상 부재 (`.34` 는 iDRAC9) |
+| Status | `UNVERIFIED` | **`HOLD`** (Repair 경로 검증됨 / 비밀번호 정책 미해소) | `PARTIAL` (공식 문서 + 사이트 보고 1건) |
+| Remaining Gap | iDRAC7/8 실미러 부재 | Create 실장비 미검증 | Accounts 원본 캡처(동적 모델 추정 확정) · 생성 응답(201 본문 · Location) 형태 |
 
 **[정정 2026-08-13] 저장소에 iDRAC10 실미러는 없다.**
 종전 표는 `10_100_15_34` 를 iDRAC10 Fixture Evidence 로 적었으나 그 미러는
@@ -263,7 +273,8 @@ Recovery Account                  = Location × Vendor (vault/<loc>/redfish/<ven
 (`LAB_INVENTORY.md` 2026-08-12 정정과 실장비 재검증이 모두 같은 결론). iDRAC10 행의
 근거는 공식 문서뿐이며 Fixture / Live 모두 없다.
 
-**iDRAC10 HOLD 사유** (`tests/evidence/2026-08-12-redfish-standard-account-separation.md` §6.1):
+**`.34` HOLD 사유** — 종전 제목은 "iDRAC10 HOLD" 였지만 관측 장비 `.34` 는 iDRAC9 다(당시 Family 오판으로 iDRAC10 Family 가 잡혔다 —
+위 [정정 2026-08-13] 과 같은 이유, 2026-11-16 제목 정정) (`tests/evidence/2026-08-12-redfish-standard-account-separation.md` §6.1):
 장비가 돌려준 문장 그대로 —
 `The property Locked is a read only property and cannot be assigned a value.` (1차, 코드로 해결됨)
 `Unable to set the password because the password entered does not comply to the Security Strengthen Policy standards.` (2차, 운영 결정 필요)
@@ -302,7 +313,7 @@ Recovery Account                  = Location × Vendor (vault/<loc>/redfish/<ven
 | Reserved | 미확인 | — | — | — | `HostBootStrap` | ID 1~4 (HostAutoFW/HostAutoOS 등) |
 | Password | 미확인 | API 8~20 (UI 문서는 32) | 동일 | API max 255 / UI 8~32 | API max 255 / CLI 8~32 | 8~20 |
 | Repository Strategy | `generic_collection_post` | `lenovo_purley_slot_patch` | `lenovo_collection_post` | `lenovo_xcc_accounttypes` | `lenovo_xcc_accounttypes` | `lenovo_collection_post` |
-| Family 판정 근거 | adapter hint | **pre-populated 빈 slot 관측** | dynamic members | adapter hint `xcc2` | adapter hint `xcc3` | (TSM 전용 hint 없음 — POST + PCR=false 로 공통) |
+| Family 판정 근거 | adapter hint | **pre-populated 빈 slot 관측** (Manager.Model 이 숫자 없는 XCC 1세대여도 — 2026-11-16, 2026-10-27 회귀 정정) | dynamic members | Manager.Model `… Controller 2` / 숫자 없음 + 동적 목록 · 없으면 hint `xcc2` | Manager.Model `… Controller 3` · 없으면 hint `xcc3` | (TSM 전용 hint 없음 — POST + PCR=false 로 공통) |
 | Fixture Evidence | 없음 | 없음 | 실미러 `10_50_11_232` (XCC 1.15) | 없음 | 없음 | 없음 |
 | Live Evidence | 없음 | 없음 | 없음 | **2026-08-12 git: 10.50.11.232 FW AFBT58B 5.70 — Case A PROVEN + 2차 Write 0** | 동일 Family 판정 | 없음 |
 | Status | `UNVERIFIED` | `PARTIAL` | `PARTIAL` | **`PROVEN` (Case A만)** | `PARTIAL` | `PARTIAL` |

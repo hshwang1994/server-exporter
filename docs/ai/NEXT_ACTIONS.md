@@ -1,5 +1,23 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Dell iDRAC10 표준 계정 생성 방식 정정 (2026-11-16) — 남은 항목
+
+> 정본: `docs/ai/catalogs/CONVENTION_DRIFT.md` DRIFT-034 · `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md` ·
+> `docs/reference/decision-log.md` 2026-11-16 · `docs/ai/contracts/redfish-account-compat-matrix.md` Dell 절.
+
+- [ ] **[HIGH / 사이트 — 배포 뒤 첫 실행] iDRAC10 재실행 · 원본 캡처** — 긴급 조치(Family 의 `create_method` 만 바꾼 사본)를 쓴 곳이 있으면 정식 수정본으로 바꾼다.
+      긴급 조치 사본은 iDRAC8(R630) · 초기 iDRAC9(3.x)에도 POST 를 보내 생성이 실패한다(DRIFT-034). 바꾼 뒤 같은 iDRAC10 을 다시 돌려
+      `diagnosis.details.account_service.family == dell_idrac10_collection_post`(계정이 이미 있으면 쓰기 0 · 정상 경로)를 확인하고,
+      `capture-site-fixture` 로 `AccountService/Accounts` 목록 · 계정 1개 · Manager(Model · FirmwareVersion)를 남긴다 —
+      "iDRAC10 Accounts = 동적 모델" 추정을 확정하고 Family evidence 를 `documented` 에서 올린다.
+- [ ] **[MED / lab — ACC-L3] Lenovo Purley 실측** — XCC 1세대 Model + 빈 slot 미리 깔림 → `lenovo_purley_slot_patch` 로 되돌린 것은 Lenovo 문서 근거뿐이다.
+      Purley(ThinkSystem 1세대) 미러로 Accounts 모양과 생성 경로를 확인한다.
+- [ ] **[LOW / AI] 계정 모듈이 결과 없이 끝날 때의 오류 행** — 모듈이 예외로 끝나면 meta `dryrun` 기본값이 true 라 계정 전용 오류 행이 빠진다.
+      수집은 그대로 중단되고(재수집 조건 불충족) 실패 사유는 일반 인증 실패 문장이다. 원인 행을 남기려면 `redfish-gather/tasks/account_service.yml` 의
+      실패 판정에 "모듈 결과 없음" 을 더한다 — 진단 문장 변경이라 영향 확인 뒤.
+- [ ] **[LOW / 관찰] iDRAC10 펌웨어 2.x 가 나올 때** — Dell 판별은 Manager.Model(`17G`)이 먼저라 Manager 를 읽으면 영향이 없다. Manager 를 못 읽고
+      Firmware 만 2.x 인 iDRAC10 은 slot 으로 판정돼 쓰기 전에 "빈 계정 슬롯이 없어" 로 멈춘다(잘못된 쓰기 0). 그런 장비가 보이면 Firmware 범위를 고친다.
+
 ## Serial Number 필수 3채널 확장 · Dell 데이터 보존 (2026-11-09) — 남은 항목
 
 > 정본: `docs/ai/decisions/ADR-2026-11-09-serial-required-redfish-esxi.md` · `docs/reference/decision-log.md` 2026-11-09 ·
@@ -568,7 +586,7 @@
 | # | 항목 | 내용 |
 |---|---|---|
 | AWC-8 | `scripts/ai/verify_no_plaintext_secret.py` Windows 콘솔 오류 | 기본 cp949 콘솔에서 출력 인코딩 때문에 `UnicodeEncodeError` → exit 1. 검출 결과는 정상(`PYTHONUTF8=1` 로 exit 0). 하네스 스크립트 문제이며 계정 작업 범위 밖이라 손대지 않았다 |
-| AWC-9 | Adapter 세대 오선택 (기존 PWC-4) | Dell 10.100.15.34 는 iDRAC9 인데 adapter 는 `redfish_dell_idrac10` 을 고른다. **계정 경로는 Firmware major 로 판정하므로 영향받지 않지만** adapter_id 자체는 여전히 틀린다 |
+| AWC-9 | Adapter 세대 오선택 (기존 PWC-4) | Dell 10.100.15.34 는 iDRAC9 인데 adapter 는 `redfish_dell_idrac10` 을 고른다. **계정 경로는 장비 값으로 판정하므로 영향받지 않지만**(2026-11-16 부터 Model → Firmware → 계정 목록 모양 순 — DRIFT-034) adapter_id 자체는 여전히 틀린다 |
 | AWC-10 | `redfish_gather.py` 분량 | 6,900줄 초과. rule 10 R3 관점에서 계정 영역 분리가 맞지만 Jenkins agent import 경로가 미검증이라 별도 작업으로 남긴다 |
 
 
@@ -667,8 +685,8 @@
 | # | 항목 | 우선순위 | 절차 |
 |---|---|---|---|
 | ACC-L1 | 통제된 1대 read-only Capability Probe -> dry-run -> Write -> 2차 실행 Write 0 | [HIGH] | evidence 문서 5절에 명령과 확인 필드까지 정리했다 |
-| ACC-L2 | Dell iDRAC7/8 read-only 미러 캡처 | [HIGH] | Manager-scoped AccountService 실증 (현재 미러는 iDRAC9/10 만) |
-| ACC-L3 | Lenovo Purley 미러 캡처 | [HIGH] | pre-populated 빈 slot 판정 실증. 현재 XCC 미러는 1호스트뿐 |
+| ACC-L2 | Dell iDRAC7/8 read-only 미러 캡처 | [HIGH] | Manager-scoped AccountService 실증 (현재 미러는 iDRAC9 만 — `.34` 를 iDRAC10 으로 적었던 것은 2026-08-13 정정) |
+| ACC-L3 | Lenovo Purley 미러 캡처 | [HIGH] | pre-populated 빈 slot 판정 실증. 현재 XCC 미러는 1호스트뿐. 2026-11-16: XCC 1세대 Model + 빈 slot → Purley 로 되돌렸다(2026-10-27 회귀 정정) — 문서 근거뿐 |
 | ACC-L4 | Cisco 최신 BMC 미러 캡처 | [HIGH] | RoleId `Administrator` + Id semantics 실증 (현재 미러는 CIMC 만) |
 | ACC-L5 | Supermicro X13/X14 미러 (계정 분리 전/후 Firmware 각 1) | [MED] | 분리 경계 실증 + 최신 `/AccountService` POST 도입 판단 |
 | ACC-L6 | Inspur M6 미러 + ETag/If-Match 실동작 + `Oem.Public.Status` error code 목록 | [MED] | 현재 fixture 는 mock |
@@ -857,6 +875,8 @@
   가 비어 priority 최상위만 선택되는 기존 이슈가 사이트에서 실증됨(8대 전부 iDRAC8 인데 idrac10 선택).
   수집 데이터는 세대 무관 동일이라 무해하나 `diagnosis.not_supported_message` 라벨이 부정확.
   기존 항목("Dell·Lenovo 세대 adapter 가 priority 로만 선택") 과 동일 건 — 실증 사례 확보로 우선순위 상향 검토.
+  2026-11-16: 계정 Family 는 이 hint 에 기대지 않는다(Model → Firmware → 계정 목록 모양이 먼저 — DRIFT-034). iDRAC10 생성이 Collection POST 가 되면서
+  hint 로 새면 이 8대가 지원하지 않는 POST 를 받기 때문이다.
 
 ## OS physical_disks serial/wwn 후속 (2026-06-22)
 
@@ -1149,7 +1169,7 @@
 
 - **[CONTRACT 결정대기] #12 SimpleStorage empty-bay 필터링**: 표준 storage 경로(`_extract_storage_drives`)는 빈 베이(cap 0/null)를 필터링하는데, SimpleStorage(`_gather_simple_storage`)는 안 함 → cross-path 불일치. **그러나** dmtf golden 이 빈 베이(SATA Bay 3, 전 필드 null)를 **포함**하고 있어 필터링 적용 시 golden 변경 + envelope 계약 변경(빈 베이 노출 여부). **방향(필터 vs null 포함)은 설계/사용자 결정 필요** — DSP2043 mockup 은 의도적으로 빈 베이를 모델링. 결정 시 golden 재생성 필요.
 - **[WONTFIX] #14 PowerSubsystem watt float 보존**: EnvironmentMetrics PowerWatts.Reading 가 float(12.5W) 가능하나 `_safe_int` 가 truncate. **의도적 유지** — /Power 경로(golden)는 watt 를 int 로 emit 하므로 PowerSubsystem 도 int 로 통일해야 envelope 타입 일관(rule 13). 소수 watt 는 운영상 무의미. #21 에서 두 경로 모두 int 통일.
-- **[INFO] #7 Dell PATCH 3-slot 제한**: 의도된 동작(코드 주석 'up to 3'). 버그 아님 — account_service_provision 은 빈 슬롯 최대 3개만 시도. 향후 커버리지 테스트 추가 권장(코드 변경 불요).
+- **[INFO] #7 Dell PATCH 3-slot 제한** — **[정정 2026-11-16] 지금 코드와 다르다.** 빈 슬롯 첫 1곳에만 1회 쓴다(`empty_slots[0]` — 쓰기 실패 뒤 다른 슬롯 · URI 로 재시도하지 않는다, `CLAUDE.md` §8). 'up to 3' 주석도 코드에 없다. iDRAC10 은 slot 이 아니라 Collection POST 다(DRIFT-034). 시험 `tests/unit/test_account_create_method_by_generation.py`.
 
 ---
 
@@ -1515,7 +1535,7 @@ Job: `clovirone-server-gather-vault-pilot` (운영 Job config 복제, `Jenkinsfi
 
 #### E-6. **Dell 표준 계정 비밀번호가 장비 암호 정책 미달** [운영 결정 필요 — HIGH]
 
-10.100.15.34 (iDRAC10) 가 표준 계정 PATCH 를 거부하며 직접 통보:
+10.100.15.34 (iDRAC9 R760 · FW 7.10.70.00 — 당시 Family 오판으로 iDRAC10 Family 가 잡혔다. 2026-11-16 표기 정정) 가 표준 계정 PATCH 를 거부하며 직접 통보:
 `"the password entered does not comply to the Security Strengthen Policy standards"`.
 
 - [ ] **선택지 (a)** 표준 계정 비밀번호 강화 → 전 BMC 재동기화. 값이 바뀌면
@@ -1529,6 +1549,9 @@ Job: `clovirone-server-gather-vault-pilot` (운영 Job config 복제, `Jenkinsfi
 
 이번 검증 대상은 전부 표준 계정이 이미 존재했다 (`account_existed: true`).
 "계정 부재 → 생성 → 재인증" 경로는 모듈 단위 테스트로만 확인했다.
+
+- 2026-11-16: Dell iDRAC10 생성(Collection POST)은 사용자 사이트에서 생성 · 재인증 성공이 보고됐다(긴급 조치 사본 — 원본 envelope 미캡처, 맨 위 2026-11-16 절).
+  iDRAC7/8/9 · Lenovo Purley 의 slot PATCH 생성과 그 밖의 vendor 생성은 여전히 실장비 미검증이다.
 
 #### E-3. **Pilot 중 실제 Account Write 1건 발생** [CRIT — 보고 완료]
 

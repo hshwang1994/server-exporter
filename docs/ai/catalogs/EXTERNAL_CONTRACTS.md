@@ -2,6 +2,19 @@
 
 > 외부 시스템 (Redfish / IPMI / SSH / WinRM / vSphere) 계약 카탈로그. rule 28 #11 측정 대상 (TTL 90일). rule 96 origin 주석 정본.
 
+## 일자: 2026-11-16 — Dell iDRAC10 표준 계정 생성 = Collection POST (DRIFT-034) · 세대별 생성 방식
+
+> 정본: `redfish_gather._ACCOUNT_FAMILIES['dell_idrac10_collection_post']` origin 주석 · `resolve_account_family` Dell/Lenovo 분기 ·
+> `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md`. 실측: 사용자 사이트 iDRAC10 1대(보고 — 원본 envelope · Accounts 미캡처). lab 에 iDRAC10 · Lenovo Purley 없음.
+
+| 계약 | 정본 | server-exporter 적용 |
+|---|---|---|
+| Dell iDRAC10 계정 생성 | `ManagerAccountCollection` POST 로 만든다 — 1.10.17.00(첫 릴리스)부터 (source: developer.dell.com iDRAC10 Redfish API "What's New" — "Support for POST operation on ManagerAccountCollection to create a user"). Dell 공식 스크립트 `Invoke-CreateIdracUserPasswordREDFISH`: Manager.Model 12G~16G 는 `Accounts/<id>` PATCH, 그 밖(iDRAC10)은 `AccountService/Accounts` POST(201) · DELETE(204) (source: github.com/dell/iDRAC-Redfish-Scripting) | Family `dell_idrac10_collection_post`(종전 `dell_idrac10_slot_patch`). body = UserName · Password · Enabled · RoleId, `Id` 없음(BMC 가 정한다). 사이트에서 같은 쓰기로 생성 · 재인증 성공 |
+| Dell iDRAC7/8/9 계정 생성 | 미리 깔린 slot(16개, slot 1 = IPMI anonymous)에 PATCH. Collection POST 없음 — iDRAC9 PrivilegeRegistry 미러에서 ManagerAccountCollection 은 GET/HEAD 만 | `dell_slot_patch` 유지 (사이트 iDRAC9 R760 실측 `proven`) |
+| Dell 세대 판별 근거 | Manager.Model `<NN>G …`(12G~16G = iDRAC9 이하) — 위 Dell 스크립트와 같은 기준. Firmware major: iDRAC10 = 1.x, iDRAC7/8/9 = 2.x~7.x (iDRAC7/8 Redfish 는 2.30+) | 판별 순서 Model → Firmware → 계정 목록 모양(빈 slot 미리 깔림 = slot 모델) → adapter hint. hint 는 무인증 1차 선택이라 Dell 은 늘 idrac10(priority 120) |
+| Lenovo XCC 1세대 Model 이름 | Purley 와 Whitley/AMD 가 같은 'Lenovo XClarity Controller'(숫자 없음). Purley 만 미리 깔린 slot 12개 PATCH (source: pubs.lenovo.com/xcc-restapi/create_an_account_intel_p_based_patch), Collection POST 는 "Lenovo Intel Whitley-based systems and AMD 2 sockets systems" (source: pubs.lenovo.com/xcc-restapi/create_an_account_post) | XCC 1세대 Model + 빈 slot 미리 깔림 → `lenovo_purley_slot_patch`. 2026-10-27 이 이름을 전부 XCC2 Family(POST)로 보내던 회귀 정정. Whitley 실미러 `10_50_11_232`(SR650 V2 · AFBT58B 5.70)는 계정 3개만 노출(동적) → XCC2 Family 그대로 |
+| DRIFT 발견 2026-11-16 | 2026-08-12 iDRAC10 Family 를 만들 때 예약 슬롯(1,2)만 문서로 확인하고 생성 방식은 iDRAC9 의 slot PATCH 를 근거 없이 물려받았다. 아래 2026-08-12 · 2026-05-06 행의 "Dell = PATCH-only · POST 미지원" 은 iDRAC7/8/9 에만 맞다 | 추정(사이트 Accounts 캡처로 확정 예정): iDRAC10 Accounts 는 만들어진 계정만 보여 주는 동적 모델이라 "빈 slot" 이 없다 |
+
 ## 일자: 2026-10-29 — DMTF Sensor `ReadingRange` · Chassis `Drives` / Storage `Links.Enclosures` · LinkStatus 전이 값 · System 요약값 (Summary 정합성 수정)
 
 > 정본: `tests/evidence/2026-10-29-redfish-summary-fix/`(SUMMARY_FIX_HANDOFF · tier1/new_get_sources.jsonl · replay_miss_ledger.json · preservation/linkstatus_values.md) · `docs/contract/03-fields.md` · `docs/ai/decisions/ADR-2026-10-29-redfish-summary-null-rules.md`. 실측: 2차 Mock 11대 + 1차 7대 미러(실장비 캡처본 — 실장비 실시간 검증 아님).
@@ -208,7 +221,7 @@ Password History 전용 property 는 이 펌웨어의 Attribute 목록에 **존�
 | Family | 계약 | origin |
 |---|---|---|
 | `dell_slot_patch` | 빈 slot PATCH, slot 1 = IPMI anonymous 예약 | dell.com/.../idrac8_2.70.70.70_ug/configuring-local-users |
-| `dell_idrac10_slot_patch` | slot 1 + slot 2(default root) 예약, Local User 32 | dell.com/.../idrac10_1.20.xx_ug/configuring-local-users |
+| `dell_idrac10_collection_post` (2026-11-16 정정 — 종전 `dell_idrac10_slot_patch`) | **Collection POST** 생성. slot 1 + slot 2(default root) 예약(기록용), Local User 32 | dell.com/.../idrac10_1.20.xx_ug/configuring-local-users · developer.dell.com iDRAC10 API "What's New" 1.10.17.00 (위 2026-11-16 절) |
 | (Dell 공통) | iDRAC10 IP Blocking FailCount 3 / FailWindow 60s / Penalty 60s | dell.com/.../idrac10_1.xx_scg/network-security-configuration |
 | (Dell 공통) | iDRAC9 Password Strength Policy (4.40.00.00+) | dell.com/.../idrac9_7.xx_ug/password-strength-policy |
 | `hpe_ilo4` | OEM namespace `Oem/Hp`, Password/UserName max 39 | hewlettpackard.github.io/ilo-rest-api-docs/ilo4/ |
@@ -731,7 +744,7 @@ DMTF DSP8010 2026.2+ release / 사이트 펌웨어 schema 변경 관측 / 신규
 
 | Vendor | 패턴 | 비고 | source |
 |---|---|---|---|
-| Dell iDRAC | PATCH-only (slot 1-17) | POST 미지원, slot 1 anonymous | dell.com manageraccount + 사이트 실측 |
+| Dell iDRAC | PATCH-only (slot 1-17) | POST 미지원, slot 1 anonymous — **2026-11-16 정정: iDRAC7/8/9 에만 해당. iDRAC10 은 Collection POST** (맨 위 2026-11-16 절) | dell.com manageraccount + 사이트 실측 |
 | HPE iLO | 표준 POST + Oem.Hpe.Privileges retry | RoleId 충분 | servermanagementportal.ext.hpe.com |
 | Lenovo XCC | 표준 POST + PasswordChangeRequired retry | XCC 권한 분리 (note 1) | pubs.lenovo.com/xcc-restapi |
 | Supermicro | 표준 POST | password complexity 엄격 | supermicro.com Redfish User Guide |

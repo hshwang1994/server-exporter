@@ -1,5 +1,24 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell/Lenovo 세대 판별을 장비 값 우선으로
+
+> 정본: `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md` · `docs/reference/decision-log.md` 2026-11-16 · `docs/ai/catalogs/CONVENTION_DRIFT.md` DRIFT-034 · `docs/ai/contracts/redfish-account-compat-matrix.md` Dell 절.
+
+- **계기**: 사용자 — 사이트 Dell iDRAC10 복구 경로에서 표준 계정 생성이 "빈 계정 슬롯이 없어 표준 계정을 만들 수 없습니다" 로 실패했고, iDRAC10 Family 의
+  `create_method` 를 `collection_post` 로 바꾸는 긴급 조치로 생성에 성공했다. 원인 분석 · 정식 수정 · 다른 제조사 점검 · 생성 실패 시 Gathering 차단 확인 ·
+  시험 · 회귀를 요청했고 계획을 승인했다.
+- **원인**: iDRAC10 Family 가 iDRAC9 의 생성 방식(미리 깔린 빈 slot 에 PATCH)을 근거 없이 물려받았다 — Dell 공식 계약은 1.10.17.00 부터 Collection POST.
+  모듈은 빈 slot 을 찾지 못해 **쓰기 전에** 멈췄다(쓰기 0). HEAD 재생이 같은 문장을 낸다.
+- **제품 변경** (`016c46ad`): Family `dell_idrac10_collection_post`(Collection POST, Id 없음) · Dell 판별 Manager.Model `<NN>G` → Firmware
+  major(1 / 2~7) → 계정 목록 모양 → hint(긴급 조치만 정식화하면 iDRAC8 2.x · 초기 iDRAC9 3.x · Manager 미확인 Dell 이 지원하지 않는 POST 를 받는 회귀를 막는다) ·
+  Lenovo XCC 1세대 Model + 빈 slot 미리 깔림 → `lenovo_purley_slot_patch`(2026-10-27 부터 POST Family 로 가던 회귀 정정) · 재수집(Phase 3) 조건에
+  `verification == 'verified'`(방어선, 동작 변화 0) · Dell 재생성(opt-in) 차단 유지 + 메시지 세대별 · 주석 정정. 시험 새 파일 1 + 갱신 2.
+- **바뀌지 않은 것**: envelope 13 필드 · `failure_code` · `failure_stage` · schema version · Jenkinsfile · callback · vault · baseline · 정상 경로(표준 계정 인증 성공 →
+  쓰기 0) · 그 밖 vendor Family 18종. 보이는 값은 복구 경로의 `diagnosis.details.account_service.family` 이름 하나(`dell_idrac10_slot_patch` → `dell_idrac10_collection_post`).
+- **검증**: 새 시험 87 passed(같은 시험을 HEAD 모듈에 돌리면 26건 실패) · 재생 7 장비 모양 × 3 판본(HEAD · 긴급 조치 · 정식) · pytest Windows 6887 passed · integration 540 passed · 0 failed · WSL CI gate 실행 단계 전부 통과(3채널 syntax-check) · Linux 계정 시험 383 · 단위 부분집합 1115 passed — TEST_HISTORY 2026-11-16.
+  실장비: lab 에 iDRAC10 · Lenovo Purley 가 없다. iDRAC10 POST 생성은 사용자 사이트 보고 1건(원본 미캡처), Purley 는 Lenovo 문서 근거뿐.
+- **남은 것**: 사이트 iDRAC10 재실행 · Accounts 원본 캡처 · 긴급 조치 사본 교체(사이트 몫) · Lenovo Purley 실측 · 계정 모듈 비정상 종료 시 오류 행 — NEXT_ACTIONS 2026-11-16.
+
 ## 일자: 2026-11-09 — Serial Number 필수 규칙(시나리오 E) 3채널 확장 · Dell Service Tag 없음 데이터 보존
 
 > 정본: `docs/ai/decisions/ADR-2026-11-09-serial-required-redfish-esxi.md` · `docs/reference/decision-log.md` 2026-11-09 · `docs/contract/03-fields.md` 4절 E · `tests/evidence/2026-11-09-serial-required-redfish-esxi.md`.

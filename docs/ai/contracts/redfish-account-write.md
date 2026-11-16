@@ -436,7 +436,7 @@ Vendor × Family 매트릭스, `CURRENT_STATE.md`,
 | Family | 조치 | 내용 |
 |---|---|---|
 | `dell_slot_patch` (iDRAC7/8/9) | [OK] + 🔧 props | Locked `read_only`, PCR `unsupported`, AccountTypes `verify_only` |
-| `dell_idrac10_slot_patch` | [OK] + 🔧 props | 예약 slot {1,2} 유지 |
+| `dell_idrac10_collection_post` (2026-11-16 — 종전 `dell_idrac10_slot_patch`) | 🔧 **DRIFT-034** | 생성 = **Collection POST**(Id 없음). 예약 slot {1,2} 는 기록용. 세대 판별 Model → Firmware → 계정 목록 모양 → hint |
 | 전 Dell | 🔧 **G-03** | `SYS474` / `RelatedProperties` / `Severity` 해석 |
 | 전 Dell | 🔧 **G-13** | `AccountLockoutThreshold=0` 이어도 IP Blocking 별도 예산 |
 | Basic Auth | 🔧 **G-18** | client 는 이미 선제 `Authorization` 전송 → `Unadvertised` 호환. 상태만 기록, `Disabled` 진단 분리 |
@@ -446,7 +446,7 @@ Vendor × Family 매트릭스, `CURRENT_STATE.md`,
 
 | Family | 조치 | 내용 |
 |---|---|---|
-| `lenovo_purley_slot_patch` | 🔧 **G-20** | capability-first 정렬 + 부정 신호(hint xcc2/xcc3/whitley/amd → Purley 아님). PCR `unsupported` |
+| `lenovo_purley_slot_patch` | 🔧 **G-20** · 2026-11-16 | capability-first 정렬 + 부정 신호(hint xcc2/xcc3/whitley/amd → Purley 아님). PCR `unsupported`. 숫자 없는 XCC 1세대 Model + 빈 slot 미리 깔림이면 XCC2/3 판정보다 먼저 Purley (2026-10-27 회귀 정정) |
 | `lenovo_collection_post` (Whitley/AMD/TSM) | 🔧 props | PCR `writable`, Locked: XCC1 `read_only` / **TSM `writable`**. 204 no-body [OK] |
 | `lenovo_xcc_accounttypes` | 🔧 **분할** | ↓ |
 | ➕ `lenovo_xcc2_accounttypes` | ➕ | AccountTypes `writable`, PCR `writable` |

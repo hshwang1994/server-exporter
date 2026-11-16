@@ -14,6 +14,8 @@
 >   - **field_dictionary**: 개수는 적지 않는다 (rule 00). `grep -c '^\s*priority:' schema/field_dictionary.yml` 로 센다.
 >   - **발견(gated)**: Dell/Lenovo 는 무인증 ServiceRoot 에 model 부재 → 세대 adapter 가 priority 로만 선택
 >     (Dell→idrac10, Lenovo→xcc3 가 항상). collect/normalize tasks 동일이라 수집 데이터 무영향, diagnosis 라벨만 cosmetic. NEXT_ACTIONS 등재.
+>     계정 경로에서는 cosmetic 이 아니다 — 세대마다 생성 방식이 다르다(iDRAC7/8/9 · Purley = slot PATCH, iDRAC10 = Collection POST). 그래서 계정 Family 는
+>     이 hint 가 아니라 장비 값(Manager.Model → Firmware → 계정 목록 모양)으로 정한다 (2026-11-16, CONVENTION_DRIFT DRIFT-034).
 >
 > **cycle 2026-05-12 변경**: adapter 카운트 변경 없음 (31 그대로). `vendor_notes` 보강만:
 >   - `hpe_csus_3200.yml` / `hpe_superdome_flex.yml` 에 `multi_node_support: true` Additive (ADR-2026-05-12).

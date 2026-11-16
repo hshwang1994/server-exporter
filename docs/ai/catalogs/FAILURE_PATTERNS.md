@@ -1403,3 +1403,27 @@
   - 실제 Jenkins 에서 `pin-cert` rc 2(기대 지문 없음) · 4(다름) · 0(같음, openssl 로 받은 것과 같은 PEM)과 `promote-chain --plan-only`(다음 계획) PASS 를 확인했다
 - 재발 방지: rule 80 R8 에 고정 절차 · jenkins-prod 지문 · Forbidden(`-k`)을 적었다. prodgen 의 `-sk` 는 그대로다(기존 동작 — NEXT_ACTIONS 2026-11-09)
 - 관련 rule: rule 80 R8, CLAUDE.md §12 · ADR-2026-11-09-promotion-visibility-and-detached-runs 결정 6
+
+---
+
+## 2026-11-16 — Dell iDRAC10 Family 가 iDRAC9 의 생성 방식(slot PATCH)을 근거 없이 물려받아 사이트에서 표준 계정 생성이 쓰기 전에 실패
+
+- 카테고리: external-contract-drift (+ scope-miss — 세대 판별이 hint 로 새는 범위)
+- 발견 위치: `redfish-gather/library/redfish_gather.py` `_ACCOUNT_FAMILIES['dell_idrac10_slot_patch']` · `resolve_account_family` Dell · Lenovo 분기 (기준 `73ef16b8`)
+- 증상: 사이트 Dell iDRAC10 복구 경로에서 errors[] "표준 관리 계정을 정리하지 못했습니다…" / detail "빈 계정 슬롯이 없어 표준 계정을 만들 수 없습니다…" — 쓰기 0건,
+  Gathering 은 failed. 사용자가 create_method 를 `collection_post` 로 바꾸자 생성 · 재인증 성공(사용자 보고)
+- 원인:
+  - 2026-08-12 iDRAC10 Family 를 iDRAC9 에서 갈라낼 때 문서로 확인한 것은 예약 슬롯(1,2)뿐이었다. 생성 방식은 검증 없이 slot PATCH 로 남았다
+    (compat matrix 에도 iDRAC10 Create `UNVERIFIED`). Dell 공식은 iDRAC10 1.10.17.00 부터 ManagerAccountCollection POST
+  - 세대 판별은 Firmware 4~7 만 iDRAC9 로 보고 나머지를 adapter hint 로 넘겼다. Dell hint 는 무인증 1차 선택이라 늘 idrac10 이다 —
+    두 Family 의 생성 방식이 같았던 동안은 이 누수가 드러나지 않았다. 긴급 조치만 정식화했다면 iDRAC8(2.x) · 초기 iDRAC9(3.x)가 POST 를 받는다
+    (HEAD + 긴급 조치 재생으로 확인: R630 13G/2.86 · R740 14G/3.36 → POST 1회 · 생성 실패)
+  - Lenovo: 2026-10-27 의 Model 우선 정렬이 숫자 없는 XCC 이름(Purley · Whitley 공용)을 전부 XCC2 Family(POST)로 보내 Purley 를 덮었다
+- 영향: 표준 계정 401 + 복구 인증 성공인 복구 경로만. 정상 경로(쓰기 0) · envelope · schema 무영향. 실패는 기존 흐름대로 Gathering failed(재수집 없음)
+- 수정: Family `dell_idrac10_collection_post` · Dell 판별 Model → Firmware(1 / 2~7) → 계정 목록 모양 → hint · Lenovo XCC 1세대 + 빈 slot → Purley ·
+  Phase 3 재수집 조건에 `verification == 'verified'` (방어선). 시험 `tests/unit/test_account_create_method_by_generation.py`(HEAD 대비 26건이 실패하던 것을 확인)
+- 재발 방지:
+  - Family 를 세대로 가를 때는 예약 슬롯뿐 아니라 **생성 방식 · URI · body** 를 세대 문서로 각각 확인하고 origin 주석에 남긴다(rule 96 R1)
+  - adapter hint 는 무인증 priority 결과라 세대 근거가 아니다 — 장비 값(Model · Firmware · 계정 목록 모양)이 먼저다. hint 단독 판별은 시험으로 고정한다
+  - 세대 판별을 바꿀 때는 lab 실측 장비형(R630 iDRAC8 · R740 · R760)을 운영 hint 그대로 넣은 회귀를 함께 돌린다
+- 관련 rule: rule 96 R1 · R4, rule 25 R7-A-1, rule 95 R1 #11, `CLAUDE.md` §8

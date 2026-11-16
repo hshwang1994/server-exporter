@@ -19,6 +19,21 @@
 
 ---
 
+## DRIFT-034 (2026-11-16, resolved — Dell iDRAC10 계정 생성 방식 · Dell/Lenovo 세대 판별이 외부 계약과 어긋남)
+
+- **발견 위치**(기준 `73ef16b8`): `redfish-gather/library/redfish_gather.py` `_ACCOUNT_FAMILIES['dell_idrac10_slot_patch']`(create_method `slot_patch`) ·
+  `resolve_account_family` Dell 분기(Firmware 4~7 만 iDRAC9, 나머지는 adapter hint) · Lenovo 분기(숫자 없는 XCC Model 을 전부 XCC2 Family 로)
+- **분류**: external-contract-drift
+- **설명**: Dell 공식 계약은 iDRAC10 = ManagerAccountCollection POST 인데 Family 는 iDRAC9 의 slot PATCH 를 근거 없이 물려받았다 — 사이트 iDRAC10 에서
+  "빈 계정 슬롯이 없어" 로 쓰기 전에 실패(사용자 보고 2026-11-16, collection_post 로 바꾸자 성공). 생성 방식만 바꾸면 hint(늘 idrac10)로 새던 iDRAC8(2.x) ·
+  초기 iDRAC9(3.x) · Manager 미확인 Dell 이 지원하지 않는 POST 를 받는다(HEAD + 긴급 조치 재생: R630 13G/2.86 · R740 14G/3.36 → POST 1회).
+  같은 점검에서 Lenovo XCC 1세대 Purley 가 2026-10-27 부터 POST Family 로 가던 회귀도 찾았다
+- **영향**: Redfish 복구 경로(표준 계정 401 + 복구 계정 인증 성공)의 생성 쓰기만. 정상 경로(쓰기 0) · envelope · schema 불변. `diagnosis.details.account_service.family` 값 1개 이름 변경
+- **resolved (2026-11-16)**: Family `dell_idrac10_collection_post`(Collection POST) · Dell 판별 Model → Firmware(1 / 2~7) → 계정 목록 모양 → hint ·
+  Lenovo XCC 1세대 Model + 빈 slot 미리 깔림 → Purley. 시험 `tests/unit/test_account_create_method_by_generation.py`. 근거 `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md`
+- **남음**: iDRAC10 Accounts 원본 캡처(동적 모델 추정 확정) · Purley 실측 — `docs/ai/NEXT_ACTIONS.md`
+- **관련**: rule 96 R1 · R1-A · R4, rule 25 R7-A-1(사이트 실측 우선), `CLAUDE.md` §8
+
 ## DRIFT-033 (2026-10-29, resolved — Summary 감사에서 드러난 사전 · 계약 문서끼리의 충돌과 구현과 어긋난 문장 묶음)
 
 - **발견 위치**(기준 `104bcaf0`): `schema/field_dictionary.yml` :695 `storage.physical_disks[]` "시스템 전체 물리 디스크" ↔ :834 · `docs/contract/03-fields.md` :616 "Storage 전체에 드라이브가 0건일 때만 섀시 `Drives` 폴백";

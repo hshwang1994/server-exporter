@@ -1,5 +1,24 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-16 — Dell iDRAC10 계정 생성 Collection POST · Dell/Lenovo 세대 판별 (main `016c46ad`)
+
+> 정본: `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md`. **실장비 검증이 아니다** — lab 에 iDRAC10 · Lenovo Purley 가 없다(iDRAC10 은 사용자 사이트 보고 1건).
+> Windows 작업 PC · Python 3.13 / WSL Ubuntu · python3 3.12.3 · ansible-core 2.20.7(ext4 clone).
+
+| 구분 | 결과 |
+|---|---|
+| 새 시험 `tests/unit/test_account_create_method_by_generation.py` | 87 passed — Family 판별 19 · iDRAC10 생성 정상 2 · 실패 · 경계 9 · iDRAC7/8/9 · Purley 회귀 5 · Phase 3 렌더 52(진리표 48) |
+| 같은 시험 × HEAD 모듈(`73ef16b8`) | 26 failed · 61 passed — iDRAC10 생성 · R630 · iDRAC9 3.x · Manager 미확인 · Purley 사례가 수정 전 코드에서 실패한다 |
+| 재생 HEAD · 긴급 조치 · 정식 수정 × 장비 모양 7 | HEAD 는 iDRAC10 동적에서 사이트와 같은 문장 · 쓰기 0. 긴급 조치는 R740 3.36 · R630 2.86 · Manager 미확인 16 slot 에 POST 1회 → 거부. 정식 수정은 7가지 모두 세대 계약대로(evidence 3절 표) |
+| 단위 부분집합 `-k "account or family or recollect or reconcile or lenovo or dell or recovery or credential or provision"` | 1115 passed · 4701 deselected |
+| pytest Windows `tests/unit tests/e2e tests/regression` | **6887 passed · 45 skipped · 5 xfailed · 0 failed** (1491.68 s) |
+| pytest Windows `tests/integration -m "not live"` | **540 passed · 6 skipped · 1 deselected** (33.36 s) — 미러 재생 `test_account_reconcile_replay.py` 43 passed(Dell iDRAC9 미러 = `dell_slot_patch` 유지) |
+| 문서를 읽는 시험 재실행(문서 수정 뒤, 21파일 + 계정 시험) | 798 passed · 1 skipped · 5 xfailed |
+| WSL CI gate(`CI_GATE_SKIP_PYTEST=1`, ext4 clone `016c46ad`) | [PASS] 실행 단계 전부 통과 — 집계는 PARTIAL(설계대로: pytest 단계만 건너뜀, pytest 는 Windows 전체 실행) · compile · field dictionary PASS · schema drift 정합(sections 11 · fd_paths 264) · vendor boundary · harness consistency 통과 · finalize corpus MATCH 20/20 · `ansible-playbook --syntax-check` 3채널 통과. 같은 clone Linux pytest: 계정 5파일 383 passed · 단위 부분집합 1115 passed. 캡처 로그에 앞 두 단계 머리말이 빠졌다 — 집계 규칙상 fail=0 이어야 PARTIAL 이라 실행 단계는 전부 통과다 |
+| 정적 | py_compile OK · `verify_vendor_boundary` · `verify_harness_consistency` · `output_schema_drift_check`(sections 11) 통과 · `validate_field_dictionary` PASS · Jinja compile `--all --blocking` rc 0 · `check_project_map_drift` — 새 시험 파일로 `tests` 지문 갱신 · `verify_docs_references` 죽은 참조 1건은 기존(2026-10-27 ticket, 이번 변경 무관) |
+| yamllint | [SKIP] 환경 — 작업 PC · WSL 어디에도 없다(CI gate 도 실행하지 않는다). YAML parse · syntax-check 로 대신 |
+| 미실행 | iDRAC10 · Lenovo Purley 실장비(lab 부재). iDRAC8/9 에 POST 를 보내 405 를 받는 것은 문서 · 미러 근거로 둔 stub 값이다 |
+
 ## 2026-11-09 (2) — 정규 승격 production `2de33bb1` (main `e4e7d5d1`) · 승격 체인 도구 `scripts/ai/longrun`
 
 > 정본: `docs/reference/live-validation.md` 2026-11-09 · `docs/reference/decision-log.md` 2026-11-09 승격 기록 · `docs/ai/decisions/ADR-2026-11-09-promotion-visibility-and-detached-runs.md`.
