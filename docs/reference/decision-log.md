@@ -16,7 +16,7 @@
 |---|---|---|
 | 도달성 판정 | 관리 TCP 응답 OR ICMP Echo. ICMP 는 TCP 전 포트 무응답일 때 1회, Gate 가 아니다 | 2026-09-03 |
 | Redfish 자격 축 | 표준 수집 계정은 전역 1벌(`vault/common/redfish/standard.yml`), 복구 계정은 Location×Vendor(`vault/<loc>/redfish/<vendor>.yml`, `role: recovery`) | 2026-08-12 · 2026-10-11 D-17 |
-| 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공". HPE RMC(CSUS 3200/Superdome Flex)는 `hpe_rmc` Family — 생성 POST 에 `Enabled` 를 보내지 않는다(사이트 실측 거부). 계정 레코드 `enabled` 는 3-상태 | 2026-08-12~13 · 2026-10-14 |
+| 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공". HPE RMC(CSUS 3200/Superdome Flex)는 `hpe_rmc` Family — 생성 POST 에 `Enabled` 를 보내지 않는다(사이트 실측 거부). 계정 레코드 `enabled` 는 3-상태. 생성 방식은 세대가 가른다 — Dell iDRAC7/8/9 · Lenovo Purley 는 미리 깔린 빈 slot PATCH, Dell iDRAC10 과 그 밖은 POST(Collection POST. Cisco IMC 3.x 만 계정 번호 URI 에 POST). 세대는 장비 값(Manager.Model → Firmware → 계정 목록 모양)이 먼저고 무인증 adapter hint 는 마지막이다 | 2026-08-12~13 · 2026-10-14 · 2026-11-16 |
 | status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음. Redfish 는 첫 인증 2xx 뒤 하위 403 을 섹션 실패(partial)로, Power·Thermal 둘 다 404 는 not_supported 로. **예외 E(3채널 — 2026-11-09 부터 ESXi · Redfish 포함)**: Serial Number 를 얻지 못한 host 는 섹션과 무관하게 failed (data · sections 보존). 다른 실패 사유가 이미 있으면 사유 · errors[] 는 그대로 두고 원인만 `diagnosis.details.serial_number` | 2026-05-06 · 2026-10-12 · 2026-10-13 · 2026-11-09 |
 | Linux sudo | SSH 인증 뒤 sudo 확인: root → NOPASSWD(제출 0) → 로그인 비밀번호 → Vault `sudo_passwords`(같은 값 1회). 정책 거부·sudo 불가는 즉시 중단, 비밀번호 거부는 대상 잠금 정책에서 계산한 예산(`_l_sudo_max_rejections`) 안에서만. 분류는 결과 구조(rc 유무·값)만, Ansible 버전 가정 없음. 실패 host 는 특권 태스크 4개를 건너뛴다 | 2026-10-13 |
 | Serial Number (3채널) | 필수 식별자. `correlation.serial_number` 가 null 이면 공통 규칙 `common/tasks/normalize/require_serial.yml` 이 status=failed(GATHER_FAILED · 채널별 Serial 문장 — OS 는 Linux sudo 실패만 `serial_missing_sudo`), 원인은 `diagnosis.details.serial_number.cause`. 사전 점검 · 인증 실패와 Redfish 계정 요청 전 중단은 제외. Dell 은 Service Tag 가 없어도 수집을 버리지 않는다(serial null + notice). 새 failure_code 없음 | 2026-10-13 · 2026-11-09 |
@@ -48,6 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell 세대 판별을 장비 값 우선으로(긴급 조치만 정식화하면 생기는 iDRAC8 · 초기 iDRAC9 POST 회귀 차단) · Lenovo XCC 1세대 Purley slot PATCH 복구 |
 | 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장 · 공통 규칙 1개 · 기존 사유가 있으면 Serial 행 중복 없음 · OS 문장 원인별 · Dell Service Tag 누락 시 데이터 보존 · 정규 승격 production `2de33bb1` |
 | 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) · 긴급 승격 production `09fb6625` |
 | 2026-11-07 — Redfish Summary 수정 main 병합(merge commit) · 사내 GitLab `main` 직접 수정 9건 반영(`target_type` string · `syjeong_test` 생성 대상) |
@@ -110,6 +111,62 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell/Lenovo 세대 판별을 장비 값 우선으로
+
+> 정본: `redfish-gather/library/redfish_gather.py` `_ACCOUNT_FAMILIES` · `resolve_account_family` · `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md`.
+> 복구 경로(표준 계정이 401 이고 복구 계정 인증이 성공했을 때)의 생성 쓰기만 바뀐다. 정상 경로(표준 계정 인증 성공 → 쓰기 0) · envelope · schema 는 그대로다.
+
+### 사용자 보고 · 요청
+
+- 보고: 사이트 Dell iDRAC10 에서 Redfish Gathering 중 계정 생성 오류 — message `표준 관리 계정을 정리하지 못했습니다. 계정 상태와 권한을 확인하세요.` ·
+  detail `빈 계정 슬롯이 없어 표준 계정을 만들 수 없습니다. 사용하지 않는 계정을 정리하세요.` 긴급 조치로 `'dell_idrac10_slot_patch'` 의
+  `'create_method': 'slot_patch'` 를 `'collection_post'` 로 바꾸자 재시도에서 계정 생성 성공 로그를 확인했다.
+- 요청: 원인 분석과 `slot_patch` · `collection_post` 차이 확인, `collection_post` 로 해결되면 정식 수정(다른 생성 로직의 PATCH 도 문제가 되면 POST 로),
+  다른 제조사 · 모델 점검과 수정, 계정 생성 실패 시 후속 Gathering 이 진행되지 않는지 확인, 정상 · 실패 시험과 기존 장비 회귀, 간단한 결과 보고.
+
+### 결정
+
+1. **iDRAC10 생성 = Collection POST.** Family `dell_idrac10_collection_post`(종전 `dell_idrac10_slot_patch`)가 `AccountService/Accounts` 에
+   {UserName, Password, Enabled, RoleId} 를 POST 한다(Id 는 BMC 가 정한다). 근거: Dell 공식 iDRAC10 Redfish API(1.10.17.00 부터
+   ManagerAccountCollection POST) · Dell 공식 스크립트(12G~16G 는 PATCH, iDRAC10 은 POST) · 사이트 결과. 이름도 바꿔 진단값
+   (`diagnosis.details.account_service.family`)이 실제 방식과 같게 했다.
+2. **"PATCH 를 전부 POST 로" 는 하지 않는다.** 기존 계정의 비밀번호 동기화는 표준상 PATCH 이고, iDRAC7/8/9 와 Lenovo Purley 에는 Collection POST
+   생성이 없다(iDRAC9 미러의 PrivilegeRegistry 도 ManagerAccountCollection 에 GET · HEAD 만 허용). 바꾼 것은 근거가 있는 iDRAC10 생성뿐이다.
+3. **긴급 조치만 정식화하지 않는다 — Dell 세대 판별을 장비 값 우선으로 고친다.** 무인증 1차 adapter 는 Dell 이면 늘 `redfish_dell_idrac10`(priority)
+   인데, 종전 판별은 Firmware 4~7 만 iDRAC9 로 보고 그 밖(iDRAC8 2.x · 초기 iDRAC9 3.x · Manager 미확인)을 이 hint 로 넘겼다. 두 Family 의 생성
+   방식이 같을 때는 드러나지 않던 누수다. 긴급 조치를 그대로 두면 이 장비들이 지원하지 않는 POST 를 받는다(재생: R630 13G/2.86 · R740 14G/3.36 →
+   POST 1회 거부 · 생성 실패). 새 순서: Manager.Model `<NN>G`(12~16 = slot · 17 이상 = POST, Dell 스크립트와 같은 기준) → Firmware major
+   (1 = POST · 2~7 = slot) → 계정 목록 모양(빈 slot 이 미리 깔림 = slot) → hint → 근거가 없으면 slot.
+4. **Lenovo XCC 1세대 Purley 를 slot PATCH 로 되돌린다.** 2026-10-27 의 Model 우선 정렬이 숫자 없는 'Lenovo XClarity Controller'(Purley 와
+   Whitley/AMD 가 같은 이름)를 전부 XCC2 Family(POST)로 보냈다. Lenovo 공식 문서상 Purley 만 미리 깔린 slot 에 PATCH 로 만든다. Model 이 XCC 1세대이고
+   빈 slot 이 미리 깔려 있을 때만 Purley 로 보내며, Whitley 실미러(계정 3개 — 동적)는 그대로 XCC2 Family 다.
+5. **표준 계정 재수집 조건을 오류 행 판정과 같게 둔다** — `verification == 'verified'` 추가. 지금 모듈에서는 동작 변화가 없다(방어선).
+6. **Dell 재생성(opt-in) 차단은 유지한다.** iDRAC10 에는 DELETE 가 있지만 재생성은 실장비 근거가 없다. 기술 메시지만 세대별로 정확히 했다.
+
+결정 주체: 사용자 — 정식 수정 · 다른 제조사 점검 · 시험 범위(요청)와 계획 승인(같은 대화). 3 · 4 · 5 · 6 은 AI 가 원인 분석 중 찾아 계획에 넣었고
+같은 승인에 포함됐다.
+
+### 생성 실패 시 Gathering
+
+생성이 어떤 이유로 실패하든(빈 slot 없음 · POST 거부 · 응답 유실 · 재인증 실패 · 상태 불일치 · 계정 목록 불완전) `recovered=false` 이고, 표준 계정 재수집은
+돌지 않으며 수집은 failed envelope(`auth` · `AUTH_PROBE_FAILED`)로 끝난다. 복구 계정으로 수집하는 경로는 없다. 재수집 조건은 렌더 진리표 48사례로
+시험에 고정했다.
+
+### 실행 기록 (2026-11-16)
+
+| 커밋 | 내용 | 검증 |
+|---|---|---|
+| `016c46ad` | Family · Dell/Lenovo 판별 · 재수집 조건 · 주석 · 시험 | 새 시험 87 passed(같은 시험이 수정 전 모듈에서 26건 실패) · 전체 pytest 6887 passed · 0 failed(Windows unit · e2e · regression) · integration 540 passed · CI gate WSL CI gate 실행 단계 전부 통과(3채널 syntax-check 포함, pytest 단계는 Windows 실행) |
+
+실장비: lab 에 iDRAC10 · Lenovo Purley 가 없다. iDRAC10 POST 생성의 실측은 사용자 사이트 보고 1건(원본 envelope · 계정 목록 미캡처)이다.
+
+### 대안 (Considered)
+
+- 긴급 조치 그대로(생성 방식만 POST) — 기각. 결정 3 의 회귀(iDRAC8 · 초기 iDRAC9 생성 실패).
+- Dell 생성을 전 세대 POST 로 — 기각. iDRAC7/8/9 는 Collection POST 생성이 없다.
+- iDRAC10 에서 POST 가 실패하면 slot PATCH 로 다시 시도 — 기각. 계정 쓰기 계약은 쓰기 실패 뒤 다른 URI · 본문으로 재시도하지 않는다.
+- 인증 뒤 adapter 를 다시 골라 세대를 확정 — 이번 범위 밖. 수집 · 표시값 전반에 영향이 있는 별도 과제이고, 계정 판별은 Manager 값을 직접 읽어 같은 효과를 낸다.
 
 ## 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장
 
