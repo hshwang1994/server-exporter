@@ -469,6 +469,63 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-11-16 Dell iDRAC10 표준 계정 생성 Collection POST · Dell/Lenovo 세대 판별 — main `cdb708cf` 매트릭스 #743~#753 · CI #70 · production `673edaa4` · canary (실장비)
+
+main `cdb708cf` 로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다. 수집 코드는 `016c46ad` 과 같고, 뒤의 커밋 2개는 문서 · 하네스다.
+결정 근거는 [decision-log.md](decision-log.md) 2026-11-16 이다. 투입과 대기, 결과 비교는 작업 PC 의 분리 프로세스가 Jenkins API 로 했다(자격은 파일로 전달, TLS 는 고정한 인증서로 검증).
+
+lab 에는 iDRAC10 과 Lenovo XCC 1세대 Purley 가 없다. lab Redfish 7대는 표준 계정 인증이 바로 통과해 계정 쓰기 단계에 들어가지 않는다.
+그래서 이 실행이 보여 주는 것은 정상 경로가 그대로라는 것이다. 바뀐 생성 방식은 시험과 장비 모양 재생으로만 확인했다(`tests/evidence/2026-11-16-dell-idrac10-account-create-post.md`).
+
+### main `cdb708cf` 매트릭스 (main Job #743~#753, checkout 전부 == `cdb708cf` — #732~#742 와 같은 파라미터, eventUuid 만 새 값)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #743 | SUCCESS | 80 s · 3/3 success · errors 0 |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #744 | SUCCESS | 106 s · success 2 · `TARGET_UNREACHABLE` 3 — TEST-NET 2 와 `10.100.64.132`(#733 과 같이 "호스트로 갈 루트가 없음") |
+| S3 Linux 11 | #745 | SUCCESS | 145 s · 11/11 success · errors 0 |
+| S4 Windows 1 | #746 | SUCCESS | 140 s · `system.version 2022-21H2` |
+| T2 TEST-NET 2 | #747 | SUCCESS | 78 s · 2/2 `TARGET_UNREACHABLE` |
+| T5 사용자 중단 (6대) | #753 | ABORTED | 53 s · 결과 6 · 6/6 `GATHER_FAILED`(중단) · 비교는 참고만 |
+| T6 Callback 거부 주소 | #748 | UNSTABLE | 109 s |
+| E2E-A loc=cj | #749 | UNSTABLE | TEST-NET 2 · 111 s |
+| E2E-A2 loc=chj | #750 | FAILURE | fail-closed(등록되지 않은 Location) · 19 s · tip 관측 `cdb708cf` 전후 동일(`ls-remote` origin) |
+| E2E-D ESXi 6 | #751 | SUCCESS | 95 s · 6/6 success · errors 0 |
+| E2E-E Redfish 7 | #752 | SUCCESS | 398 s · 7/7 success · errors 0 · 표준 계정 1회 인증 7/7(fallback 없음) · `diagnosis.details.account_service` 빈 값 7/7(Account Write 0) |
+
+직전 매트릭스(#732~#742)와 host 별로 비교했다(status · sections · errors · correlation · serial · diagnosis 일부). 11개 시나리오 모두 값이 다른 host 가 0이다.
+
+Redfish 7대의 무인증 1차 adapter 는 Dell 5대가 `redfish_dell_idrac10`, Lenovo `10.50.11.232` 가 `redfish_lenovo_xcc3`, Cisco 가 `redfish_cisco_ucs_xseries` 였다.
+인증 뒤에는 각각 `redfish_dell_idrac9` · `redfish_lenovo_xcc` · `redfish_cisco_cimc` 로 다시 골랐다. 표준 계정 복구 단계에는 1차 값이 hint 로 간다.
+- Dell 5대(Manager.Model `16G Monolithic` · Firmware `7.10.70.00`)는 수정 전후 모두 `dell_slot_patch` 로 판정된다.
+- hint 때문에 iDRAC10 Family 로 가던 경우(Firmware 2.x · 3.x, Manager 를 못 읽음)는 lab 에 없어 재생으로만 확인했다.
+- Lenovo `10.50.11.232`(Model `Lenovo XClarity Controller` · 계정 3개 동적 목록)는 수정 전후 모두 XCC2 Family(POST)다.
+
+### CI · 승격
+
+- CI `clovirone-cicd/clovirone-server-gather-ci` #70(`PROMOTE=false` · `PROMOTE_DRY_RUN=true`, E2E 입력 매트릭스 11건 + tip 관측): **SUCCESS** 68분 · 필수 단계 전부 PASS · 집계 **COMPLETE_PASS**(G01~G20)
+  - G14 pytest 6466 passed · 210 skipped · 70 deselected · 5 xfailed · 0 failed(#69 보다 87 많다 — 이번 새 시험 파일)
+  - E2E 증거 88건 통과(Harness 77 + 매트릭스 11). GitHub 저장소는 처음부터 자격 없이 읽혔다(공개 전환 없음)
+- 작업 PC prodgen `promote --sha cdb708cf`(CI #70 산출물 3개) → **production `673edaa4`**(2026-11-16T02:26Z, 22분)
+  - parent `2de33bb1` · 199 파일 · `Verdict: COMPLETE_PASS` · Gates-Rerun G11~G15 · G18~G20 PASS · `CI-Stages: verified`
+  - GitHub `production` · GitLab `main` · 로컬 `production` 이 모두 `673edaa4` · GitLab 브랜치 1개 · force 0
+  - 직전 production 대비 바뀐 파일은 3개다: `redfish-gather/library/redfish_gather.py`(계정 Family · Dell/Lenovo 판별 · 재생성 메시지) · `redfish-gather/site.yml`(재수집 조건 1줄) · provenance.
+    `adapters/redfish/dell_idrac9.yml` 은 주석만 바뀌어 생성본(주석 제거)에는 차이가 없다
+
+### production `673edaa4` canary (production Job #330~#333, 2026-11-16)
+
+직전 canary(#326 · #327 · #328 · #329)와 같은 파라미터로 차례로 돌렸다(eventUuid 만 새 값).
+
+| 빌드 | 채널 | 결과 | 확인 (checkout 전부 `673edaa4` · Portal HTTP 200 · 결과 수 == 접수 수 · errors 0 · 13키) |
+|---|---|---|---|
+| #330 | ESXi 6 | SUCCESS 83초 | 6/6 success · Serial 6/6 |
+| #331 | Redfish 7 | SUCCESS 388초 | 7/7 success · Serial 7/7 · 표준 계정 1회 인증 7/7 · `diagnosis.details.account_service` 빈 값 7/7(Account Write 0) |
+| #332 | OS 11 | SUCCESS 147초 | 11/11 success · Serial 11/11 |
+| #333 | Windows 1 (.120) | SUCCESS 141초 | 1/1 success · `system.version 2022-21H2` |
+
+네 건 모두 같은 코드의 main 결과(#751 · #752 · #745 · #746)와 같았다. 직전 production 결과(#326 · #327 · #328 · #329)와도 같았다.
+비교한 값은 위 매트릭스 비교와 같다. 다음 승격의 비교 기준은 매트릭스 #743~#753 · CI #70 · canary #330~#333 이다.
+
 ## 2026-11-09 Serial Number 필수 3채널 · Dell Service Tag 누락 시 데이터 보존 — main `e4e7d5d1` 매트릭스 #732~#742 · CI #69 · production `2de33bb1` · canary (실장비)
 
 main `e4e7d5d1` 로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다. 수집 코드는 `22f44e20` 과 같고, 뒤의 커밋 3개는 문서 · 하네스다.

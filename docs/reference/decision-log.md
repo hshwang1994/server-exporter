@@ -48,7 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
-| 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell 세대 판별을 장비 값 우선으로(긴급 조치만 정식화하면 생기는 iDRAC8 · 초기 iDRAC9 POST 회귀 차단) · Lenovo XCC 1세대 Purley slot PATCH 복구 |
+| 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell 세대 판별을 장비 값 우선으로(긴급 조치만 정식화하면 생기는 iDRAC8 · 초기 iDRAC9 POST 회귀 차단) · Lenovo XCC 1세대 Purley slot PATCH 복구 · 정규 승격 production `673edaa4` |
 | 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장 · 공통 규칙 1개 · 기존 사유가 있으면 Serial 행 중복 없음 · OS 문장 원인별 · Dell Service Tag 누락 시 데이터 보존 · 정규 승격 production `2de33bb1` |
 | 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) · 긴급 승격 production `09fb6625` |
 | 2026-11-07 — Redfish Summary 수정 main 병합(merge commit) · 사내 GitLab `main` 직접 수정 9건 반영(`target_type` string · `syjeong_test` 생성 대상) |
@@ -157,9 +157,25 @@
 
 | 커밋 | 내용 | 검증 |
 |---|---|---|
-| `016c46ad` | Family · Dell/Lenovo 판별 · 재수집 조건 · 주석 · 시험 | 새 시험 87 passed(같은 시험이 수정 전 모듈에서 26건 실패) · 전체 pytest 6887 passed · 0 failed(Windows unit · e2e · regression) · integration 540 passed · CI gate WSL CI gate 실행 단계 전부 통과(3채널 syntax-check 포함, pytest 단계는 Windows 실행) |
+| `016c46ad` | Family · Dell/Lenovo 판별 · 재수집 조건 · 주석 · 시험 | 새 시험 87 passed(같은 시험이 수정 전 모듈에서 26건 실패) · 전체 pytest 6887 passed · 0 failed(Windows unit · e2e · regression) · integration 540 passed · WSL CI gate 실행 단계 전부 통과(3채널 syntax-check 포함, pytest 단계는 Windows 실행) |
+| `4b99fd36` | 실미러 8대를 실행 경로(Manager 포함 · 관측한 1차 adapter hint)대로 재생하는 Family 시험 | 미러 재생 52 passed(신규 9). 수정 전 모듈에서도 실행 경로 8/8 은 같다. Manager 를 못 읽은 Dell 은 수정 전 모듈에서 hint 를 따라 실패한다 |
 
 실장비: lab 에 iDRAC10 · Lenovo Purley 가 없다. iDRAC10 POST 생성의 실측은 사용자 사이트 보고 1건(원본 envelope · 계정 목록 미캡처)이다.
+
+### 승격 기록 (2026-11-16)
+
+production 승격은 2026-06-30 사용자 지시(자동 승격)에 따라 승인된 작업 계획의 마지막 단계로 돌렸다. main `cdb708cf`(수집 코드는 `016c46ad` 과 같다)로
+정규 절차를 밟았다. 상세는 [live-validation.md](live-validation.md) 2026-11-16 이다.
+
+| 단계 | 결과 |
+|---|---|
+| main Job 매트릭스 | #743~#753, 11/11 기대대로 · checkout `cdb708cf`. 직전 #732~#742 대비 11개 시나리오 모두 같음 · Redfish 7대 Account Write 0 |
+| CI | #70 SUCCESS · COMPLETE_PASS(G01~G20) · G14 6466 passed · 0 failed. 저장소는 처음부터 공개 상태였다 |
+| 승격 | `promote --sha cdb708cf` → production `673edaa4`(parent `2de33bb1`, gate G01~G20 PASS · 199파일 · 바뀐 파일 3개). GitHub `production` = 사내 GitLab `main` = `673edaa4`, force 없음 |
+| canary | production Job #330~#333(ESXi 6 · Redfish 7 · OS 11 · Windows 1) 4/4 SUCCESS · checkout `673edaa4` · Portal HTTP 200 · 같은 코드의 main 결과와 직전 production 결과 모두와 같다 |
+
+lab 실장비에서 계정 생성 경로를 탄 장비는 0대다(표준 계정 인증이 바로 통과한다). 바뀐 생성 방식과 세대 판별은 시험 · 장비 모양 재생 · 실미러 재생으로만
+확인했다. iDRAC10 의 실측은 사용자 사이트 보고 1건이다.
 
 ### 대안 (Considered)
 
