@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-16 (2) — 정규 승격 production `673edaa4` (main `cdb708cf`) · 실미러 실행 경로 Family 시험
+
+> 정본: `docs/reference/live-validation.md` 2026-11-16 · `docs/reference/decision-log.md` 2026-11-16 승격 기록. 투입 · 대기 · 비교는 `scripts.ai.longrun promote-chain`(분리 실행, 고정 인증서).
+
+| 구분 | 결과 |
+|---|---|
+| main Job 매트릭스 #743~#753 (checkout `cdb708cf`) | 11/11 기대대로 · 직전 #732~#742 와 host 별 차이 0 · Redfish 7대 표준 계정 1회 인증 · Account Write 0 |
+| CI #70 | SUCCESS 68분 · COMPLETE_PASS(G01~G20) · G14 6466 passed · 210 skipped · 70 deselected · 5 xfailed · 0 failed · E2E 증거 88건(Harness 77 + 매트릭스 11) |
+| promote | production `673edaa4`(parent `2de33bb1`, 22분, Gates-Rerun G11~G15 · G18~G20 PASS, 바뀐 파일 3) · GitHub `production` = GitLab `main` = 로컬 `production` · GitLab 브랜치 1 |
+| canary #330~#333 | 4/4 SUCCESS · checkout `673edaa4` · ESXi 6/6 · Redfish 7/7(Account Write 0) · OS 11/11 · Windows 1/1 · main 결과 · 직전 production 결과와 같음 |
+| 실미러 실행 경로 Family 시험 (`4b99fd36`, 신규 9) | `tests/integration/test_account_reconcile_replay.py` 52 passed. 수정 전 모듈: 실행 경로 8/8 같음 · Manager 없는 Dell 1건 실패(hint 추종) |
+
 ## 2026-11-16 — Dell iDRAC10 계정 생성 Collection POST · Dell/Lenovo 세대 판별 (main `016c46ad`)
 
 > 정본: `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md`. **실장비 검증이 아니다** — lab 에 iDRAC10 · Lenovo Purley 가 없다(iDRAC10 은 사용자 사이트 보고 1건).

@@ -5,7 +5,11 @@
 > 정본: `docs/ai/catalogs/CONVENTION_DRIFT.md` DRIFT-034 · `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md` ·
 > `docs/reference/decision-log.md` 2026-11-16 · `docs/ai/contracts/redfish-account-compat-matrix.md` Dell 절.
 
-- [ ] **[HIGH / 사이트 — 배포 뒤 첫 실행] iDRAC10 재실행 · 원본 캡처** — 긴급 조치(Family 의 `create_method` 만 바꾼 사본)를 쓴 곳이 있으면 정식 수정본으로 바꾼다.
+- [x] **[DONE 2026-11-16 — production `673edaa4`] production 승격** — main `cdb708cf` 로 매트릭스 #743~#753 → CI #70 COMPLETE_PASS →
+      `promote --push-remote origin,internal` → canary #330~#333 4/4 SUCCESS(같은 코드의 main 결과 · 직전 production 결과와 host 별로 같음).
+      lab Redfish 7대는 표준 계정 인증이 바로 통과해 생성 경로를 타지 않았다. 다음 승격 계획: `~/.se_longrun/promote-cdb708cf/next_plan.json`
+      (없으면 live-validation 2026-11-16 의 빌드 번호 — 매트릭스 #743~#753 · CI #70 · canary #330~#333).
+- [ ] **[HIGH / 사이트 — 배포됨, 첫 실행 대기] iDRAC10 재실행 · 원본 캡처** — 정식 수정은 production `673edaa4`(2026-11-16)부터 들어 있다. 긴급 조치(Family 의 `create_method` 만 바꾼 사본)를 쓴 곳이 있으면 정식 수정본으로 바꾼다.
       긴급 조치 사본은 iDRAC8(R630) · 초기 iDRAC9(3.x)에도 POST 를 보내 생성이 실패한다(DRIFT-034). 바꾼 뒤 같은 iDRAC10 을 다시 돌려
       `diagnosis.details.account_service.family == dell_idrac10_collection_post`(계정이 이미 있으면 쓰기 0 · 정상 경로)를 확인하고,
       `capture-site-fixture` 로 `AccountService/Accounts` 목록 · 계정 1개 · Manager(Model · FirmwareVersion)를 남긴다 —
@@ -25,9 +29,9 @@
 
 - [x] **[DONE 2026-11-09 — production `2de33bb1`] production 승격** — 사용자 승인 뒤 main `e4e7d5d1` 로 매트릭스 #732~#742 → CI #69 COMPLETE_PASS
       (#68 은 저장소 비공개로 중단) → `promote --push-remote origin,internal` → canary #326~#329 4/4 SUCCESS(직전 결과와 host 별로 같음).
-      아래 2026-11-07 절의 "긴급 승격 `09fb6625` 정규 재승격" 도 닫혔다. 다음 승격 계획: `~/.se_longrun/promote-e4e7d5d1/next_plan.json`
-      (없으면 live-validation 2026-11-09 의 빌드 번호 — 매트릭스 #732~#742 · CI #69 · canary #326~#329).
+      아래 2026-11-07 절의 "긴급 승격 `09fb6625` 정규 재승격" 도 닫혔다. 다음 승격 계획은 2026-11-16 절로 옮겼다(`promote-cdb708cf`).
 - [ ] **[HIGH / 사용자] GitHub 저장소를 다시 비공개로** — 승격 체인 때문에 공개로 바꿨다(rule 80 R7). 다시 비공개로 둬도 수집 Job · Harness 는 영향이 없다.
+      2026-11-16 승격 체인도 공개 상태에서 돌았다(체인이 바꾼 것 없음) — 아직 공개다.
       다음 승격 때 다시 공개 요청이 나온다(아래 2026-11-07 MED 항목을 하면 필요 없어진다).
 - [ ] **[MED / AI] prodgen 의 Jenkins 읽기를 고정 인증서로** — `scripts/ai/prodgen/evidence.py` · `verify/__init__.py` · `verify/gates_live.py` 의 `curl -sk` 가 자격(netrc)을
       싣고 TLS 검증 없이 Jenkins 를 읽는다(promote 의 G12 · G13 · 증거 수집). `longrun` 처럼 `--cacert` 를 받게 하고(기본값 · CI agent 의 인증서 경로 확인 필요)

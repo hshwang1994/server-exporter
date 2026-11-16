@@ -17,6 +17,8 @@
   쓰기 0) · 그 밖 vendor Family 18종. 보이는 값은 복구 경로의 `diagnosis.details.account_service.family` 이름 하나(`dell_idrac10_slot_patch` → `dell_idrac10_collection_post`).
 - **검증**: 새 시험 87 passed(같은 시험을 HEAD 모듈에 돌리면 26건 실패) · 재생 7 장비 모양 × 3 판본(HEAD · 긴급 조치 · 정식) · pytest Windows 6887 passed · integration 540 passed · 0 failed · WSL CI gate 실행 단계 전부 통과(3채널 syntax-check) · Linux 계정 시험 383 · 단위 부분집합 1115 passed — TEST_HISTORY 2026-11-16.
   실장비: lab 에 iDRAC10 · Lenovo Purley 가 없다. iDRAC10 POST 생성은 사용자 사이트 보고 1건(원본 미캡처), Purley 는 Lenovo 문서 근거뿐.
+- **승격**: production `673edaa4`(2026-11-16T02:26Z, main `cdb708cf`) — 매트릭스 #743~#753 · CI #70 COMPLETE_PASS · canary #330~#333 4/4 SUCCESS ·
+  직전 결과와 host 별로 같음. 실미러 8대를 실행 경로(Manager 포함)대로 재생하는 시험 `4b99fd36` — 수정 전후 Family 같음, Manager 없는 Dell 만 다름(수정 전 hint 추종).
 - **남은 것**: 사이트 iDRAC10 재실행 · Accounts 원본 캡처 · 긴급 조치 사본 교체(사이트 몫) · Lenovo Purley 실측 · 계정 모듈 비정상 종료 시 오류 행 — NEXT_ACTIONS 2026-11-16.
 
 ## 일자: 2026-11-09 — Serial Number 필수 규칙(시나리오 E) 3채널 확장 · Dell Service Tag 없음 데이터 보존

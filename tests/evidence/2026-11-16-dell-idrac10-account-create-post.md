@@ -73,6 +73,12 @@ iDRAC10 Accounts 는 만들어진 계정만 보여 주는 동적 모델로 보�
 - Lenovo Purley 는 2026-10-27 부터 HEAD 에서 이미 POST Family 로 간다(긴급 조치와 무관한 별개 회귀).
 - 정식 수정은 7가지 모양 모두 해당 세대의 계약대로 쓴다.
 
+lab 실장비 미러 8대(`tests/reference/redfish/` — Dell iDRAC9 16G · 7.10.70.00 5대, Lenovo XCC1 Whitley 1대, HPE iLO 6 1대, Cisco CIMC 4.1 1대)도
+실행 경로대로 재생했다. 계정 단계는 첫 Manager 를 discovery 에 넘기고, hint 는 main Job #752 에서 관측한 무인증 1차 adapter 다.
+- 8대 모두 수정 전후 Family 가 같다. Dell `dell_slot_patch` · Lenovo `lenovo_xcc2_accounttypes` · HPE `hpe_ilo5plus` · Cisco `cisco_cimc_collection_post_id`.
+- Manager 를 빼면 수정 전 모듈은 Dell 5대를 hint 대로 `dell_idrac10_slot_patch` 로 판정한다. 수정 뒤에는 계정 목록 모양으로 `dell_slot_patch` 다.
+  기존 미러 시험은 Manager 없이만 판별해 이 차이를 보지 못했다. 시험 2종을 더했다(8절).
+
 ## 4. `slot_patch` 와 `collection_post`
 
 | 항목 | `slot_patch` | `collection_post` |
@@ -133,6 +139,9 @@ Lenovo Purley 는 Family 정의가 아니라 판별이 바뀌었다(2026-10-27 �
 | 같은 시험을 HEAD 모듈에 | 26 failed · 61 passed — iDRAC10 생성 · R630 · 3.x · Manager 미확인 · Purley 사례가 HEAD 에서 실패한다(시험이 결함을 잡는다) |
 | 단위 부분집합(`-k "account or family or recollect or reconcile or lenovo or dell or recovery or credential or provision"`) | [PASS] 1115 passed |
 | 미러 재생 `tests/integration/test_account_reconcile_replay.py` | [PASS] 43 passed (Dell iDRAC9 미러 = `dell_slot_patch` 유지) |
+| 미러 재생 — 실행 경로 Family 고정(신규 9, 커밋 `4b99fd36`) | [PASS] 52 passed(기존 43 + 신규 9). 신규 시험을 수정 전 모듈에 돌리면 실행 경로 8/8 은 같고, Manager 를 못 읽은 Dell 1건은 hint 를 따라 실패한다 |
+| main Job 매트릭스 #743~#753(lab 실장비, main `cdb708cf`) | [PASS] 11/11 기대대로 · 직전 #732~#742 와 host 별 차이 0 · Redfish 7대 표준 계정 1회 인증 · `diagnosis.details.account_service` 빈 값 7/7(Account Write 0) — 정상 경로만 탄다 |
+| production `673edaa4` · canary #330~#333(lab 실장비) | [PASS] CI #70 COMPLETE_PASS · 4/4 SUCCESS · Redfish 7/7 Account Write 0 · main 결과 · 직전 production 결과와 같음 |
 | 전체 pytest(Windows, `tests/unit tests/e2e tests/regression`) | [PASS] 6887 passed · 45 skipped · 5 xfailed · 0 failed (1491.68 s) |
 | `tests/integration -m "not live"`(Windows) | [PASS] 540 passed · 6 skipped · 1 deselected (33.36 s) |
 | CI gate `scripts/ai/ci_gate.sh`(WSL, ext4 clone) — 3채널 syntax-check 포함 | [PASS] 실행 단계 전부 통과 — 집계는 PARTIAL(설계대로: pytest 단계만 건너뜀, pytest 는 Windows 전체 실행) · compile · field dictionary PASS · schema drift 정합(sections 11 · fd_paths 264) · vendor boundary · harness consistency 통과 · finalize corpus MATCH 20/20 · `ansible-playbook --syntax-check` 3채널 통과. 같은 clone Linux pytest: 계정 5파일 383 passed · 단위 부분집합 1115 passed. 캡처 로그에 앞 두 단계 머리말이 빠졌다 — 집계 규칙상 fail=0 이어야 PARTIAL 이라 실행 단계는 전부 통과다 |
@@ -141,7 +150,7 @@ Lenovo Purley 는 Family 정의가 아니라 판별이 바뀌었다(2026-10-27 �
 
 ## 9. 남은 것
 
-- [HIGH / 사이트] 정식 수정 배포 뒤 같은 iDRAC10 재실행 + `AccountService/Accounts` · Manager 원본 캡처 — 2.2 추정 확정, Family evidence 상향.
+- [HIGH / 사이트] 정식 수정(production `673edaa4`, 2026-11-16) 배포 뒤 같은 iDRAC10 재실행 + `AccountService/Accounts` · Manager 원본 캡처 — 2.2 추정 확정, Family evidence 상향.
   긴급 조치 사본을 쓴 곳이 있으면 정식 수정본으로 바꾼다(3절 — 긴급 조치는 iDRAC8 · 초기 iDRAC9 생성을 실패시킨다).
 - [MED / lab] Lenovo Purley 실측(ACC-L3).
 - [LOW / AI] 계정 모듈 비정상 종료 시 오류 행.
