@@ -136,6 +136,7 @@
           when:
             - _rf_account_reconcile_allowed | bool
             - (_rf_account_service_meta | default({})).recovered | default(false) | bool
+            - ((_rf_account_service_meta | default({})).verification | default('none')) == 'verified'
             - not ((_rf_account_service_meta | default({})).dryrun | default(true) | bool)
           ansible.builtin.include_tasks: tasks/collect_standard.yml
           vars:

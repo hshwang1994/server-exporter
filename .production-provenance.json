@@ -302,11 +302,11 @@
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 49,
+   "removed_lines": 53,
    "removed_trailing": 0,
    "sha256": "30748a729e3e3dd0dff381a625b01dd83f75fb45fe8e01d1d488456d52c155b8",
-   "source_blob": "7284cff54bcfc107cc1c1d6456bc55c96c32aa32",
-   "source_sha256": "a9f3002d52c11f663eeca8752f5c3c99df7c2fffe148e00ccfa915e6abf91a10"
+   "source_blob": "f987eff5d8a13c9ce16b35b70d8d9e48d6194011",
+   "source_sha256": "e56b2916ca0bae5fd2d3174032416bcc5ffca4111cf95f2ce1b7e4d3a9142a97"
   },
   "adapters/redfish/fujitsu_irmc.yml": {
    "bytes": 2172,
@@ -1635,7 +1635,7 @@
    "source_sha256": "c9097d8d66b39d113fc2a6b20a302dabd82d28a32b61ad8d1347169a692d6041"
   },
   "redfish-gather/library/redfish_gather.py": {
-   "bytes": 310305,
+   "bytes": 311531,
    "language": "python",
    "mode": "100644",
    "preserved": [
@@ -1646,23 +1646,23 @@
     }
    ],
    "python_kind": "library",
-   "removed_lines": 1522,
+   "removed_lines": 1547,
    "removed_trailing": 376,
-   "sha256": "29c9e98023a2816d3bd8020c9e70bf7509c68fc8ce404b25f8db4e6bae85c679",
-   "source_blob": "996b44003c86ea37671d29283da6ab8f3315a543",
-   "source_sha256": "4996ff97bb9f15971823edbad8be9fba6b886677e1fe9f2c53538ded06080926"
+   "sha256": "db585f53cc1125c5a5ebcf9ad8b7c1e5cac699ada7746aa0eed8b2caca3cdb6b",
+   "source_blob": "2a360e55d15b732839d51ed65db015425137d540",
+   "source_sha256": "41bc19c2c393954e336e2de44bcd5b53b73983c56dad8ce4f3d2dd561dc5c6b8"
   },
   "redfish-gather/site.yml": {
-   "bytes": 28232,
+   "bytes": 28334,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 276,
+   "removed_lines": 279,
    "removed_trailing": 0,
-   "sha256": "c67c0f033b704634d80c87b0b80f00fd8dbdd6bfb9dd737869c75c68d6db48f0",
-   "source_blob": "e12f014c3386f9ec90ad8c33650249b3a1feb6ca",
-   "source_sha256": "e78f06d5a38c2fdc1b05d5297ceea6d111adb5787385bdf26773bc2ebd61cf13"
+   "sha256": "27f856226665d6918425ff6585704084250787b613b353fdb7706cf92a2c8e82",
+   "source_blob": "bd008aa8362bc98f5edd27baf8787a66bde6dba2",
+   "source_sha256": "dfab39c7b3f603025f2474e44582d716ca884c3bb53f3e639188bcb5301b6984"
   },
   "redfish-gather/tasks/account_service.yml": {
    "bytes": 12429,
@@ -2565,6 +2565,13 @@
   "scripts/ai/hooks/stop_writeback.py",
   "scripts/ai/hooks/subagent_stop_log.py",
   "scripts/ai/hooks/user_prompt_router.py",
+  "scripts/ai/longrun/__init__.py",
+  "scripts/ai/longrun/__main__.py",
+  "scripts/ai/longrun/bodies.py",
+  "scripts/ai/longrun/chain.py",
+  "scripts/ai/longrun/detached.py",
+  "scripts/ai/longrun/jenkins.py",
+  "scripts/ai/longrun/submit.py",
   "scripts/ai/measure_compatibility_matrix.py",
   "scripts/ai/measure_field_usage_matrix.py",
   "scripts/ai/prodgen/__init__.py",
@@ -2676,8 +2683,8 @@
   "tests/reference/redfish/README.md",
   "tests/reference/redfish/mock2/README.md"
  ],
- "main_sha": "e4e7d5d194da31c6a17848b85f6f968c0d7d1b75",
- "main_tree": "38b2e851f3804875db86346e2b160a0582404543",
+ "main_sha": "cdb708cf9d59758fb840f7221cf2bf78a5d9fedc",
+ "main_tree": "bf80c88a04d574543e9a8bbc60758b26a7ce83e6",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
@@ -2693,5 +2700,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "1954ecb224ce8dbdb365db7621c78d36e0e6a6433c63f59fe5d2611692068e4f"
+ "tree_hash": "dd83f10d497ed16dd882fccf2e4e7125a5d22f4d6aaea2113081882250f5cef7"
 }

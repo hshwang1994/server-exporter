@@ -5503,7 +5503,8 @@ _ACCOUNT_FAMILIES = {
                                      'AccountTypes': {'create': 'unsupported',
                                                       'repair': 'verify_only'},
                                  }},
-    'dell_idrac10_slot_patch':  {'create_method': 'slot_patch',
+    'dell_idrac10_collection_post': {
+                                 'create_method': 'collection_post',
                                  'reserved_slot_ids': ('1', '2'), 'evidence': 'documented',
                                  'props': {
                                      'Locked': {'create': 'unsupported', 'repair': 'read_only'},
@@ -5701,19 +5702,31 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
 
     if v == 'dell':
         mdl = (mgr.get('model') or '').lower()
+        m_gen = re.search(r'\b(\d{2})\s*g\b', mdl)
+        model_gen = int(m_gen.group(1)) if m_gen else None
         fw_match = re.match(r'\s*(\d+)\.', str(firmware or ''))
         fw_major = int(fw_match.group(1)) if fw_match else None
-        if fw_major in (4, 5, 6, 7):
-            gen10 = False
-        elif fw_major == 1 or 'idrac10' in mdl:
-            gen10 = True
+        prepopulated = _has_prepopulated_slots(accounts)
+        hint_gen10 = 'idrac10' in hint
+        if model_gen is not None:
+            gen10, basis = model_gen >= 17, 'model'
+        elif 'idrac10' in mdl:
+            gen10, basis = True, 'model'
+        elif fw_major == 1:
+            gen10, basis = True, 'firmware'
+        elif fw_major is not None and 2 <= fw_major <= 7:
+            gen10, basis = False, 'firmware'
+        elif prepopulated:
+            gen10, basis = False, 'slots'
+        elif hint_gen10:
+            gen10, basis = True, 'hint'
         else:
-            gen10 = 'idrac10' in hint
+            gen10, basis = False, 'default'
         reasons.append(
-            f'vendor=dell fw_major={fw_major} model={mdl!r} '
-            f'hint_idrac10={"idrac10" in hint} '
-            f'prepopulated={_has_prepopulated_slots(accounts)} → idrac10={gen10}')
-        return account_family('dell_idrac10_slot_patch' if gen10 else 'dell_slot_patch'), reasons
+            f'vendor=dell model_gen={model_gen} fw_major={fw_major} model={mdl!r} '
+            f'prepopulated={prepopulated} hint_idrac10={hint_gen10} basis={basis} '
+            f'→ idrac10={gen10} ({"Collection POST" if gen10 else "slot PATCH"})')
+        return account_family('dell_idrac10_collection_post' if gen10 else 'dell_slot_patch'), reasons
 
     if v == 'cisco':
         if 'admin' in roles and 'administrator' not in roles:
@@ -5752,6 +5765,10 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
         mdl = (mgr.get('model') or '').lower()
         m_gen = re.search(r'xclarity controller\s*(\d+)?', mdl)
         model_gen = (int(m_gen.group(1)) if m_gen.group(1) else 2) if m_gen else None
+        if m_gen and not m_gen.group(1) and _has_prepopulated_slots(accounts):
+            reasons.append(f'Manager.Model={mdl!r}(XCC 1세대) + pre-populated empty slots 관측 '
+                           f'→ Purley slot PATCH (hint={hint!r} 는 참고)')
+            return account_family('lenovo_purley_slot_patch'), reasons
         exposes_account_types = any(a.get('account_types') for a in accounts)
         has_bootstrap = any(a.get('host_bootstrap') is not None for a in accounts)
         if exposes_account_types or has_bootstrap or model_gen is not None or 'xcc3' in hint or 'xcc2' in hint:
@@ -6500,7 +6517,10 @@ def account_service_provision(
         if vendor == 'dell':
             out['errors'].append(_err(
                 'account_service',
-                'Dell iDRAC PATCH-only — DELETE+POST fallback 미지원 (수동 복구 필요)',
+                ('Dell iDRAC PATCH-only — DELETE+POST fallback 미지원 (수동 복구 필요)'
+                 if family['create_method'] == 'slot_patch' else
+                 'Dell iDRAC10 — DELETE+POST 재생성은 실장비 검증 전이라 하지 않습니다 (수동 복구 필요)'),
+                detail=f'family={family["id"]}',
             ))
             return out
         del_code, _, del_err = _delete(
