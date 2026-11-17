@@ -199,7 +199,7 @@ SECONDS=0
 set +e
 timeout --signal=INT --kill-after=90 "$LIMIT" \
     bash -c 'printf "%s\n" "$$" > "$1" 2>/dev/null || true; shift; exec "$@"' se-ansible "$WS/.gather_ansible_pid" \
-    ansible-playbook "$PLAYBOOK" -i "$INVENTORY" -f "$FORKS" --limit "@$WS/.gather_limit_hosts" --vault-password-file="$VAULT_TMP" -e se_location="$LOCATION"
+    ansible-playbook "$PLAYBOOK" -i "$INVENTORY" -f "$FORKS" --limit "@.gather_limit_hosts" --vault-password-file="$VAULT_TMP" -e se_location="$LOCATION"
 rc=$?
 ran=$SECONDS
 se_stop_alive

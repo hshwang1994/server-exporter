@@ -1887,7 +1887,7 @@
    "source_sha256": "db22f5566cdbed3f0ae4188d58efc9d1c6d99cc575bead08913b89fe261bec4c"
   },
   "scripts/run_gather.sh": {
-   "bytes": 11061,
+   "bytes": 11057,
    "language": "shell",
    "mode": "100644",
    "preserved": [
@@ -1898,11 +1898,11 @@
     }
    ],
    "python_kind": null,
-   "removed_lines": 50,
+   "removed_lines": 53,
    "removed_trailing": 0,
-   "sha256": "5c3d96c656fbe92ece4fd073ea3c722ced5c3ccc7dfdf65967a53c78d07d1c8c",
-   "source_blob": "0a13d96a7589939fc359102edef729d262cbe49f",
-   "source_sha256": "2720194f1a3476ac39eb49050c10b7760419c2ec4f6500224c538d091051bc50"
+   "sha256": "176feec5590249c3ad82380267154196e774bb70308f5a5415c253c0546e106d",
+   "source_blob": "bec1f2103ed6cf31dd8483e93a5fc88101f78830",
+   "source_sha256": "27b23d5bd55748f01f9676e7037c51646ac8c374fab707c177cde0e63a82b744"
   },
   "scripts/workspace_cleanup.py": {
    "bytes": 15257,
@@ -2683,8 +2683,8 @@
   "tests/reference/redfish/README.md",
   "tests/reference/redfish/mock2/README.md"
  ],
- "main_sha": "cdb708cf9d59758fb840f7221cf2bf78a5d9fedc",
- "main_tree": "bf80c88a04d574543e9a8bbc60758b26a7ce83e6",
+ "main_sha": "8249f79a9ccb5ee0e485a57ec906182f06d78537",
+ "main_tree": "96a419fda9a3a8dc939f87245885549eca1ece25",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
@@ -2700,5 +2700,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "dd83f10d497ed16dd882fccf2e4e7125a5d22f4d6aaea2113081882250f5cef7"
+ "tree_hash": "cc17aeffa0d151694d33f0506424065bf8c934b45b882141ea9f357f6e8eb0f1"
 }
