@@ -469,6 +469,19 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-11-17 Job 이름 공백 — `--limit` 상대 경로 · 긴급 승격 production `ce1647c7` · canary (실장비)
+
+`scripts/run_gather.sh` 가 `--limit` 파일을 작업 폴더 기준 상대 경로로 넘기도록 고쳤다. 사용자 지시로 CI · main Job 매트릭스 없이 긴급 승격했다([decision-log.md](decision-log.md) 2026-11-17).
+런타임 파일은 `673edaa4` 와 `scripts/run_gather.sh` 한 줄만 다르다.
+
+### 긴급 승격 production `ce1647c7` canary (production Job #334, 2026-11-17)
+
+직전 canary #332 와 같은 파라미터(OS 11대, eventUuid 만 새 값)로 1건을 돌렸다.
+SUCCESS 129초 · checkout `ce1647c7` · Portal HTTP 200(1번째 전송) · 결과 11 == 접수 11 · 11/11 success · errors 0 · 13키 · Serial 11/11 · #332 대비 값이 다른 host 0.
+
+이 Job 이름에는 공백이 없다. 그래서 이 실행이 보여 주는 것은 정상 경로가 그대로라는 것이다.
+공백이 든 작업 폴더는 WSL 의 실제 Ansible 로 재현해 확인했다(`tests/evidence/2026-11-17-workspace-space-limit.md`). 공백이 든 Job 의 실제 재실행은 사용자 몫이다.
+
 ## 2026-11-16 Dell iDRAC10 표준 계정 생성 Collection POST · Dell/Lenovo 세대 판별 — main `cdb708cf` 매트릭스 #743~#753 · CI #70 · production `673edaa4` · canary (실장비)
 
 main `cdb708cf` 로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다. 수집 코드는 `016c46ad` 과 같고, 뒤의 커밋 2개는 문서 · 하네스다.

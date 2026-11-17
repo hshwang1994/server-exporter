@@ -40,6 +40,8 @@ Vault 파일은 저장소의 `vault/` 아래에 암호화돼 commit됩니다. �
 
 수집 파이프라인은 하나이고 `target_type` 파라미터로 OS, ESXi, Redfish를 고릅니다. 종류별로 Job을 나누고 싶으면 같은 Script Path로 Job을 더 만들고 기본값만 다르게 두세요.
 
+Job 이름은 Runner의 작업 폴더 이름(`<Job 이름>-<빌드 번호>`)이 됩니다. 공백과 한글을 써도 됩니다. 단, 배포본이 production `ce1647c7`(2026-11-17) 이후여야 합니다. 그 전 배포본에서는 이름에 공백이 있으면 모든 대상이 수집을 시작하지 못하고 실패합니다(7절). 쉼표와 따옴표는 확인하지 않았으니 쓰지 마세요.
+
 사내 Job은 다음 두 개입니다.
 
 | Job | Branch Specifier | 용도 |
@@ -151,6 +153,7 @@ HTTP 201이 돌아오면 요청이 큐에 들어간 것입니다.
 | `[Portal 전송] N번째 전송에 실패했습니다.` 와 `Portal 주소를 해석하지 못했습니다(이름 풀이 실패).` | Controller가 `callbackUrl`의 호스트 이름을 해석하지 못합니다. Controller의 DNS와 주소를 확인하세요. 요청은 Portal에 닿지 않았고 남은 횟수 안에서 다시 보냅니다 |
 | `[Portal 전송] N번째 전송에 실패했습니다.` 와 `연결하지 못했거나 응답을 받지 못했습니다.` | Portal 주소, 포트, 방화벽을 확인하세요. 3번 모두 실패하면 UNSTABLE이고 본문은 `callback_body.json`에 남습니다 |
 | `[Portal 전송] Portal이 요청을 거부했습니다. HTTP 4xx.` | Portal이 요청을 받고 거부했습니다. 다시 보내지 않습니다. Portal 쪽 로그를 보세요 |
+| `[ERROR]: Unable to find limit file b'<작업 폴더 경로 앞부분>'` 뒤 `[수집] ansible-playbook이 비정상 종료했습니다.` | Job 이름에 공백이나 쉼표가 있고 배포본이 production `ce1647c7`(2026-11-17) 이전입니다. 수집을 1대도 시작하지 못해 모든 대상이 "개더링 프로젝트에서 수집 결과를 만들지 못했습니다."로 갑니다. 배포본을 갱신하거나 Job 이름에서 공백을 빼세요. 화면에 보일 이름은 Display Name에 둡니다. Portal이 Job을 이름(URL)으로 부르면 Portal 설정도 함께 바꿉니다 |
 | `[venv] Ansible 실행환경(venv)을 찾지 못했습니다.` | [02-agent-node.md](02-agent-node.md) 5절 |
 | 빌드가 UNSTABLE이고 `[addon] unavailable: ...` | Add-on 저장소를 받지 못했거나 검사에 실패했습니다. 4절의 변수와 그 위 `[addon]` 줄을 보세요. 기본 수집은 정상입니다 |
 

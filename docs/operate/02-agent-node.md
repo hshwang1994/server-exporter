@@ -48,7 +48,7 @@ Runner에서 Controller 방향으로 열 포트는 SSH 방식에서는 없습니
 필수 사항입니다.
 
 - Agent용 OS 계정 1개. 이 계정으로 Agent 프로세스와 `ansible-playbook`이 실행됩니다.
-- Agent 작업 폴더(remote root). 이 계정이 쓸 수 있어야 합니다. 빌드마다 `<remote root>/workspace/<Job 폴더>/<Job 이름>-<빌드 번호>` 작업 폴더가 생깁니다.
+- Agent 작업 폴더(remote root). 이 계정이 쓸 수 있어야 합니다. 빌드마다 `<remote root>/<Job 이름>-<빌드 번호>` 작업 폴더가 생깁니다. Job 이름은 Jenkins 폴더 경로를 뺀 마지막 이름입니다(Job `DAY_1/os-gather`의 12번 빌드 → `<remote root>/os-gather-12`). Job 이름에 쓸 수 있는 문자는 [03-job-registration.md](03-job-registration.md) 3절에 있습니다.
 - `/tmp`에 쓰기 권한. 수집 실행마다 vault 비밀번호 임시 파일(`/tmp/se_vault.*`, 권한 600)과 SSH 다중화 폴더(`/tmp/se_cp.*`)를 만들고 끝나면 지웁니다.
 
 ```bash

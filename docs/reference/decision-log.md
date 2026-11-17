@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-11-09
+> 최종 갱신: 2026-11-17
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -48,6 +48,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-11-17 — Job 이름에 공백이 있으면 모든 대상이 수집 전에 실패하던 문제 · `--limit` 을 작업 폴더 기준 상대 경로로 · 긴급 승격 production `ce1647c7` |
 | 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell 세대 판별을 장비 값 우선으로(긴급 조치만 정식화하면 생기는 iDRAC8 · 초기 iDRAC9 POST 회귀 차단) · Lenovo XCC 1세대 Purley slot PATCH 복구 · 정규 승격 production `673edaa4` |
 | 2026-11-09 — Serial Number 필수 규칙(시나리오 E)을 ESXi · Redfish 로 확장 · 공통 규칙 1개 · 기존 사유가 있으면 Serial 행 중복 없음 · OS 문장 원인별 · Dell Service Tag 누락 시 데이터 보존 · 정규 승격 production `2de33bb1` |
 | 2026-11-07 (2) — `syjeong_test` 삭제(main · 생성 대상, CI 미실행 — 사용자 지시) · 긴급 승격 production `09fb6625` |
@@ -111,6 +112,49 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-11-17 — Job 이름에 공백이 있으면 모든 대상이 수집 전에 실패하던 문제 · `--limit` 을 작업 폴더 기준 상대 경로로
+
+> 정본: `scripts/run_gather.sh` 의 `ansible-playbook` 실행 줄 · `tests/unit/test_run_gather.py` · `tests/evidence/2026-11-17-workspace-space-limit.md`.
+> 바뀐 것은 `ansible-playbook` 에 넘기는 `--limit` 값 하나다. envelope · schema · `Jenkinsfile_portal` · adapter · vault · callback 은 그대로다.
+
+### 사용자 보고 · 지시
+
+- 보고: Job `DAY_1/git/os 게더링 소연` #1(OS 244대, 이 Job 의 첫 빌드)이 `[ERROR]: Unable to find limit file b'/home/cloviradmin/jenkins-agent/os'` 하나만 남기고 1초 만에 끝났다.
+  244대 모두 실패 결과로 Portal 에 갔고 빌드는 UNSTABLE 이었다. "이거 왜 발생한건가요?"
+- 원인과 수정 계획을 승인한 뒤 "변경이 너무 적어서 전체 CI프로세스를 돌리는건 비효율적이다." 승격 방식을 묻자 "긴급 승격"을 골랐다.
+
+### 원인
+
+1. `Jenkinsfile_portal` 은 작업 폴더를 `ws("<Job 이름>-<빌드 번호>")` 로 잡는다. 상대 경로라 Agent remote root 아래 `os 게더링 소연-1` 이 된다.
+2. `scripts/run_gather.sh` 는 `--limit "@<작업 폴더 절대 경로>/.gather_limit_hosts"` 를 넘겼다. 셸에서는 인자 하나다.
+   그러나 Ansible 은 `--limit` 값을 host pattern 으로 읽는다. 쉼표가 있으면 쉼표에서, 없으면 공백과 `:` 에서 자른다(`split_host_pattern`).
+   그래서 첫 조각 `@/home/cloviradmin/jenkins-agent/os` 를 limit 파일로 찾다가 실패했다.
+3. 수집이 0대라 수집 기록 판정이 `failed_run` 이 되었다. 결과 정리 단계는 244대 모두에 `failure_stage=fallback` · `OUTPUT_BUILD_FAILED` 결과를 채웠다. 장비 문제가 아니다.
+4. 지금까지 쓴 Job 이름에는 공백이 없었고, 시험의 작업 폴더 이름도 `ws` 라 드러나지 않았다. 운영 문서에도 Job 이름 제한이 없다. 운영 실수가 아니라 코드 결함이다.
+
+### 결정
+
+1. `--limit "@.gather_limit_hosts"` 로 바꾼다. 작업 폴더(`run_gather.sh` 앞부분의 `cd "$WS"` 이후 cwd) 기준 상대 경로라, 작업 폴더 이름에 무엇이 있어도 limit 값에 들어가지 않는다.
+   기각한 대안은 셋이다.
+   - 임시 폴더에 복사: 임시 파일 · 정리 · 종료 코드가 늘어난다.
+   - 값 끝에 쉼표 붙이기: Ansible 내부 동작에 기댄다.
+   - `ws()` 이름 정규화: Jenkinsfile 두 벌과 `workspace_cleanup.py` 를 함께 바꿔야 하고, remote root 에 공백이 있으면 여전히 깨진다.
+2. 회귀 시험을 둔다. 공백 · 한글이 든 작업 폴더에서 `run_gather.sh` 를 돌리고, limit 값에 공백 · `:` · 쉼표가 없는지, 실제 Ansible `split_host_pattern` 이 그 값을 조각 하나로 읽는지 확인한다.
+3. **긴급 승격 (실행됨 — production `ce1647c7`)**: 사용자 지시로 CI · main Job 매트릭스는 돌리지 않았다.
+   - 방식은 2026-11-07 (2) 와 같다. prodgen 함수(build · run_gates · remote_baseline · classify_production · commit-tree · `_publish`)를 부르고 CI 단계 결과 · E2E 증거 확인만 뺐다.
+   - 직전 production `673edaa4` 와 다른 파일이 `scripts/run_gather.sh` 하나가 아니면 멈추는 가드를 두었다.
+   - trailer 는 사실만 적었다: `Verdict: PARTIAL`(G01~G10 · G16~G18 · G20 PASS, G11~G15 · G19 SKIP) · `CI-Build: manual` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion: user-approved 2026-11-17`.
+   - 결과: GitHub `production` = 사내 GitLab `main` = 로컬 `ce1647c7`(main `8249f79a`, parent `673edaa4`, fast-forward, force 0) · drift-check PROVENANCE.
+     canary 는 production Job #334(OS 11대) SUCCESS 이고 직전 #332 와 host 별로 같다.
+   - 다음 정규 승격이 증거를 채운다(선례 2026-10-14 · 2026-10-15 · 2026-11-07 (2)). 결정 주체: 사용자.
+4. 쉼표 · 따옴표가 든 Job 이름은 이번에 고치지 않는다. 확인할 곳이 남아 있다(후속 과제).
+   - WSL 실측: 수정 뒤의 `--limit` 과, 실제 파일을 가리키는 `-i` 는 쉼표가 있어도 문제없다.
+   - 남은 것: Add-on 을 켠 빌드의 role 이름, `Jenkinsfile_portal` 셸 문자열의 따옴표.
+
+### 바로 쓸 수 있는 우회 (배포본을 아직 받지 않은 Jenkins)
+
+Job 이름에서 공백을 뺀다. 화면에 보일 이름은 Display Name 에 둔다. Portal 이 Job 을 이름(URL)으로 부르면 Portal 설정도 함께 바꾼다.
 
 ## 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell/Lenovo 세대 판별을 장비 값 우선으로
 
