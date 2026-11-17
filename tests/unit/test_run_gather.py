@@ -84,8 +84,7 @@ esac
 '''
 
 
-@pytest.fixture
-def env(tmp_path):
+def _make_env(tmp_path, ws_name="ws"):
     venv = tmp_path / "venv" / "bin"
     venv.mkdir(parents=True)
     (venv / "python3").symlink_to(shutil.which("python3"))
@@ -95,7 +94,7 @@ def env(tmp_path):
     stub.chmod(0o755)
     emit = tmp_path / "emit.py"
     emit.write_text(EMIT, encoding="utf-8")
-    ws = tmp_path / "ws"
+    ws = tmp_path / ws_name
     ws.mkdir()
     (ws / "scripts").symlink_to(REPO / "scripts")
     (ws / "gather_manifest.json").write_text(json.dumps({"schema": 1, "build": {"job": "j", "number": "7"}, "channel": "os", "ips": IPS}),
@@ -108,6 +107,11 @@ def env(tmp_path):
     e.update({"WORKSPACE": str(ws), "SE_ANSIBLE_VENV": str(tmp_path / "venv"), "STUB_OUT": str(out), "STUB_EMIT": str(emit),
               "ANSIBLE_JSON_OUTPUT_FILE": str(ws / "gather_output.json"), "VAULT_PASSWORD": "pw-for-test", "LC_ALL": "C.UTF-8"})
     return {"env": e, "ws": ws, "out": out, "inv": inv, "tmp": tmp_path}
+
+
+@pytest.fixture
+def env(tmp_path):
+    return _make_env(tmp_path)
 
 
 def _argv(env, gather_max="5", agent_lost=None):
@@ -170,10 +174,29 @@ def test_normal_run_records_times_and_passes_the_computed_inputs(env):
     assert (env["ws"] / "gather_rc.txt").read_text().strip() == "0"
     args = (env["out"] / "args.txt").read_text().splitlines()
     assert args[:5] == ["site.yml", "-i", str(env["inv"]), "-f", "7"] and "-e" in args and "se_location=git" in args
-    assert args[args.index("--limit") + 1] == f"@{env['ws']}/.gather_limit_hosts"
+    assert args[args.index("--limit") + 1] == "@.gather_limit_hosts", "limit 파일은 작업 폴더(cwd) 기준 상대 경로로 넘긴다"
     assert _received(env) == [IPS]
     assert not any("dryrun" in a or "FORCE" in a for a in args), "시험용 extra-vars 배선이 없다"
     assert (env["ws"] / ".gather_alive").exists(), "생존 표시를 시작 직후 쓴다"
+
+
+def test_workspace_path_with_spaces_reaches_ansible_as_one_limit_file(tmp_path):
+    """2026-11-17 Job "os 게더링 소연" #1 — 작업 폴더 이름(<Job 이름>-<빌드 번호>)에 공백이 있으면 Ansible 이 --limit "@<절대 경로>" 를
+    공백에서 잘라 limit 파일을 찾지 못했다(Unable to find limit file, 244대가 1초 만에 실패). limit 값은 작업 폴더 기준 상대 경로여야 한다.
+    가짜 ansible 은 셸 따옴표로 파일을 열어 Ansible 의 자르기를 흉내 내지 못한다 — 그래서 인자 모양과 실제 split_host_pattern 으로 본다."""
+    env = _make_env(tmp_path, "os 게더링 소연-1")
+    r = _run(env, gather_max="60", mode="emit")
+    assert r.returncode == 0, r.stderr
+    assert _received(env) == [IPS], "공백 · 한글이 든 작업 폴더에서도 남은 대상 전부를 넘긴다"
+    assert _record(env)["state"] == "completed"
+    args = (env["out"] / "args.txt").read_text(encoding="utf-8").splitlines()
+    lim = args[args.index("--limit") + 1]
+    assert not re.search(r"[\s:,]", lim), f"Ansible 이 host pattern 을 자르는 문자(공백 · ':' · ',')가 limit 값에 있다: {lim!r}"
+    try:
+        from ansible.inventory.manager import split_host_pattern
+    except ImportError:
+        return                                                # Ansible 이 없는 환경 — 위 모양 검사로 갈음한다
+    assert split_host_pattern(lim) == ["@.gather_limit_hosts"], "실제 Ansible 이 limit 값을 조각 하나(작업 폴더의 대상 파일)로 읽는다"
 
 
 def test_vault_password_is_a_private_temp_file_removed_after_the_run(env):

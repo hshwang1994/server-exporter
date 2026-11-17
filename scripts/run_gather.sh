@@ -245,9 +245,12 @@ if [ "$LIMIT" -lt "$GATHER_MAX" ]; then echo "  남은 실행 한계: $(se_dur "
 STARTED=true
 SECONDS=0
 set +e
+# --limit 값은 Ansible 이 host pattern 으로 읽어 쉼표에서, 쉼표가 없으면 공백과 ':' 에서 자른다(ansible split_host_pattern).
+#   작업 폴더(<Job 이름>-<빌드 번호>)에 공백 · 쉼표가 있으면 "@<절대 경로>" 가 잘려 limit 파일을 찾지 못한다(2026-11-17 Job "os 게더링 소연" #1 — 244대가 1초 만에 실패).
+#   그래서 작업 폴더(위 cd "$WS" 의 cwd) 기준 상대 경로로 넘긴다. 이 앞에서 cd 하지 않는다.
 timeout --signal=INT --kill-after=90 "$LIMIT" \
     bash -c 'printf "%s\n" "$$" > "$1" 2>/dev/null || true; shift; exec "$@"' se-ansible "$WS/.gather_ansible_pid" \
-    ansible-playbook "$PLAYBOOK" -i "$INVENTORY" -f "$FORKS" --limit "@$WS/.gather_limit_hosts" --vault-password-file="$VAULT_TMP" -e se_location="$LOCATION"
+    ansible-playbook "$PLAYBOOK" -i "$INVENTORY" -f "$FORKS" --limit "@.gather_limit_hosts" --vault-password-file="$VAULT_TMP" -e se_location="$LOCATION"
 rc=$?
 ran=$SECONDS
 se_stop_alive
