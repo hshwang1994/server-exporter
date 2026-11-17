@@ -1427,3 +1427,22 @@
   - adapter hint 는 무인증 priority 결과라 세대 근거가 아니다 — 장비 값(Model · Firmware · 계정 목록 모양)이 먼저다. hint 단독 판별은 시험으로 고정한다
   - 세대 판별을 바꿀 때는 lab 실측 장비형(R630 iDRAC8 · R740 · R760)을 운영 hint 그대로 넣은 회귀를 함께 돌린다
 - 관련 rule: rule 96 R1 · R4, rule 25 R7-A-1, rule 95 R1 #11, `CLAUDE.md` §8
+
+---
+
+## 2026-11-17 — Job 이름의 공백이 `--limit @<절대 경로>` 를 잘라 모든 대상이 수집 전에 실패
+
+- 카테고리: external-contract-unverified (Ansible CLI 의 `--limit` 해석) + test-fidelity
+- 발견 위치: `scripts/run_gather.sh` 의 `ansible-playbook` 실행 줄 (기준 `f3cf7678`)
+- 증상: Job `DAY_1/git/os 게더링 소연` #1(OS 244대) — `[ERROR]: Unable to find limit file b'/home/cloviradmin/jenkins-agent/os'`, ansible rc 1 · 1초.
+  244대 모두 `fallback` · `OUTPUT_BUILD_FAILED`("개더링 프로젝트에서 수집 결과를 만들지 못했습니다.") · 빌드 UNSTABLE
+- 원인:
+  - 작업 폴더가 `<remote root>/<Job 이름>-<빌드 번호>`(`ws()` 상대 경로)라 Job 이름의 공백이 경로에 들어간다
+  - Ansible 은 `--limit` 값을 host pattern 으로 읽어 쉼표에서, 쉼표가 없으면 공백과 `:` 에서 자른다(`inventory/manager.py` `split_host_pattern`). 셸 인용은 이것을 막지 못한다
+  - 시험의 가짜 ansible 은 `--limit` 인자를 셸이 넘긴 그대로 파일로 열었고, 시험 작업 폴더 이름도 `ws` 뿐이라 이 차이가 드러나지 않았다
+- 영향: 작업 폴더 경로(Job 이름 · remote root)에 공백 · 쉼표 · `:` 가 있는 모든 빌드, 3채널 공통. 대상 접속 0
+- 수정: `--limit "@.gather_limit_hosts"`(작업 폴더 기준 상대 경로, `8249f79a`) · 회귀 시험(공백 · 한글 작업 폴더 + 실제 `split_host_pattern`) · 긴급 승격 production `ce1647c7`
+- 재발 방지:
+  - Ansible CLI 에 파일 경로를 넘길 때는 그 인자가 경로로 읽히는지, pattern · 목록으로 읽히는지 Ansible 소스로 확인한다(`--limit` · `-i` 의 쉼표 · role 이름의 쉼표 — `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-11-17)
+  - 경로가 인자로 가는 시험은 공백 · 한글 · 쉼표가 든 폴더 이름으로도 돌리고, 가능하면 실제 Ansible 의 해석 함수로 확인한다(가짜 실행 파일은 해석 차이를 숨긴다)
+- 관련 rule: rule 96 R1, rule 95 R1, `CLAUDE.md` §11

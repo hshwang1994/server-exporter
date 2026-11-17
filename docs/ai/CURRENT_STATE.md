@@ -1,5 +1,23 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-11-17 — Job 이름에 공백이 있으면 모든 대상이 수집 전에 실패하던 문제 · 긴급 승격 production `ce1647c7`
+
+> 정본: `tests/evidence/2026-11-17-workspace-space-limit.md` · `docs/reference/decision-log.md` 2026-11-17 · `docs/ai/catalogs/FAILURE_PATTERNS.md` 2026-11-17 · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-11-17.
+
+- **계기**: 사용자 — Job `DAY_1/git/os 게더링 소연` #1(OS 244대, 첫 빌드)이 `Unable to find limit file b'/home/cloviradmin/jenkins-agent/os'` 하나로 1초 만에 끝나
+  244대가 실패 결과로 갔다(원인 질의). 계획 승인 뒤 "변경이 너무 적어서 전체 CI프로세스를 돌리는건 비효율적이다" → 승격 방식으로 "긴급 승격" 선택.
+- **원인**: 작업 폴더가 `<remote root>/<Job 이름>-<빌드 번호>` 라 Job 이름의 공백이 경로에 들어갔다. Ansible 은 `--limit "@<절대 경로>"` 를 host pattern 으로 읽어
+  공백에서 잘랐다(`split_host_pattern` — 쉼표가 있으면 쉼표, 없으면 공백 · `:`). 수집 0대 → `failed_run` → 244대 `fallback` · `OUTPUT_BUILD_FAILED` 채움.
+- **제품 변경** (`8249f79a`): `scripts/run_gather.sh` 가 `--limit "@.gather_limit_hosts"`(작업 폴더 cwd 기준 상대 경로)를 넘긴다 + 주석. 시험 `tests/unit/test_run_gather.py` —
+  fixture 본문을 `_make_env(tmp_path, ws_name)` 로 빼고 기대값을 바꿨다. 공백 · 한글 작업 폴더 시험 1건을 더했다(limit 값 모양 + 실제 `split_host_pattern`).
+- **바뀌지 않은 것**: envelope 13 필드 · `failure_code` · `failure_stage` · schema · `Jenkinsfile_portal` · callback · vault · adapter · baseline.
+- **검증**: 새 시험은 수정 전 코드에서 의도한 단언으로 실패한다. WSL 실제 Ansible e2e(공백 · 한글 작업 폴더)에서 수정 전은 사고와 같은 오류 · 문장이 나오고, 수정 후는 실제 수집이 돈다.
+  관련 시험 · 정적 검사 · 문서 시험 결과는 TEST_HISTORY 2026-11-17. 사용자 지시로 전체 pytest · CI · main Job 매트릭스는 돌리지 않았다.
+- **승격 (사용자 지시 "긴급 승격")**: production `ce1647c7`(main `8249f79a`, parent `673edaa4`, 2026-11-17T08:34Z) — `Verdict: PARTIAL`(G11~G15 · G19 SKIP) · `Emergency-Promotion` ·
+  직전 대비 `scripts/run_gather.sh` 1줄 · GitHub `production` = GitLab `main` = 로컬 · force 0 · drift-check PROVENANCE · canary production Job #334 OS 11/11 SUCCESS(#332 와 host 별 같음).
+- **문서**: `docs/operate/02-agent-node.md`(작업 폴더 경로 정정) · `03-job-registration.md`(Job 이름 문자 · 증상 행) · `09-production-branch.md` 7절 · decision-log · live-validation.
+- **남은 것**: DAY_1 Job 재실행(사용자) · 다음 정규 승격으로 CI · E2E 증거 채우기 · 쉼표 · 따옴표가 든 Job 이름 확인 — NEXT_ACTIONS 2026-11-17.
+
 ## 일자: 2026-11-16 — Dell iDRAC10 표준 계정 생성을 Collection POST 로 · Dell/Lenovo 세대 판별을 장비 값 우선으로
 
 > 정본: `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md` · `docs/reference/decision-log.md` 2026-11-16 · `docs/ai/catalogs/CONVENTION_DRIFT.md` DRIFT-034 · `docs/ai/contracts/redfish-account-compat-matrix.md` Dell 절.

@@ -1,5 +1,22 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Job 이름 공백 — `--limit` 상대 경로 (2026-11-17) — 남은 항목
+
+> 정본: `tests/evidence/2026-11-17-workspace-space-limit.md` · `docs/reference/decision-log.md` 2026-11-17 · `docs/ai/catalogs/FAILURE_PATTERNS.md` 2026-11-17.
+
+- [ ] **[HIGH / 사용자] DAY_1 Job 재실행** — `DAY_1/git/os 게더링 소연`(사내 GitLab `main` 을 받는 Jenkins)은 production `ce1647c7`(2026-11-17)부터 수정이 들어 있다.
+      다시 돌려 콘솔 `Checking out Revision` 이 `ce1647c7` 이후 커밋인지, `Unable to find limit file` 없이 `[수집]` 이 대상에 접속하는지 본다.
+      지난 #1 의 244건은 합성 실패 결과라 다시 수집해야 한다. 이름을 이미 바꿨다면 Portal 의 Job 호출 설정도 함께 확인한다.
+- [ ] **[MED / AI — 다음 정규 승격] 긴급 승격 증거 채우기** — `ce1647c7` 은 `Verdict: PARTIAL`(CI 단계 결과 · E2E 증거 없음, G11~G15 · G19 SKIP)이다.
+      다음 정규 승격(매트릭스 → CI → promote → canary)이 채운다. 계획 파일 `~/.se_longrun/promote-cdb708cf/next_plan.json` — canary C-OS 의 비교 기준은
+      #332 를 그대로 써도 되고 같은 입력의 #334(2026-11-17, `~/.se_longrun/emergency-8249f79a/bodies/production_334.json`)로 바꿔도 된다.
+- [ ] **[LOW / AI] 쉼표 · 따옴표가 든 Job 이름** — WSL 실측(2026-11-17): 수정 뒤 `--limit` 과 실제 파일을 가리키는 `-i` 는 쉼표가 있어도 문제없다. 남은 것은 둘이다.
+      (1) Add-on 을 켠 빌드의 `include_role name: "{{ _addon_dir }}"` — Ansible 은 쉼표가 든 role 이름을 거부한다(소스). `run_addon.yml` 이 이 오류를 Add-on 섹션 오류로 가두는지 확인한다.
+      (2) 따옴표 — `Jenkinsfile_portal` 의 `sh` 문자열이 `"${WORKSPACE}"` 를 감싸는 방식에서 깨지는지 확인한다.
+      필요하면 `ws()` 이름을 안전한 문자로 바꾸거나(Jenkinsfile 2벌 · `workspace_cleanup.py`) Validate 단계에서 거부한다.
+- [ ] **[LOW / 사용자] Add-on `21db2a48` 확인** — 사고 빌드의 Add-on 커밋은 저장소 밖이라 보지 못했다. 로컬 사본 `6b1d6e2` 는 `_addon_dir` 를 `lookup('file')` · `is file` 에만 쓴다(공백 무관).
+      Add-on 을 켠 공백 Job 을 재실행할 때 `errors[]` 에 `addon` 오류가 없는지 함께 본다.
+
 ## Dell iDRAC10 표준 계정 생성 방식 정정 (2026-11-16) — 남은 항목
 
 > 정본: `docs/ai/catalogs/CONVENTION_DRIFT.md` DRIFT-034 · `tests/evidence/2026-11-16-dell-idrac10-account-create-post.md` ·

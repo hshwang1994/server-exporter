@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-11-17 — `--limit` 작업 폴더 기준 상대 경로 (main `8249f79a`) · 긴급 승격 production `ce1647c7`
+
+> 정본: `tests/evidence/2026-11-17-workspace-space-limit.md`. 사용자 지시("변경이 너무 적어서 전체 CI프로세스를 돌리는건 비효율적이다")로 전체 pytest · CI · main Job 매트릭스는 돌리지 않았다 — 아래가 실행한 전부다.
+> Windows 작업 PC · Python 3.13(prodgen · 문서 시험) / WSL Ubuntu · python3 3.12 · ansible-core 2.20.7.
+
+| 구분 | 결과 |
+|---|---|
+| 새 시험 × 수정 전 `run_gather.sh` | `test_workspace_path_with_spaces_reaches_ansible_as_one_limit_file` 이 limit 값 모양 단언(공백 포함)에서 실패 — 의도한 단언 |
+| `tests/unit/test_run_gather.py` (WSL, 주석 정리 뒤 재실행) | 24 passed (76.82 s) |
+| `run_gather.sh` · 수집 단계 관련 17파일 (WSL) | 387 passed — run_gather · gather_state(+emit_failed) · time_limits · harness_tools · env_guard · activate_ansible_venv · jenkinsfile_portal 5종 · jenkinsfile_ci · remote_task_timeouts · redfish_phase3_contracts · redfish_request_timeouts · integration addon_hook_playbook |
+| 문서 · 증거를 읽는 시험 48파일 (Windows, 문서 수정 뒤) | **1520 passed · 30 skipped · 5 xfailed · 0 failed** (123.83 s) — skip 은 Windows 에서 건너뛰는 Linux 전용 시험 |
+| WSL 실제 Ansible e2e (작업 폴더 `os 게더링 소연-1`, TEST-NET 2대) | 수정 전 `f3cf7678`: `Unable to find limit file b'/tmp/se-e2e.2xsB/os'` · rc 1 · 1초 · `failed_run` · 2대 합성(`fallback` · `OUTPUT_BUILD_FAILED`, 사고와 같은 문장) / 수정 후 `8249f79a`: 33초 · `completed` · 2대 실제 결과 `TARGET_UNREACHABLE` |
+| 쉼표 경로 (WSL 실제 Ansible) | `--limit @<쉼표 절대 경로>` 실패 · `--limit @<cwd 상대>` 정상 · `-i <쉼표 경로의 실제 파일>` 정상 |
+| 정적 검사 | 3채널 `ansible-playbook --syntax-check` rc 0 · `bash -n scripts/run_gather.sh` · py_compile · verify_harness_consistency · check_project_map_drift · verify_vendor_boundary 통과 |
+| 긴급 승격 | prodgen build 198 파일 · class B 0 · gate PARTIAL(G01~G10 · G16~G18 · G20 PASS, G11~G15 · G19 SKIP) · 직전 production `673edaa4` 대비 `scripts/run_gather.sh` 1줄 · production `ce1647c7` · GitHub `production` = GitLab `main` = 로컬 · drift-check PROVENANCE(rc 0) |
+| canary production Job #334 (#332 와 같은 입력) | SUCCESS 129 s · checkout `ce1647c7` · Portal HTTP 200 · 11/11 success · errors 0 · 13키 · #332 대비 값이 다른 host 0 |
+
 ## 2026-11-16 (2) — 정규 승격 production `673edaa4` (main `cdb708cf`) · 실미러 실행 경로 Family 시험
 
 > 정본: `docs/reference/live-validation.md` 2026-11-16 · `docs/reference/decision-log.md` 2026-11-16 승격 기록. 투입 · 대기 · 비교는 `scripts.ai.longrun promote-chain`(분리 실행, 고정 인증서).

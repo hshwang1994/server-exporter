@@ -1570,3 +1570,15 @@ MinPasswordLength                   = 8
 - 수집(`os-gather/tasks/linux/gather_cpu.yml`): `lscpu --version`(util-linux-ng 형식 포함)으로 판정. 문구 또는 ≥2.34 → 합계 ÷ 소켓, <2.34 → 기존 규칙, 미상 + 문구 없음 → L2 `null` · L3 `/proc/cpuinfo`.
 - 사내 대상 배포판의 기본 util-linux(배포판 패키지 기준 — 대상에서 버전을 직접 읽어 기록하지는 않았다): RHEL 8 2.32 · RHEL 9 2.37 · Ubuntu 24.04 2.39 · RHEL 10 2.40. 2.34~2.36 실장비는 없다(재현만).
 
+## 2026-11-17 — Ansible CLI 가 경로 인자를 읽는 방식 (`--limit` · `-i` · role 이름, external-contract-unverified)
+
+- `--limit` (`ansible/inventory/manager.py` `split_host_pattern` · `InventoryManager.subset`): 값을 host pattern 으로 읽는다. 쉼표가 있으면 쉼표에서 자르고,
+  없으면 정규식 `[^\s:\[\]]+` 로 공백과 `:` 에서 자른다. `@` 로 시작하는 조각을 limit 파일로 보고 `os.path.exists` 로 찾는다(cwd 기준).
+  그래서 `@<절대 경로>` 는 경로에 공백 · 쉼표 · `:` 가 있으면 깨진다. 셸 인용으로는 막을 수 없다.
+  - 실측: `split_host_pattern("@/home/cloviradmin/jenkins-agent/os 게더링 소연-1/.gather_limit_hosts")` → `['@/home/cloviradmin/jenkins-agent/os', '게더링', '소연-1/.gather_limit_hosts']`
+  - 실측: `--limit "@/tmp/…/os,gather-1/limit"` → `Unable to find limit file b'/tmp/…/os'` · cwd 기준 `--limit @limit` → 정상
+- `-i`: 실제로 있는 파일이면 쉼표가 있어도 파일로 읽는다(host_list 플러그인은 "경로가 없고 쉼표가 있을 때"만 대상 목록으로 본다). 실측: `-i "/tmp/…/os,gather-1/inv.sh"` → script 인벤토리 정상.
+- role 이름(`include_role name:`): 쉼표가 있으면 `Invalid old style role requirement` 로 거부한다(`playbook/role/include.py`). 소스만 확인했고 실행해 보지 않았다.
+- 쓰는 곳: `scripts/run_gather.sh`(`--limit "@.gather_limit_hosts"` — 작업 폴더 cwd 기준, 2026-11-17 부터) · `common/tasks/addon/run_addon.yml`(`include_role name: "{{ _addon_dir }}"` — 작업 폴더 절대 경로).
+- source: WSL ansible-core 2.20.7 설치본(`~/.local/lib/python3.12/site-packages/ansible/`)의 소스와 실행 (확인 2026-11-17). 사고 기록 `FAILURE_PATTERNS.md` 2026-11-17.
+
